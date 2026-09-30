@@ -72,6 +72,27 @@ public class RoundTypeDefinitionValidationTests
         Assert.Equal(2, issues.Count);
     }
 
+    [Theory]
+    [InlineData("weapon_ak47")]
+    [InlineData(null)]
+    public void InvalidSecondaryDefault_WithEmptyPool_FallsBackToDeagle(string? secondary)
+    {
+        var definition = new RoundTypeDefinitionConfig
+        {
+            Name = "Custom",
+            Defaults = new TeamDefaultsConfig
+            {
+                T = new DefaultWeaponsConfig { Secondary = secondary! },
+                CT = new DefaultWeaponsConfig { Secondary = "weapon_usp_silencer" },
+            },
+        };
+        var issues = new List<ConfigIssue>();
+        var cleaned = Clean(definition, issues);
+        Assert.Equal("weapon_deagle", cleaned.Defaults.T.Secondary);
+        Assert.Equal("weapon_usp_silencer", cleaned.Defaults.CT.Secondary);
+        Assert.Single(issues);
+    }
+
     [Fact]
     public void OutOfRangeNumbers_AreClamped()
     {

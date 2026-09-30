@@ -11,6 +11,27 @@ public class RoundTypesConfigValidatorTests
     private static RoundTypeDefinitionConfig Def(string name) => new() { Name = name };
 
     [Fact]
+    public void LegacyV1Entries_AreReplacedByBuiltInDefinitions()
+    {
+        var config = Defaults with { Version = 1, RoundTypes = new[] { Def("Pistol"), Def("Mid"), Def("FullBuy"), Def("Eco") } };
+        var result = _validator.Validate(config, Defaults, "roundtypes.json");
+        var definitions = result.Config.ToDefinitions();
+        Assert.Equal("weapon_m4a1", definitions["FullBuy"].DefaultCT.Primary);
+        Assert.Equal("weapon_glock", definitions["Pistol"].DefaultT.Secondary);
+        Assert.Equal(3, result.Issues.Count(i => i.Message.Contains("pre-v2")));
+        Assert.Empty(definitions["Eco"].Primaries.For(RetakeV4.Domain.Common.TeamSide.CT));
+    }
+
+    [Fact]
+    public void CurrentVersionEntries_WithEmptyPools_AreKept()
+    {
+        var config = Defaults with { RoundTypes = new[] { Def("FullBuy") } };
+        var result = _validator.Validate(config, Defaults, "roundtypes.json");
+        Assert.Empty(result.Config.ToDefinitions()["FullBuy"].Primaries.For(RetakeV4.Domain.Common.TeamSide.CT));
+        Assert.DoesNotContain(result.Issues, i => i.Message.Contains("pre-v2"));
+    }
+
+    [Fact]
     public void Defaults_AreValid_AndMatchV3Sequence()
     {
         var result = _validator.Validate(Defaults, Defaults, "roundtypes.json");

@@ -8,13 +8,42 @@ public sealed class RoundTypesConfigValidator : IConfigValidator<RoundTypesConfi
     public ValidationResult<RoundTypesConfig> Validate(RoundTypesConfig config, RoundTypesConfig defaults, string file)
     {
         var issues = new List<ConfigIssue>();
-        var roundTypes = CleanRoundTypes(config.RoundTypes, defaults.RoundTypes, file, issues);
+        var roundTypes = CleanRoundTypes(UpgradeLegacyEntries(config, defaults, file, issues), defaults.RoundTypes, file, issues);
         var names = roundTypes.Select(r => r.Name).ToHashSet(StringComparer.Ordinal);
         var sequence = CleanSequence(config.Sequence, names, file, issues);
         var specific = names.Contains(config.Specific) ? config.Specific : Fallback(roundTypes[0].Name, config.Specific, file, issues);
         return new ValidationResult<RoundTypesConfig>(
             config with { RoundTypes = roundTypes, Sequence = sequence, Specific = specific }, issues);
     }
+
+    private const int FirstVersionWithWeaponPools = 2;
+
+    // A pre-v2 file only has round type names: without this upgrade every round would be played with the
+    // class defaults (no weapon pool, deagle only) instead of the built-in V3 loadouts.
+    private static IReadOnlyList<RoundTypeDefinitionConfig>? UpgradeLegacyEntries(
+        RoundTypesConfig config, RoundTypesConfig defaults, string file, List<ConfigIssue> issues)
+    {
+        if (config.Version >= FirstVersionWithWeaponPools || config.RoundTypes is null)
+        {
+            return config.RoundTypes;
+        }
+        return config.RoundTypes.Select(entry =>
+        {
+            var builtIn = defaults.RoundTypes.FirstOrDefault(d => d.Name == entry?.Name);
+            if (entry is null || builtIn is null || !HasNoWeaponPools(entry))
+            {
+                return entry!;
+            }
+            issues.Add(new ConfigIssue(file, $"RoundTypes[{entry.Name}]", $"has no weapon pools (pre-v2 file); using the built-in {entry.Name} definition"));
+            return builtIn;
+        }).ToList();
+    }
+
+    private static bool HasNoWeaponPools(RoundTypeDefinitionConfig entry) =>
+        PoolSize(entry.Primaries) + PoolSize(entry.Secondaries) == 0;
+
+    private static int PoolSize(WeaponPoolConfig? pool) =>
+        pool is null ? 0 : (pool.T?.Count ?? 0) + (pool.CT?.Count ?? 0) + (pool.Any?.Count ?? 0);
 
     private static IReadOnlyList<RoundTypeDefinitionConfig> CleanRoundTypes(
         IReadOnlyList<RoundTypeDefinitionConfig>? roundTypes, IReadOnlyList<RoundTypeDefinitionConfig> defaults, string file, List<ConfigIssue> issues)

@@ -6,6 +6,8 @@ namespace RetakeV4.Modules.RoundTypes;
 
 public static class RoundTypeDefinitionValidation
 {
+    private const string FallbackSecondary = "weapon_deagle";
+
     public static RoundTypeDefinitionConfig Clean(RoundTypeDefinitionConfig definition, string file, List<ConfigIssue> issues)
     {
         var key = $"RoundTypes[{definition.Name}]";
@@ -58,9 +60,9 @@ public static class RoundTypeDefinitionValidation
         var primary = source.Primary is null || primaryPool.Contains(source.Primary)
             ? source.Primary
             : Replace(source.Primary, primaryPool.FirstOrDefault(), $"{key}.Primary", context);
-        var secondary = secondaryPool.Contains(source.Secondary) || secondaryPool.Count == 0
+        var secondary = secondaryPool.Contains(source.Secondary) || (secondaryPool.Count == 0 && WeaponCatalog.IsSecondary(source.Secondary))
             ? source.Secondary
-            : Replace(source.Secondary, secondaryPool[0], $"{key}.Secondary", context)!;
+            : Replace(source.Secondary, secondaryPool.Count > 0 ? secondaryPool[0] : FallbackSecondary, $"{key}.Secondary", context)!;
         return new DefaultWeaponsConfig { Primary = primary, Secondary = secondary };
     }
 
