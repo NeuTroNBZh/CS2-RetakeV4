@@ -40,9 +40,11 @@ public sealed class RetakeV4Plugin : BasePlugin
         });
 
         _host = new ModuleHost(CreateModules(), Logger);
-        _host.Start(new JsonConfigStore(ConfigDirectory()), _ =>
-            new ModuleContext(this, bus, guard, text, Logger, pipeline, rounds, hotReload));
+        _host.Start(new JsonConfigStore(ConfigDirectory()), (module, registrations) =>
+            new ModuleContext(this, bus, guard, text, Logger, rounds,
+                new ModuleHooks(this, bus, pipeline, guard, module.Name, registrations)));
         Logger.LogInformation("RetakeV4 {Version} loaded with modules: {Modules}", ModuleVersion, string.Join(", ", _host.LoadedModules));
+        bus.Publish(new ModulesReady(hotReload));
     }
 
     public override void Unload(bool hotReload)

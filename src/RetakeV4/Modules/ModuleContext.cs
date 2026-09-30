@@ -13,6 +13,5 @@ public sealed record ModuleContext(
     ModuleGuard Guard,
     ITextService Text,
     ILogger Logger,
-    PreparationPipeline Preparation,
     RoundTracker Rounds,
-    bool HotReload);
+    ModuleHooks Hooks);

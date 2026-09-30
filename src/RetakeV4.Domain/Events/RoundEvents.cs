@@ -9,3 +9,5 @@ public sealed record RoundPrepared(PreparationContext Context);
 public sealed record MapStarted(string MapName);
 
 public sealed record WarmupForcedEnd(string MapName);
+
+public sealed record ModulesReady(bool HotReload);

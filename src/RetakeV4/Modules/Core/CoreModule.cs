@@ -16,7 +16,6 @@ public sealed class CoreModule : IRetakeModule
     private ModuleContext? _context;
     private WarmupTracker _warmup = WarmupTracker.Start(16f);
     private Timer? _watchdog;
-    private IDisposable? _debugSubscription;
     private string _mapName = string.Empty;
 
     public string Name => "Core";
@@ -36,42 +35,31 @@ public sealed class CoreModule : IRetakeModule
     public void Load(ModuleContext context)
     {
         _context = context;
-        if (!string.IsNullOrWhiteSpace(Server.MapName))
+        var hooks = context.Hooks;
+        hooks.OnMapStart("map_start", mapName => StartForMap(mapName, false));
+        hooks.OnEvent<EventRoundStart>("round_start", _ => OnRoundStart());
+        hooks.OnEvent<EventRoundFreezeEnd>("freeze_end", _ => Context.Rounds.Handle(RoundSignal.FreezeEnded));
+        hooks.OnEvent<EventRoundEnd>("round_end", _ => Context.Rounds.Handle(RoundSignal.RoundEnded));
+        hooks.Command("css_retake_info", "Shows the RetakeV4 version", OnInfoCommand);
+        hooks.OnBus<ModulesReady>(e =>
         {
-            StartForMap(Server.MapName, context.HotReload);
-        }
+            if (!string.IsNullOrWhiteSpace(Server.MapName))
+            {
+                StartForMap(Server.MapName, e.HotReload);
+            }
+        });
         if (_config.Debug)
         {
-            _debugSubscription = context.Bus.Subscribe<RoundPhaseChanged>(Name, e =>
+            hooks.OnBus<RoundPhaseChanged>(e =>
                 context.Logger.LogInformation("Round {Round}: {From} -> {To}", e.RoundNumber, e.From, e.To));
         }
-        RegisterGameHandlers(context.Plugin);
-    }
-
-    // CSSharp handlers cannot be unregistered by the host: once registered they must stay
-    // harmless (no-op) if the module is later unloaded after a failure.
-    private void RegisterGameHandlers(BasePlugin plugin)
-    {
-        plugin.RegisterListener<Listeners.OnMapStart>(mapName => Guarded("map_start", () => StartForMap(mapName, false)));
-        plugin.RegisterEventHandler<EventRoundStart>((_, _) => Guarded("round_start", OnRoundStart));
-        plugin.RegisterEventHandler<EventRoundFreezeEnd>((_, _) => Guarded("freeze_end", () => Context.Rounds.Handle(RoundSignal.FreezeEnded)));
-        plugin.RegisterEventHandler<EventRoundEnd>((_, _) => Guarded("round_end", () => Context.Rounds.Handle(RoundSignal.RoundEnded)));
-        plugin.AddCommand("css_retake_info", "Shows the RetakeV4 version", (player, command) => Guarded("info_command", () => OnInfoCommand(player, command)));
     }
 
     public void Unload()
     {
         _watchdog?.Kill();
         _watchdog = null;
-        _debugSubscription?.Dispose();
-        _debugSubscription = null;
         _context = null;
-    }
-
-    private HookResult Guarded(string stage, Action action)
-    {
-        _context?.Guard.Run(Name, stage, action);
-        return HookResult.Continue;
     }
 
     private void OnRoundStart()
