@@ -26,6 +26,7 @@ public sealed class TeamsModule : IRetakeModule
     private ModuleContext? _context;
     private TeamState _state = TeamState.Empty;
     private bool _scrambleRequested;
+    private bool _restartedForInconsistency;
 
     public string Name => "Teams";
 
@@ -189,7 +190,16 @@ public sealed class TeamsModule : IRetakeModule
             {
                 continue;
             }
-            player.SwitchTeam(PlayerQueries.ToCsTeam(move.To));
+            // A queued player is a spectator without a pawn: ChangeTeam puts them on the team for
+            // the next spawn, whereas SwitchTeam is meant for live players and may not apply.
+            if (move.Reason == MoveReason.EnteredFromQueue)
+            {
+                player.ChangeTeam(PlayerQueries.ToCsTeam(move.To));
+            }
+            else
+            {
+                player.SwitchTeam(PlayerQueries.ToCsTeam(move.To));
+            }
             Context.Text.Chat(player, ReasonKey(move.Reason), move.To.ToString());
         }
         NotifyQueue();
@@ -221,21 +231,22 @@ public sealed class TeamsModule : IRetakeModule
         {
             return;
         }
-        var actual = PlayerQueries.Humans().ToDictionary(p => new PlayerId(p.Slot), PlayerQueries.SideOf);
-        var result = TeamPlanner.Reconcile(_state, actual);
-        foreach (var intruder in result.ToSpectator)
+        var humans = PlayerQueries.Humans();
+        var actual = humans.ToDictionary(p => new PlayerId(p.Slot), PlayerQueries.SideOf);
+        var result = TeamPlanner.Reconcile(_state, actual, id => PriorityOf(humans.First(h => h.Slot == id.Slot)));
+        _state = result.State;
+        foreach (var intruder in result.ToSpectator.Select(i => Utilities.GetPlayerFromSlot(i.Slot)).OfType<CCSPlayerController>())
         {
-            Utilities.GetPlayerFromSlot(intruder.Slot)?.ChangeTeam(CsTeam.Spectator);
-        }
-        if (result.Fixes.Count == 0)
-        {
-            return;
+            intruder.ChangeTeam(CsTeam.Spectator);
+            Context.Text.Chat(intruder, "teams.queue.joined", _state.QueuePosition(new PlayerId(intruder.Slot)) ?? 0);
         }
         foreach (var fix in result.Fixes)
         {
             Utilities.GetPlayerFromSlot(fix.Player.Slot)?.SwitchTeam(PlayerQueries.ToCsTeam(fix.To));
         }
-        if (_config.RestartOnInconsistency)
+        var restart = _config.RestartOnInconsistency && result.Fixes.Count > 0 && !_restartedForInconsistency;
+        _restartedForInconsistency = restart;
+        if (restart)
         {
             Context.Text.ChatAll("teams.inconsistent");
             GameRulesAccessor.Get()?.TerminateRound(1f, RoundEndReason.RoundDraw);

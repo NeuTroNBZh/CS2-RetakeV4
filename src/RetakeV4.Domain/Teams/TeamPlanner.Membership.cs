@@ -12,7 +12,7 @@ public enum JoinOutcome
 
 public sealed record JoinResult(TeamState State, JoinOutcome Outcome, TeamSide? Side, int? QueuePosition, bool RestartRound);
 
-public sealed record ReconcileResult(IReadOnlyList<TeamMove> Fixes, IReadOnlyList<PlayerId> ToSpectator);
+public sealed record ReconcileResult(TeamState State, IReadOnlyList<TeamMove> Fixes, IReadOnlyList<PlayerId> ToSpectator);
 
 public static partial class TeamPlanner
 {
@@ -63,18 +63,24 @@ public static partial class TeamPlanner
         return result;
     }
 
-    public static ReconcileResult Reconcile(TeamState state, IReadOnlyDictionary<PlayerId, TeamSide?> actual)
+    public static ReconcileResult Reconcile(TeamState state, IReadOnlyDictionary<PlayerId, TeamSide?> actual, Func<PlayerId, int> priorityOf)
     {
-        var expected = state.Ct.Select(p => (Player: p, Side: TeamSide.CT)).Concat(state.T.Select(p => (Player: p, Side: TeamSide.T)));
+        var expected = state.Ct.Select(p => (Player: p, Side: TeamSide.CT)).Concat(state.T.Select(p => (Player: p, Side: TeamSide.T))).ToList();
+        var result = expected
+            .Where(e => actual.TryGetValue(e.Player, out var side) && side is null)
+            .Aggregate(state, (current, e) => Leave(current, e.Player));
         var fixes = expected
-            .Where(e => actual.TryGetValue(e.Player, out var side) && side != e.Side)
+            .Where(e => actual.TryGetValue(e.Player, out var side) && side is not null && side != e.Side)
             .Select(e => new TeamMove(e.Player, e.Side, MoveReason.Balanced))
             .ToList();
         var intruders = actual
             .Where(a => a.Value is not null && state.SideOf(a.Key) is null)
             .Select(a => a.Key)
             .ToList();
-        return new ReconcileResult(fixes, intruders);
+        result = intruders
+            .Where(p => !result.IsQueued(p))
+            .Aggregate(result, (current, p) => Enqueue(current, p, priorityOf(p)));
+        return new ReconcileResult(result, fixes, intruders);
     }
 
     private static TeamSide SideNeeded(TeamState state, TeamRules rules)

@@ -113,7 +113,7 @@ public class TeamPlannerJoinTests
     {
         var state = State(new[] { 1 }, new[] { 2 });
         var actual = new Dictionary<PlayerId, TeamSide?> { [P(1)] = TeamSide.T, [P(2)] = TeamSide.T, [P(3)] = TeamSide.CT, [P(4)] = null };
-        var result = TeamPlanner.Reconcile(state, actual);
+        var result = TeamPlanner.Reconcile(state, actual, _ => 0);
         var fix = Assert.Single(result.Fixes);
         Assert.Equal(new TeamMove(P(1), TeamSide.CT, MoveReason.Balanced), fix);
         Assert.Equal(new[] { P(3) }, result.ToSpectator);
@@ -122,8 +122,40 @@ public class TeamPlannerJoinTests
     [Fact]
     public void Reconcile_IgnoresPlayersMissingFromActual()
     {
-        var result = TeamPlanner.Reconcile(State(new[] { 1 }, new[] { 2 }), new Dictionary<PlayerId, TeamSide?>());
+        var result = TeamPlanner.Reconcile(State(new[] { 1 }, new[] { 2 }), new Dictionary<PlayerId, TeamSide?>(), _ => 0);
         Assert.Empty(result.Fixes);
         Assert.Empty(result.ToSpectator);
+        Assert.Equal(2, result.State.PlayingCount);
+    }
+
+    [Fact]
+    public void Reconcile_SpectatingExpectedPlayer_LeavesInsteadOfBeingFixed()
+    {
+        var actual = new Dictionary<PlayerId, TeamSide?> { [P(1)] = null, [P(2)] = TeamSide.T };
+        var result = TeamPlanner.Reconcile(State(new[] { 1 }, new[] { 2 }), actual, _ => 0);
+        Assert.Empty(result.Fixes);
+        Assert.Null(result.State.SideOf(P(1)));
+        Assert.False(result.State.IsQueued(P(1)));
+    }
+
+    [Fact]
+    public void Reconcile_QueuesIntruders_WithTheirPriority()
+    {
+        var actual = new Dictionary<PlayerId, TeamSide?> { [P(1)] = TeamSide.CT, [P(2)] = TeamSide.T, [P(3)] = TeamSide.CT };
+        var result = TeamPlanner.Reconcile(State(new[] { 1 }, new[] { 2 }), actual, p => p == P(3) ? 2 : 0);
+        var queued = Assert.Single(result.State.Queue);
+        Assert.Equal(P(3), queued.Player);
+        Assert.Equal(2, queued.Priority);
+        Assert.Equal(new[] { P(3) }, result.ToSpectator);
+    }
+
+    [Fact]
+    public void Reconcile_AlreadyQueuedIntruder_IsNotQueuedTwice()
+    {
+        var state = TeamPlanner.RequestJoin(State(new[] { 1 }, new[] { 2 }), P(3), 0, false, TeamSide.CT, Rules).State;
+        var actual = new Dictionary<PlayerId, TeamSide?> { [P(1)] = TeamSide.CT, [P(2)] = TeamSide.T, [P(3)] = TeamSide.T };
+        var result = TeamPlanner.Reconcile(state, actual, _ => 0);
+        Assert.Single(result.State.Queue);
+        Assert.Equal(new[] { P(3) }, result.ToSpectator);
     }
 }
