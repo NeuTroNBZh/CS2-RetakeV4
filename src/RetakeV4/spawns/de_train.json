@@ -1,0 +1,754 @@
+{
+  "SchemaVersion": 2,
+  "Map": "de_train",
+  "Spawns": [
+    {
+      "Id": "f92272c7-60b3-4a1d-9644-611870cea00a",
+      "Team": "T",
+      "Site": "A",
+      "CanPlant": true,
+      "Position": {
+        "X": 299.80554,
+        "Y": -131.18439,
+        "Z": -141.96872,
+        "Length": 356.71814
+      },
+      "Angle": {
+        "Pitch": 0,
+        "Yaw": 119.90512,
+        "Roll": 0
+      }
+    },
+    {
+      "Id": "5fae25c7-57fe-43fa-9e35-4c2bf908d532",
+      "Team": "T",
+      "Site": "A",
+      "CanPlant": false,
+      "Position": {
+        "X": 400.76358,
+        "Y": 36.26184,
+        "Z": -215.96875,
+        "Length": 456.69342
+      },
+      "Angle": {
+        "Pitch": 0,
+        "Yaw": 160.90784,
+        "Roll": 0
+      }
+    },
+    {
+      "Id": "3610e00c-b12c-4660-be0b-f7d37df24ff5",
+      "Team": "T",
+      "Site": "A",
+      "CanPlant": false,
+      "Position": {
+        "X": -20.978577,
+        "Y": 68.708275,
+        "Z": -215.96875,
+        "Length": 227.60367
+      },
+      "Angle": {
+        "Pitch": 0,
+        "Yaw": -40.293045,
+        "Roll": 0
+      }
+    },
+    {
+      "Id": "ebd90383-8fbd-4c4e-929d-0d895287736b",
+      "Team": "T",
+      "Site": "A",
+      "CanPlant": false,
+      "Position": {
+        "X": -47.636795,
+        "Y": 367.8039,
+        "Z": -215.96875,
+        "Length": 429.17532
+      },
+      "Angle": {
+        "Pitch": 0,
+        "Yaw": -10.980499,
+        "Roll": 0
+      }
+    },
+    {
+      "Id": "8adff9fd-700c-49ed-8741-5305d05402d1",
+      "Team": "T",
+      "Site": "A",
+      "CanPlant": false,
+      "Position": {
+        "X": -358.19907,
+        "Y": 24.961477,
+        "Z": -215.96872,
+        "Length": 419.0133
+      },
+      "Angle": {
+        "Pitch": 0,
+        "Yaw": -10.980499,
+        "Roll": 0
+      }
+    },
+    {
+      "Id": "7ed55fba-e5cf-4ca8-a67e-a8d19eea3590",
+      "Team": "T",
+      "Site": "A",
+      "CanPlant": false,
+      "Position": {
+        "X": 564.9993,
+        "Y": 368.17227,
+        "Z": -215.96875,
+        "Length": 708.10846
+      },
+      "Angle": {
+        "Pitch": 0,
+        "Yaw": -23.258392,
+        "Roll": 0
+      }
+    },
+    {
+      "Id": "3cb0ff34-e840-4096-9e13-7d72e20c4c2e",
+      "Team": "T",
+      "Site": "A",
+      "CanPlant": false,
+      "Position": {
+        "X": -111.987305,
+        "Y": 637.3805,
+        "Z": -215.96875,
+        "Length": 682.22986
+      },
+      "Angle": {
+        "Pitch": 0,
+        "Yaw": -39.9281,
+        "Roll": 0
+      }
+    },
+    {
+      "Id": "88850e96-aa62-481e-beeb-ec2dd7d5aad5",
+      "Team": "CT",
+      "Site": "A",
+      "CanPlant": false,
+      "Position": {
+        "X": 181.44771,
+        "Y": -896.66095,
+        "Z": -320.96875,
+        "Length": 969.5076
+      },
+      "Angle": {
+        "Pitch": 0,
+        "Yaw": 1.4038391,
+        "Roll": 0
+      }
+    },
+    {
+      "Id": "3b2c006e-a54d-41ea-b899-be2eb0207b16",
+      "Team": "CT",
+      "Site": "A",
+      "CanPlant": false,
+      "Position": {
+        "X": -1032.6996,
+        "Y": -940.31915,
+        "Z": -153.96875,
+        "Length": 1405.1245
+      },
+      "Angle": {
+        "Pitch": 0,
+        "Yaw": 77.14667,
+        "Roll": 0
+      }
+    },
+    {
+      "Id": "b8710adf-5b1c-4ca1-91ba-69a2d9d5208b",
+      "Team": "CT",
+      "Site": "A",
+      "CanPlant": false,
+      "Position": {
+        "X": -1145.9028,
+        "Y": -931.85986,
+        "Z": -101.96875,
+        "Length": 1480.4911
+      },
+      "Angle": {
+        "Pitch": 0,
+        "Yaw": 56.454285,
+        "Roll": 0
+      }
+    },
+    {
+      "Id": "79712784-3f1a-4d4a-87fe-a74dd8315726",
+      "Team": "CT",
+      "Site": "A",
+      "CanPlant": false,
+      "Position": {
+        "X": 1621.404,
+        "Y": -1169.5692,
+        "Z": -327.09747,
+        "Length": 2025.7926
+      },
+      "Angle": {
+        "Pitch": 0,
+        "Yaw": 113.62677,
+        "Roll": 0
+      }
+    },
+    {
+      "Id": "6abaebd2-938a-4d6d-b39e-f70fd6c5ae83",
+      "Team": "T",
+      "Site": "A",
+      "CanPlant": true,
+      "Position": {
+        "X": 538.01776,
+        "Y": -196.08826,
+        "Z": -215.96875,
+        "Length": 612.01
+      },
+      "Angle": {
+        "Pitch": 0,
+        "Yaw": -176.79268,
+        "Roll": 0
+      }
+    },
+    {
+      "Id": "1566b7ce-3e75-4b5b-bdf7-9075aa9e22b4",
+      "Team": "T",
+      "Site": "A",
+      "CanPlant": true,
+      "Position": {
+        "X": 641.9331,
+        "Y": -114.88289,
+        "Z": -159.31398,
+        "Length": 671.31
+      },
+      "Angle": {
+        "Pitch": 0,
+        "Yaw": 91.798676,
+        "Roll": 0
+      }
+    },
+    {
+      "Id": "6c62a97e-4b71-4d20-b592-f773a21ee530",
+      "Team": "T",
+      "Site": "B",
+      "CanPlant": false,
+      "Position": {
+        "X": -463.31555,
+        "Y": -1764.1312,
+        "Z": -166.96875,
+        "Length": 1831.5836
+      },
+      "Angle": {
+        "Pitch": 0,
+        "Yaw": 35.669525,
+        "Roll": 0
+      }
+    },
+    {
+      "Id": "730457d2-d5f2-4c21-892d-5b729c9e2c7b",
+      "Team": "T",
+      "Site": "B",
+      "CanPlant": false,
+      "Position": {
+        "X": -1039.5194,
+        "Y": -1348.9492,
+        "Z": -153.96875,
+        "Length": 1709.9623
+      },
+      "Angle": {
+        "Pitch": 0,
+        "Yaw": 78.23297,
+        "Roll": 0
+      }
+    },
+    {
+      "Id": "d400d77a-5acd-4bac-b29d-c1f82819ec96",
+      "Team": "T",
+      "Site": "B",
+      "CanPlant": false,
+      "Position": {
+        "X": -56.79004,
+        "Y": -1581.2207,
+        "Z": -350.96875,
+        "Length": 1620.6984
+      },
+      "Angle": {
+        "Pitch": 0,
+        "Yaw": 21.919434,
+        "Roll": 0
+      }
+    },
+    {
+      "Id": "1f42d0c2-9982-4443-9aea-0ca1b6b5033b",
+      "Team": "T",
+      "Site": "B",
+      "CanPlant": false,
+      "Position": {
+        "X": -648.4443,
+        "Y": -919.01654,
+        "Z": -299.01733,
+        "Length": 1163.8225
+      },
+      "Angle": {
+        "Pitch": 0,
+        "Yaw": 16.768219,
+        "Roll": 0
+      }
+    },
+    {
+      "Id": "108765e8-4a98-40f2-ad3d-70df1bbc5069",
+      "Team": "T",
+      "Site": "B",
+      "CanPlant": false,
+      "Position": {
+        "X": -468.63867,
+        "Y": -1163.8351,
+        "Z": -350.96875,
+        "Length": 1302.8098
+      },
+      "Angle": {
+        "Pitch": 0,
+        "Yaw": 15.166626,
+        "Roll": 0
+      }
+    },
+    {
+      "Id": "241fde57-66e1-46ae-af6d-59904d7cd49b",
+      "Team": "T",
+      "Site": "B",
+      "CanPlant": true,
+      "Position": {
+        "X": -210.91364,
+        "Y": -1378.0321,
+        "Z": -350.96875,
+        "Length": 1437.58
+      },
+      "Angle": {
+        "Pitch": 0,
+        "Yaw": -0.19981384,
+        "Roll": 0
+      }
+    },
+    {
+      "Id": "9dc97f74-538d-4274-bd58-2f917a6041cd",
+      "Team": "T",
+      "Site": "B",
+      "CanPlant": true,
+      "Position": {
+        "X": -232.72836,
+        "Y": -1275.144,
+        "Z": -277.96872,
+        "Length": 1325.6777
+      },
+      "Angle": {
+        "Pitch": 0,
+        "Yaw": -1.3866882,
+        "Roll": 0
+      }
+    },
+    {
+      "Id": "a1596b1b-d07d-48fd-8725-c749564108c3",
+      "Team": "T",
+      "Site": "B",
+      "CanPlant": true,
+      "Position": {
+        "X": -211.15405,
+        "Y": -1203.9713,
+        "Z": -350.96875,
+        "Length": 1271.7358
+      },
+      "Angle": {
+        "Pitch": 0,
+        "Yaw": 1.2586212,
+        "Roll": 0
+      }
+    },
+    {
+      "Id": "21ae2037-a68b-475d-a17a-6b134c6bb529",
+      "Team": "CT",
+      "Site": "B",
+      "CanPlant": false,
+      "Position": {
+        "X": 175.32149,
+        "Y": 10.643065,
+        "Z": -215.96872,
+        "Length": 278.37634
+      },
+      "Angle": {
+        "Pitch": 0,
+        "Yaw": -90.558586,
+        "Roll": 0
+      }
+    },
+    {
+      "Id": "541afb83-a774-4a4b-98ae-cb96e0365ad2",
+      "Team": "CT",
+      "Site": "B",
+      "CanPlant": false,
+      "Position": {
+        "X": 1663.8279,
+        "Y": -1019.1846,
+        "Z": -327.78796,
+        "Length": 1978.511
+      },
+      "Angle": {
+        "Pitch": 0,
+        "Yaw": -125.21599,
+        "Roll": 0
+      }
+    },
+    {
+      "Id": "8c879571-922f-4536-890c-85a21a9d2271",
+      "Team": "CT",
+      "Site": "B",
+      "CanPlant": false,
+      "Position": {
+        "X": 508.98727,
+        "Y": -548.0317,
+        "Z": -210.13342,
+        "Length": 776.89307
+      },
+      "Angle": {
+        "Pitch": 0,
+        "Yaw": -29.438553,
+        "Roll": 0
+      }
+    },
+    {
+      "Id": "d3ac4091-62c4-4353-a86c-16d0a47a8813",
+      "Team": "CT",
+      "Site": "B",
+      "CanPlant": false,
+      "Position": {
+        "X": 446.56094,
+        "Y": -661.15765,
+        "Z": -215.96875,
+        "Length": 826.55225
+      },
+      "Angle": {
+        "Pitch": 0,
+        "Yaw": -0.813324,
+        "Roll": 0
+      }
+    },
+    {
+      "Id": "bc945944-6072-4208-a5da-aecb8fff6c5e",
+      "Team": "CT",
+      "Site": "B",
+      "CanPlant": false,
+      "Position": {
+        "X": 1713.3424,
+        "Y": -1390.0256,
+        "Z": -326.969,
+        "Length": 2230.386
+      },
+      "Angle": {
+        "Pitch": 0,
+        "Yaw": -142.32101,
+        "Roll": 0
+      }
+    },
+    {
+      "Id": "f0eeef62-a790-4ce0-ba62-3d65488b67d9",
+      "Team": "CT",
+      "Site": "B",
+      "CanPlant": false,
+      "Position": {
+        "X": -331.3629,
+        "Y": -152.44049,
+        "Z": -215.96875,
+        "Length": 423.88913
+      },
+      "Angle": {
+        "Pitch": 0,
+        "Yaw": -125.80891,
+        "Roll": 0
+      }
+    },
+    {
+      "Id": "0511e2ae-b85d-4c15-aa25-41e7195ebd2d",
+      "Team": "CT",
+      "Site": "B",
+      "CanPlant": false,
+      "Position": {
+        "X": -578.0866,
+        "Y": -347.74524,
+        "Z": -213.46875,
+        "Length": 707.5873
+      },
+      "Angle": {
+        "Pitch": 0,
+        "Yaw": 179.88397,
+        "Roll": 0
+      }
+    },
+    {
+      "Id": "51294e93-802a-4092-8da5-10da01367b3a",
+      "Team": "CT",
+      "Site": "A",
+      "CanPlant": false,
+      "Position": {
+        "X": 310.09763,
+        "Y": 1625.2981,
+        "Z": -215.96875,
+        "Length": 1668.6512
+      },
+      "Angle": {
+        "Pitch": 0,
+        "Yaw": -2.0197754,
+        "Roll": 0
+      }
+    },
+    {
+      "Id": "f1a76681-3868-4c5f-a0ee-b5f1c00c26e7",
+      "Team": "T",
+      "Site": "A",
+      "CanPlant": false,
+      "Position": {
+        "X": 1500.1053,
+        "Y": 407.40268,
+        "Z": -211.96875,
+        "Length": 1568.8287
+      },
+      "Angle": {
+        "Pitch": 0,
+        "Yaw": 159.29626,
+        "Roll": 0
+      }
+    },
+    {
+      "Id": "6517819d-22ed-43fd-a4c9-a1166ecb125a",
+      "Team": "CT",
+      "Site": "A",
+      "CanPlant": false,
+      "Position": {
+        "X": 1288.9019,
+        "Y": -881.8668,
+        "Z": -320.96875,
+        "Length": 1594.3582
+      },
+      "Angle": {
+        "Pitch": 0,
+        "Yaw": 179.5087,
+        "Roll": 0
+      }
+    },
+    {
+      "Id": "2619bc79-964f-4092-81e1-544b53ff3e9c",
+      "Team": "CT",
+      "Site": "A",
+      "CanPlant": false,
+      "Position": {
+        "X": -183.92128,
+        "Y": -891.17664,
+        "Z": -318.96875,
+        "Length": 964.2427
+      },
+      "Angle": {
+        "Pitch": 0,
+        "Yaw": 7.8030396,
+        "Roll": 0
+      }
+    },
+    {
+      "Id": "50b1c8c9-2c65-4e25-8f1c-59d313063c00",
+      "Team": "CT",
+      "Site": "A",
+      "CanPlant": false,
+      "Position": {
+        "X": 419.41,
+        "Y": 1695.32,
+        "Z": -213.96753,
+        "Length": 1759.4875
+      },
+      "Angle": {
+        "Pitch": 0,
+        "Yaw": -159.7,
+        "Roll": 0
+      }
+    },
+    {
+      "Id": "c29d126b-5e15-4fdf-9bc4-500c2b5082df",
+      "Team": "T",
+      "Site": "A",
+      "CanPlant": false,
+      "Position": {
+        "X": 969.0126,
+        "Y": 54.807076,
+        "Z": -211.73273,
+        "Length": 993.3881
+      },
+      "Angle": {
+        "Pitch": 0,
+        "Yaw": 146.66406,
+        "Roll": 0
+      }
+    },
+    {
+      "Id": "d5a1c171-92fd-4471-ad11-cc3f3a9d954e",
+      "Team": "T",
+      "Site": "A",
+      "CanPlant": false,
+      "Position": {
+        "X": 853.34656,
+        "Y": -207.24608,
+        "Z": -211.96875,
+        "Length": 903.3726
+      },
+      "Angle": {
+        "Pitch": 0,
+        "Yaw": 27.79129,
+        "Roll": 0
+      }
+    },
+    {
+      "Id": "828b9ea2-0d1c-457d-a8ce-ad0962325012",
+      "Team": "T",
+      "Site": "A",
+      "CanPlant": false,
+      "Position": {
+        "X": 697.96875,
+        "Y": -394.9673,
+        "Z": -207.96875,
+        "Length": 828.49896
+      },
+      "Angle": {
+        "Pitch": 0,
+        "Yaw": 132.99911,
+        "Roll": 0
+      }
+    },
+    {
+      "Id": "b18f5d53-54c8-40f0-a3e7-65103b16f6b1",
+      "Team": "CT",
+      "Site": "B",
+      "CanPlant": false,
+      "Position": {
+        "X": -970.47906,
+        "Y": 736.40625,
+        "Z": -0.013118744,
+        "Length": 1218.2462
+      },
+      "Angle": {
+        "Pitch": 0,
+        "Yaw": -90.05699,
+        "Roll": 0
+      }
+    },
+    {
+      "Id": "2251e88d-1131-4425-94a1-454d20d9ea88",
+      "Team": "CT",
+      "Site": "B",
+      "CanPlant": false,
+      "Position": {
+        "X": -601.53766,
+        "Y": 467.045,
+        "Z": 16.03125,
+        "Length": 761.732
+      },
+      "Angle": {
+        "Pitch": 0,
+        "Yaw": -97.439804,
+        "Roll": 0
+      }
+    },
+    {
+      "Id": "55d1e1f7-2f7d-4697-86c6-e6978cdfeb4a",
+      "Team": "T",
+      "Site": "B",
+      "CanPlant": false,
+      "Position": {
+        "X": -189.8856,
+        "Y": -1759.5509,
+        "Z": -166.96875,
+        "Length": 1777.6261
+      },
+      "Angle": {
+        "Pitch": 0,
+        "Yaw": 64.80731,
+        "Roll": 0
+      }
+    },
+    {
+      "Id": "6e81ccab-750d-4d90-8150-1b286ae3db6e",
+      "Team": "CT",
+      "Site": "B",
+      "CanPlant": false,
+      "Position": {
+        "X": 1738.521,
+        "Y": -1655.278,
+        "Z": -320.35007,
+        "Length": 2421.7812
+      },
+      "Angle": {
+        "Pitch": 0,
+        "Yaw": -177.37633,
+        "Roll": 0
+      }
+    },
+    {
+      "Id": "2f216179-01da-48ec-89fe-ed33d5963a15",
+      "Team": "CT",
+      "Site": "B",
+      "CanPlant": false,
+      "Position": {
+        "X": 1381.968,
+        "Y": -946.7372,
+        "Z": -319.09604,
+        "Length": 1705.2769
+      },
+      "Angle": {
+        "Pitch": 0,
+        "Yaw": 168.67722,
+        "Roll": 0
+      }
+    },
+    {
+      "Id": "2a085fcc-65d1-414d-bbed-7fe4133acb1a",
+      "Team": "T",
+      "Site": "B",
+      "CanPlant": false,
+      "Position": {
+        "X": -42.018127,
+        "Y": -1442.7357,
+        "Z": -350.96875,
+        "Length": 1485.406
+      },
+      "Angle": {
+        "Pitch": 0,
+        "Yaw": 2.7002258,
+        "Roll": 0
+      }
+    },
+    {
+      "Id": "5705e571-7298-4e1c-a3b7-b76d6c1a7e59",
+      "Team": "T",
+      "Site": "B",
+      "CanPlant": false,
+      "Position": {
+        "X": -873.54,
+        "Y": -1768.6874,
+        "Z": -89.97,
+        "Length": 1974.6953
+      },
+      "Angle": {
+        "Pitch": 0,
+        "Yaw": 93.76489,
+        "Roll": 0
+      }
+    },
+    {
+      "Id": "7b7c9a48-0d81-4462-ad96-22ba73b0a211",
+      "Team": "T",
+      "Site": "B",
+      "CanPlant": false,
+      "Position": {
+        "X": -483.96826,
+        "Y": -1042.182,
+        "Z": -350.96875,
+        "Length": 1201.4773
+      },
+      "Angle": {
+        "Pitch": 0,
+        "Yaw": -3.0037231,
+        "Roll": 0
+      }
+    }
+  ]
+}

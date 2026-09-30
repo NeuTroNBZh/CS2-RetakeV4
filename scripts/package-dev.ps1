@@ -17,6 +17,7 @@ foreach ($file in @("RetakeV4.dll", "RetakeV4.Domain.dll", "RetakeV4.deps.json",
     Copy-Item $source $pluginDir
 }
 Copy-Item (Join-Path $bin "lang") $pluginDir -Recurse
+Copy-Item (Join-Path $bin "spawns") $pluginDir -Recurse
 
 $cfgDir = Join-Path $out "cfg/RetakeV4"
 New-Item -ItemType Directory -Force $cfgDir | Out-Null

@@ -18,5 +18,6 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="lang\*.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="spawns\*.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

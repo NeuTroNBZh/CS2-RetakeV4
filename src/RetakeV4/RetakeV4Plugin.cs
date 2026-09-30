@@ -10,6 +10,7 @@ using RetakeV4.Localization;
 using RetakeV4.Modules;
 using RetakeV4.Modules.Core;
 using RetakeV4.Modules.RoundTypes;
+using RetakeV4.Modules.Spawns;
 
 namespace RetakeV4;
 
@@ -61,6 +62,7 @@ public sealed class RetakeV4Plugin : BasePlugin
     {
         new CoreModule(),
         new RoundTypesModule(),
+        new SpawnsModule(),
     };
 
     private string ConfigDirectory() =>
