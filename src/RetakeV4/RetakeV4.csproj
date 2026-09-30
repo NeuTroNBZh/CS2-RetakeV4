@@ -16,4 +16,7 @@
   <ItemGroup>
     <InternalsVisibleTo Include="RetakeV4.Integration.Tests" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="lang\*.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>
