@@ -52,3 +52,13 @@ Préparation : `pwsh -NoProfile -File scripts/package-dev.ps1`, copier `artifact
 - [ ] Molotov qui brûle près de la bombe → message « du feu brûle près de la bombe ».
 - [ ] Défuse commencé avec moins de 10 s (sans kit) → message « il manque Xs » et la bombe explose immédiatement.
 - [ ] Un CT qui survit à un round Pistol ne garde pas son kit : au round suivant, seuls les CT tirés au sort en ont un.
+
+## Phase 3a — Préférences et persistance
+- [ ] Premier démarrage : `plugins/RetakeV4/data/retakev4.db` est créé, aucun avertissement de base de données dans les logs.
+- [ ] `!awp` : message « Tu es maintenant volontaire pour l'AWP… » ; avec au moins 5 joueurs, un volontaire de chaque camp reçoit parfois l'AWP en FullBuy (≈ 30 %).
+- [ ] `!awp` à nouveau : message « Tu n'es plus volontaire » et plus d'AWP.
+- [ ] Déconnexion puis reconnexion (ou changement de map) : le volontariat AWP est conservé.
+- [ ] `css_retake_import_v3 <chemin>/CS2Retake/data/CommandAllocator/cs2retake.db` (console serveur ou admin root) : message « N préférence(s) V3 importée(s) » ; un joueur importé retrouve ses armes V3 (ex. M4A1-S en FullBuy CT) après reconnexion.
+- [ ] Import avec un chemin faux : message « Échec de l'import V3 : … », aucun crash.
+- [ ] `allocation.json` en `MySql` avec une chaîne valide : table `player_loadout` créée, préférences conservées entre deux redémarrages.
+- [ ] Base indisponible (fichier en lecture seule ou MySQL arrêté) : un avertissement « Preference database unavailable… », les joueurs reçoivent l'équipement par défaut, aucune erreur en boucle.
