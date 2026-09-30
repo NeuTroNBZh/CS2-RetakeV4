@@ -13,5 +13,7 @@ public sealed class FixedRandom(params int[] values) : IRandom
         return Math.Clamp(value, 0, maxExclusive - 1);
     }
 
-    public double NextDouble() => 0.0;
+    public double DoubleValue { get; init; }
+
+    public double NextDouble() => DoubleValue;
 }

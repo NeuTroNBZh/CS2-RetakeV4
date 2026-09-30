@@ -7,4 +7,5 @@ public static class PreparationOrder
     public const int Teams = 30;
     public const int Placement = 40;
     public const int Loadout = 50;
+    public const int Plant = 60;
 }
