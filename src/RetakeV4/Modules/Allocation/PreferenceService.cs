@@ -27,8 +27,15 @@ public sealed class PreferenceService : IAsyncDisposable
         _book = book;
         _ = Task.Run(async () =>
         {
-            var stored = await _store.LoadAsync(steamId, CancellationToken.None).ConfigureAwait(false);
-            onGameThread(() => _book = _book.WithPlayer(steamId, token, stored));
+            try
+            {
+                var stored = await _store.LoadAsync(steamId, CancellationToken.None).ConfigureAwait(false);
+                onGameThread(() => _book = _book.WithPlayer(steamId, token, stored));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Could not apply loaded preferences for {SteamId}", steamId);
+            }
         });
     }
 

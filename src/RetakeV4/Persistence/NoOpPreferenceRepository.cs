@@ -4,6 +4,8 @@ namespace RetakeV4.Persistence;
 
 public sealed class NoOpPreferenceRepository : IPreferenceRepository
 {
+    public Task InitializeAsync(CancellationToken ct) => Task.CompletedTask;
+
     public Task<IReadOnlyList<StoredPreference>> LoadAsync(ulong steamId, CancellationToken ct) =>
         Task.FromResult<IReadOnlyList<StoredPreference>>(Array.Empty<StoredPreference>());
 

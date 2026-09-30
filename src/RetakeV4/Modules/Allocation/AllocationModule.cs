@@ -2,6 +2,7 @@ using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Modules.Admin;
 using CounterStrikeSharp.API.Modules.Commands;
+using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
 using RetakeV4.Adapters;
 using RetakeV4.Configuration;
@@ -66,6 +67,7 @@ public sealed class AllocationModule : IRetakeModule
     {
         _preferences?.DisposeAsync().AsTask().Wait(TimeSpan.FromSeconds(5));
         _preferences = null;
+        SqliteConnection.ClearAllPools();
         _context = null;
     }
 
@@ -79,28 +81,8 @@ public sealed class AllocationModule : IRetakeModule
             _ => new NoOpPreferenceRepository(),
         };
         var store = new ResilientPreferenceStore(repository, context.Logger, () => DateTimeOffset.UtcNow);
-        _ = Task.Run(() => InitializeAsync(repository, context.Logger));
+        _ = Task.Run(() => store.InitializeAsync(CancellationToken.None));
         return store;
-    }
-
-    private static async Task InitializeAsync(IPreferenceRepository repository, ILogger logger)
-    {
-        try
-        {
-            switch (repository)
-            {
-                case SqlitePreferenceRepository sqlite:
-                    await sqlite.InitializeAsync(CancellationToken.None).ConfigureAwait(false);
-                    break;
-                case MySqlPreferenceRepository mySql:
-                    await mySql.InitializeAsync(CancellationToken.None).ConfigureAwait(false);
-                    break;
-            }
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "Preference database could not be initialized; preferences will not be saved until it becomes available");
-        }
     }
 
     private void OnConnected(CCSPlayerController? player)
@@ -135,31 +117,33 @@ public sealed class AllocationModule : IRetakeModule
             command.ReplyToCommand("usage: css_retake_import_v3 <path to cs2retake.db>");
             return;
         }
+        var context = Context;
+        var requester = player?.SteamID;
         _ = Task.Run(async () =>
         {
             string reply;
             try
             {
-                reply = Context.Text.Server("allocation.import.done", await preferences.ImportV3Async(file, CancellationToken.None).ConfigureAwait(false));
+                reply = context.Text.Server("allocation.import.done", await preferences.ImportV3Async(file, CancellationToken.None).ConfigureAwait(false));
             }
             catch (Exception ex)
             {
-                Context.Logger.LogWarning(ex, "V3 preference import from {File} failed", file);
-                reply = Context.Text.Server("allocation.import.failed", ex.Message);
+                context.Logger.LogWarning(ex, "V3 preference import from {File} failed", file);
+                reply = context.Text.Server("allocation.import.failed", ex.Message);
             }
-            Server.NextFrame(() => _context?.Guard.Run(Name, "import_reply", () => Reply(player, reply)));
+            Server.NextFrame(() => _context?.Guard.Run(Name, "import_reply", () => Reply(requester, reply)));
         });
     }
 
-    // CommandInfo is only valid during the command callback: the delayed reply targets the player or the server console directly.
-    private static void Reply(CCSPlayerController? player, string message)
+    // CommandInfo and the controller are only valid during the command callback: the delayed reply looks the admin up again by SteamID.
+    private static void Reply(ulong? requester, string message)
     {
-        if (player is { IsValid: true })
+        if (requester is null)
         {
-            player.PrintToChat(message);
+            Server.PrintToConsole(message);
             return;
         }
-        Server.PrintToConsole(message);
+        PlayerQueries.Humans().FirstOrDefault(p => p.SteamID == requester)?.PrintToChat(message);
     }
 
     private PreparationContext AssignLoadouts(PreparationContext context)

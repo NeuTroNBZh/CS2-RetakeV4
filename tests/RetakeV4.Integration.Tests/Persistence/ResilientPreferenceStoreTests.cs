@@ -82,4 +82,46 @@ public class ResilientPreferenceStoreTests
         await repository.ImportAsync(new[] { Preference(1) }, CancellationToken.None);
         Assert.Empty(await repository.LoadAsync(1, CancellationToken.None));
     }
+
+    [Fact]
+    public async Task FirstOperation_InitializesTheRepositoryOnce()
+    {
+        var store = Store();
+        await store.LoadAsync(1, CancellationToken.None);
+        await store.UpsertAsync(Preference(1), CancellationToken.None);
+        Assert.Equal(1, _inner.InitializeCalls);
+        Assert.True(_inner.Initialized);
+    }
+
+    [Fact]
+    public async Task FailedInitialization_IsRetriedAfterBackoff()
+    {
+        _inner.FailInitialize = true;
+        var store = Store();
+        await store.InitializeAsync(CancellationToken.None);
+        Assert.False(store.IsAvailable);
+        Assert.Empty(await store.LoadAsync(1, CancellationToken.None));
+        Assert.Equal(0, _inner.LoadCalls);
+        _inner.FailInitialize = false;
+        _now = _now.AddSeconds(6);
+        await store.LoadAsync(1, CancellationToken.None);
+        Assert.Equal(2, _inner.InitializeCalls);
+        Assert.Equal(1, _inner.LoadCalls);
+        Assert.True(store.IsAvailable);
+    }
+
+    [Fact]
+    public async Task Import_InitializesFirst()
+    {
+        await Store().ImportAsync(new[] { Preference(1) }, CancellationToken.None);
+        Assert.True(_inner.Initialized);
+        Assert.Single(_inner.Stored);
+    }
+
+    [Fact]
+    public async Task Import_PropagatesInitializationFailures()
+    {
+        _inner.FailInitialize = true;
+        await Assert.ThrowsAsync<InvalidOperationException>(() => Store().ImportAsync(new[] { Preference(1) }, CancellationToken.None));
+    }
 }

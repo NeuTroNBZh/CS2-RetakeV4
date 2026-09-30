@@ -4,6 +4,8 @@ namespace RetakeV4.Persistence;
 
 public interface IPreferenceRepository
 {
+    Task InitializeAsync(CancellationToken ct);
+
     Task<IReadOnlyList<StoredPreference>> LoadAsync(ulong steamId, CancellationToken ct);
 
     Task UpsertAsync(StoredPreference preference, CancellationToken ct);

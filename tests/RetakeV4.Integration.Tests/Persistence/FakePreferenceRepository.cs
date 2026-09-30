@@ -7,11 +7,28 @@ public sealed class FakePreferenceRepository : IPreferenceRepository
 {
     public bool Fail { get; set; }
 
+    public bool FailInitialize { get; set; }
+
+    public int InitializeCalls { get; private set; }
+
+    public bool Initialized { get; private set; }
+
     public int LoadCalls { get; private set; }
 
     public List<StoredPreference> Upserts { get; } = new();
 
     public List<StoredPreference> Stored { get; } = new();
+
+    public Task InitializeAsync(CancellationToken ct)
+    {
+        InitializeCalls++;
+        if (FailInitialize)
+        {
+            throw new InvalidOperationException("no such table");
+        }
+        Initialized = true;
+        return Task.CompletedTask;
+    }
 
     public Task<IReadOnlyList<StoredPreference>> LoadAsync(ulong steamId, CancellationToken ct)
     {
