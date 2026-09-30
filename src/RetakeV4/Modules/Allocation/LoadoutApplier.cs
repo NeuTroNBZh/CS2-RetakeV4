@@ -52,7 +52,9 @@ internal static class LoadoutApplier
             weapon!.Remove();
         }
         pawn.ArmorValue = 0;
-        new CCSPlayer_ItemServices(pawn.ItemServices!.Handle).HasHelmet = false;
+        var items = new CCSPlayer_ItemServices(pawn.ItemServices!.Handle);
+        items.HasHelmet = false;
+        items.HasDefuser = false;
     }
 
     private static bool IsKnife(string designerName) =>
