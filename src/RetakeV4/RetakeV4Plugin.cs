@@ -9,6 +9,7 @@ using RetakeV4.Domain.Rounds;
 using RetakeV4.Localization;
 using RetakeV4.Modules;
 using RetakeV4.Modules.Core;
+using RetakeV4.Modules.RoundTypes;
 
 namespace RetakeV4;
 
@@ -56,7 +57,11 @@ public sealed class RetakeV4Plugin : BasePlugin
         _roundResetSubscription = null;
     }
 
-    private static IReadOnlyList<IRetakeModule> CreateModules() => new IRetakeModule[] { new CoreModule() };
+    private static IReadOnlyList<IRetakeModule> CreateModules() => new IRetakeModule[]
+    {
+        new CoreModule(),
+        new RoundTypesModule(),
+    };
 
     private string ConfigDirectory() =>
         Path.GetFullPath(Path.Combine(ModuleDirectory, "..", "..", "configs", "plugins", "RetakeV4"));
