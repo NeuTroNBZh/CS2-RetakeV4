@@ -59,6 +59,20 @@ public class RoundTypesConfigValidatorTests
     }
 
     [Fact]
+    public void NullEntries_AreRemoved_InsteadOfThrowing()
+    {
+        var config = Defaults with
+        {
+            RoundTypes = new RoundTypeDefinitionConfig?[] { null, Def("Pistol"), Def("Mid"), Def("FullBuy") }!,
+            Sequence = new RoundTypeSequenceEntry?[] { null, new RoundTypeSequenceEntry(null!, 2), new RoundTypeSequenceEntry("Pistol", 3) }!,
+        };
+        var result = _validator.Validate(config, Defaults, "roundtypes.json");
+        Assert.Equal(new[] { "Pistol", "Mid", "FullBuy" }, result.Config.RoundTypes.Select(r => r.Name));
+        Assert.Equal(new[] { "Pistol" }, result.Config.Sequence.Select(e => e.RoundType));
+        Assert.Equal(3, result.Issues.Count);
+    }
+
+    [Fact]
     public void CountBelowMinusOne_IsRemoved()
     {
         var config = Defaults with { Sequence = new[] { new RoundTypeSequenceEntry("Pistol", -5), new RoundTypeSequenceEntry("Mid", 2) } };

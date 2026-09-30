@@ -47,6 +47,15 @@ public class TeamsConfigValidatorTests
     }
 
     [Fact]
+    public void NullPriorityFlagEntries_AreRemoved_InsteadOfThrowing()
+    {
+        var flags = new PriorityFlagConfig?[] { null, new PriorityFlagConfig { Flag = null!, Priority = 1 }, new PriorityFlagConfig { Flag = "@css/vip", Priority = 1 } };
+        var result = _validator.Validate(Defaults with { PriorityFlags = flags! }, Defaults, "teams.json");
+        Assert.Equal(new[] { "@css/vip" }, result.Config.PriorityFlags.Select(f => f.Flag));
+        Assert.Equal(2, result.Issues.Count);
+    }
+
+    [Fact]
     public void InvalidPriorityFlags_AreRemoved()
     {
         var flags = new[]

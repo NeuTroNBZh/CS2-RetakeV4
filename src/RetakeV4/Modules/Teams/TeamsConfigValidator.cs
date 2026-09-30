@@ -34,10 +34,10 @@ public sealed class TeamsConfigValidator : IConfigValidator<TeamsConfig>
         var kept = new List<PriorityFlagConfig>();
         foreach (var flag in flags ?? Array.Empty<PriorityFlagConfig>())
         {
-            var validName = flag.Flag.StartsWith('@') || flag.Flag.StartsWith('#');
-            if (!validName || flag.Priority <= 0)
+            var validName = flag?.Flag is { } name && (name.StartsWith('@') || name.StartsWith('#'));
+            if (flag is null || !validName || flag.Priority <= 0)
             {
-                issues.Add(new ConfigIssue(file, nameof(TeamsConfig.PriorityFlags), $"entry '{flag.Flag}' (priority {flag.Priority}) removed: flag must start with @ or #, priority must be > 0"));
+                issues.Add(new ConfigIssue(file, nameof(TeamsConfig.PriorityFlags), $"entry '{flag?.Flag}' (priority {flag?.Priority}) removed: flag must start with @ or #, priority must be > 0"));
                 continue;
             }
             kept.Add(flag);

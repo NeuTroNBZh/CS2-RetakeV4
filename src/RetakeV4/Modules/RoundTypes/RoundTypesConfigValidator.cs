@@ -22,9 +22,9 @@ public sealed class RoundTypesConfigValidator : IConfigValidator<RoundTypesConfi
         var kept = new List<RoundTypeDefinitionConfig>();
         foreach (var roundType in roundTypes ?? Array.Empty<RoundTypeDefinitionConfig>())
         {
-            if (string.IsNullOrWhiteSpace(roundType.Name) || kept.Any(k => k.Name == roundType.Name))
+            if (roundType is null || string.IsNullOrWhiteSpace(roundType.Name) || kept.Any(k => k.Name == roundType.Name))
             {
-                issues.Add(new ConfigIssue(file, nameof(RoundTypesConfig.RoundTypes), $"blank or duplicate round type '{roundType.Name}' removed"));
+                issues.Add(new ConfigIssue(file, nameof(RoundTypesConfig.RoundTypes), $"blank or duplicate round type '{roundType?.Name}' removed"));
                 continue;
             }
             kept.Add(roundType);
@@ -43,9 +43,9 @@ public sealed class RoundTypesConfigValidator : IConfigValidator<RoundTypesConfi
         var kept = new List<RoundTypeSequenceEntry>();
         foreach (var entry in sequence ?? Array.Empty<RoundTypeSequenceEntry>())
         {
-            if (!names.Contains(entry.RoundType) || entry.Count == 0 || entry.Count < -1)
+            if (entry?.RoundType is null || !names.Contains(entry.RoundType) || entry.Count == 0 || entry.Count < -1)
             {
-                issues.Add(new ConfigIssue(file, nameof(RoundTypesConfig.Sequence), $"entry '{entry.RoundType}' x{entry.Count} removed (unknown type or invalid count)"));
+                issues.Add(new ConfigIssue(file, nameof(RoundTypesConfig.Sequence), $"entry '{entry?.RoundType}' x{entry?.Count} removed (unknown type or invalid count)"));
                 continue;
             }
             kept.Add(entry);
