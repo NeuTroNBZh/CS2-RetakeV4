@@ -1,4 +1,5 @@
 using RetakeV4.Domain.Common;
+using RetakeV4.Domain.Loadouts;
 
 namespace RetakeV4.Domain.Rounds;
 
@@ -11,4 +12,6 @@ public sealed record PreparationContext(int RoundNumber)
     public BombSite? Site { get; init; }
 
     public PlayerId? Planter { get; init; }
+
+    public RoundTypeDefinition? RoundTypeDefinition { get; init; }
 }

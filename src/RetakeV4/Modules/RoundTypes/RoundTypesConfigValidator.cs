@@ -27,7 +27,7 @@ public sealed class RoundTypesConfigValidator : IConfigValidator<RoundTypesConfi
                 issues.Add(new ConfigIssue(file, nameof(RoundTypesConfig.RoundTypes), $"blank or duplicate round type '{roundType?.Name}' removed"));
                 continue;
             }
-            kept.Add(roundType);
+            kept.Add(RoundTypeDefinitionValidation.Clean(roundType, file, issues));
         }
         if (kept.Count > 0)
         {

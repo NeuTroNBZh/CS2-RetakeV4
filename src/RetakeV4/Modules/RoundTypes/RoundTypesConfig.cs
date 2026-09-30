@@ -1,24 +1,20 @@
 using RetakeV4.Configuration;
+using RetakeV4.Domain.Loadouts;
 using RetakeV4.Domain.RoundTypes;
 
 namespace RetakeV4.Modules.RoundTypes;
 
-public sealed record RoundTypeDefinitionConfig
-{
-    public string Name { get; init; } = string.Empty;
-}
-
 public sealed record RoundTypesConfig : ModuleConfig
 {
-    public RoundTypesConfig() => Version = 1;
+    public RoundTypesConfig() => Version = 2;
 
     public RoundTypeMode Mode { get; init; } = RoundTypeMode.Sequence;
 
     public IReadOnlyList<RoundTypeDefinitionConfig> RoundTypes { get; init; } = new[]
     {
-        new RoundTypeDefinitionConfig { Name = "Pistol" },
-        new RoundTypeDefinitionConfig { Name = "Mid" },
-        new RoundTypeDefinitionConfig { Name = "FullBuy" },
+        RoundTypeDefaults.Pistol(),
+        RoundTypeDefaults.Mid(),
+        RoundTypeDefaults.FullBuy(),
     };
 
     public IReadOnlyList<RoundTypeSequenceEntry> Sequence { get; init; } = new[]
@@ -32,4 +28,7 @@ public sealed record RoundTypesConfig : ModuleConfig
 
     public RoundTypeRules ToRules() =>
         new(Mode, RoundTypes.Select(r => r.Name).ToList(), Sequence, Specific);
+
+    public IReadOnlyDictionary<string, RoundTypeDefinition> ToDefinitions() =>
+        RoundTypes.ToDictionary(r => r.Name, r => r.ToDomain(), StringComparer.Ordinal);
 }
