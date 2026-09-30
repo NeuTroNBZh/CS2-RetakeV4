@@ -10,6 +10,7 @@ using RetakeV4.Localization;
 using RetakeV4.Modules;
 using RetakeV4.Modules.Allocation;
 using RetakeV4.Modules.Core;
+using RetakeV4.Modules.Plant;
 using RetakeV4.Modules.RoundTypes;
 using RetakeV4.Modules.Spawns;
 using RetakeV4.Modules.Teams;
@@ -67,6 +68,7 @@ public sealed class RetakeV4Plugin : BasePlugin
         new TeamsModule(),
         new SpawnsModule(),
         new AllocationModule(),
+        new PlantModule(),
     };
 
     private string ConfigDirectory() =>

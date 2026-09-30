@@ -61,6 +61,14 @@ public partial class LangFilesTests
         Assert.Contains(key, Load("en").Keys);
     }
 
+    [Theory]
+    [InlineData("plant.fast.instructions")]
+    [InlineData("plant.failed")]
+    public void Phase2bPlantKeys_ArePresent(string key)
+    {
+        Assert.Contains(key, Load("en").Keys);
+    }
+
     [Fact]
     public void Phase1Keys_ArePresent()
     {

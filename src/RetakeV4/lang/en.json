@@ -12,5 +12,7 @@
   "teams.scramble.requested": "An admin requested a scramble: teams will be scrambled at the end of the round.",
   "teams.round.t_streak": "Terrorists have won {0} round(s) in a row.",
   "teams.inconsistent": "Teams were inconsistent: restarting the round.",
-  "teams.no_permission": "You do not have permission to use this command."
+  "teams.no_permission": "You do not have permission to use this command.",
+  "plant.fast.instructions": "You have {0} seconds to plant the bomb!",
+  "plant.failed": "{0} did not plant the bomb in time: Counter-Terrorists win the round."
 }
