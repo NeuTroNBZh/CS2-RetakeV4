@@ -32,3 +32,7 @@ Préparation : `pwsh -NoProfile -File scripts/package-dev.ps1`, copier `artifact
 - [ ] `css_retake_scramble` (admin) : message puis scramble à la fin du round ; sans permission : refus.
 - [ ] Map sans fichier de spawns (ex. `de_basalt`) : warning, spawns CS2 par défaut, aucune erreur.
 - [ ] `css_plugins reload RetakeV4` en plein match : les joueurs en T/CT restent en jeu, aucune erreur.
+- [ ] Un joueur admis depuis la file apparaît bien dans son équipe au round suivant (entrée via `ChangeTeam`).
+- [ ] Un joueur qui ne choisit pas d'équipe (auto-assign du moteur à l'expiration de `mp_force_pick_time`) est remis spectateur au freeze end, mis en file et prévenu de sa position.
+- [ ] Un joueur en jeu qui passe spectateur (commande `spectate` ou menu) quitte la partie sans relancer le round ; le round suivant rééquilibre.
+- [ ] Incohérence persistante : au plus un round relancé (« Les équipes étaient incohérentes »), jamais deux de suite.
