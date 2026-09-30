@@ -14,5 +14,10 @@
   "teams.inconsistent": "Les équipes étaient incohérentes : le round redémarre.",
   "teams.no_permission": "Tu n'as pas la permission d'utiliser cette commande.",
   "plant.fast.instructions": "Tu as {0} secondes pour poser la bombe !",
-  "plant.failed": "{0} n'a pas posé la bombe à temps : les CT gagnent le round."
+  "plant.failed": "{0} n'a pas posé la bombe à temps : les CT gagnent le round.",
+  "instadefuse.blocked.he": "Instadefuse impossible : une HE est en l'air.",
+  "instadefuse.blocked.molotov": "Instadefuse impossible : une molotov est en l'air.",
+  "instadefuse.blocked.inferno": "Instadefuse impossible : du feu brûle près de la bombe.",
+  "instadefuse.not_enough_time": "{0} ne peut pas instadefuse : il manque {1}s.",
+  "instadefuse.success": "{0} a instadefuse avec {1}s restantes."
 }

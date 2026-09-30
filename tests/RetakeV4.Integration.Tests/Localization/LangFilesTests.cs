@@ -69,6 +69,17 @@ public partial class LangFilesTests
         Assert.Contains(key, Load("en").Keys);
     }
 
+    [Theory]
+    [InlineData("instadefuse.blocked.he")]
+    [InlineData("instadefuse.blocked.molotov")]
+    [InlineData("instadefuse.blocked.inferno")]
+    [InlineData("instadefuse.not_enough_time")]
+    [InlineData("instadefuse.success")]
+    public void Phase2bInstaDefuseKeys_ArePresent(string key)
+    {
+        Assert.Contains(key, Load("en").Keys);
+    }
+
     [Fact]
     public void Phase1Keys_ArePresent()
     {
