@@ -1,6 +1,7 @@
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Core.Attributes;
 using Microsoft.Extensions.Logging;
+using RetakeV4.Adapters;
 using RetakeV4.Configuration;
 using RetakeV4.Domain.Events;
 using RetakeV4.Domain.Modules;
@@ -29,7 +30,7 @@ public sealed class RetakeV4Plugin : BasePlugin
         var bus = new EventBus(OnBusError);
         var guard = new ModuleGuard(MaxErrorsPerRound, OnGuardFailure);
         var pipeline = new PreparationPipeline(guard);
-        var rounds = new RoundTracker(bus, pipeline, RoundState.Initial);
+        var rounds = new RoundTracker(bus, pipeline, RoundState.Initial, GameRulesAccessor.TotalRoundsPlayed);
         var text = new TextService(Localizer);
         _roundResetSubscription = bus.Subscribe<RoundPhaseChanged>("bootstrap", e =>
         {

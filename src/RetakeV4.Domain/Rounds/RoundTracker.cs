@@ -6,8 +6,9 @@ public sealed class RoundTracker
 {
     private readonly IEventBus _bus;
     private readonly PreparationPipeline _pipeline;
+    private readonly Func<int> _roundsPlayed;
 
-    public RoundTracker(IEventBus bus, PreparationPipeline pipeline, RoundState initial)
+    public RoundTracker(IEventBus bus, PreparationPipeline pipeline, RoundState initial, Func<int>? roundsPlayed = null)
     {
         ArgumentNullException.ThrowIfNull(bus);
         ArgumentNullException.ThrowIfNull(pipeline);
@@ -15,6 +16,7 @@ public sealed class RoundTracker
         _bus = bus;
         _pipeline = pipeline;
         State = initial;
+        _roundsPlayed = roundsPlayed ?? (() => 0);
     }
 
     public RoundState State { get; private set; }
@@ -44,7 +46,7 @@ public sealed class RoundTracker
 
     private void Prepare(int roundNumber)
     {
-        var context = _pipeline.Execute(new PreparationContext(roundNumber));
+        var context = _pipeline.Execute(new PreparationContext(roundNumber) { RoundsPlayed = _roundsPlayed() });
         _bus.Publish(new RoundPrepared(context));
         Transition(RoundStateMachine.Apply(State, RoundSignal.PreparationCompleted));
     }

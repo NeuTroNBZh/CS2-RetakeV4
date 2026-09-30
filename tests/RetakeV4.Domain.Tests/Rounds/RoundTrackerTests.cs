@@ -68,6 +68,20 @@ public class RoundTrackerTests
     }
 
     [Fact]
+    public void Prepare_PassesRoundsPlayedToThePipeline()
+    {
+        PreparationContext? seen = null;
+        _pipeline.Register("Probe", new DelegatePreparationStep("probe", 1, c =>
+        {
+            seen = c;
+            return c;
+        }));
+        var tracker = new RoundTracker(_bus, _pipeline, new RoundState(RoundPhase.PostRound, 0), () => 7);
+        tracker.Handle(RoundSignal.RoundStarted);
+        Assert.Equal(7, seen?.RoundsPlayed);
+    }
+
+    [Fact]
     public void InitialStateFor_Warmup_IsWarmup() =>
         Assert.Equal(RoundState.Initial, RoundTracker.InitialStateFor(isWarmup: true));
 
