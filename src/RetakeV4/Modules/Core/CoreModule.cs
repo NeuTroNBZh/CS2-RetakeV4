@@ -14,7 +14,7 @@ public sealed class CoreModule : IRetakeModule
 {
     private CoreConfig _config = new();
     private ModuleContext? _context;
-    private WarmupTracker _warmup = WarmupTracker.Start(16f, 0f);
+    private WarmupTracker _warmup = WarmupTracker.Start(16f);
     private Timer? _watchdog;
     private IDisposable? _debugSubscription;
     private string _mapName = string.Empty;
@@ -83,7 +83,7 @@ public sealed class CoreModule : IRetakeModule
     {
         _mapName = mapName;
         Server.ExecuteCommand($"exec {_config.ExecConfig}");
-        _warmup = WarmupTracker.Start(_config.WarmupFallbackSeconds, Server.CurrentTime);
+        _warmup = WarmupTracker.Start(_config.WarmupFallbackSeconds);
         var isWarmup = GameRulesAccessor.Get()?.WarmupPeriod ?? true;
         Context.Rounds.Reset(RoundTracker.InitialStateFor(isWarmup));
         Context.Bus.Publish(new MapStarted(mapName));
