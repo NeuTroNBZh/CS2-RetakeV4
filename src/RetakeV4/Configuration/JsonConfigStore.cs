@@ -30,8 +30,10 @@ public sealed class JsonConfigStore
         var path = Path.Combine(_directory, fileName);
         if (!File.Exists(path))
         {
-            Write(path, defaults);
-            return new ConfigLoadResult<T>(defaults, Array.Empty<ConfigIssue>(), true);
+            var writeIssue = TryWrite(path, fileName, defaults);
+            return writeIssue is null
+                ? new ConfigLoadResult<T>(defaults, Array.Empty<ConfigIssue>(), true)
+                : new ConfigLoadResult<T>(defaults, new[] { writeIssue }, false);
         }
 
         var (config, readIssues) = Read(path, fileName, defaults);
@@ -59,11 +61,23 @@ public sealed class JsonConfigStore
             var issue = new ConfigIssue(fileName, ex.Path ?? "$", $"invalid JSON ({ex.Message}); using defaults, file left untouched");
             return (defaults, new[] { issue });
         }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return (defaults, new[] { new ConfigIssue(fileName, "$", $"file could not be read ({ex.Message}); using defaults") });
+        }
     }
 
-    private static void Write<T>(string path, T config)
+    private static ConfigIssue? TryWrite<T>(string path, string fileName, T config)
     {
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        File.WriteAllText(path, JsonSerializer.Serialize(config, SerializerOptions));
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllText(path, JsonSerializer.Serialize(config, SerializerOptions));
+            return null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return new ConfigIssue(fileName, "$", $"default file could not be written ({ex.Message}); using defaults");
+        }
     }
 }

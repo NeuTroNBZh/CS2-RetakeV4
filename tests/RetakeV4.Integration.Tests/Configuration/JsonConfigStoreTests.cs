@@ -110,6 +110,27 @@ public sealed class JsonConfigStoreTests : IDisposable
     }
 
     [Fact]
+    public void LockedFile_UsesDefaults_InsteadOfThrowing()
+    {
+        File.WriteAllText(_dir.File("sample.json"), """{ "Version": 2, "Count": 7 }""");
+        using var lockHandle = new FileStream(_dir.File("sample.json"), FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+        var result = _store.Load("sample.json", new SampleConfig());
+        Assert.Equal(3, result.Config.Count);
+        Assert.Single(result.Issues);
+    }
+
+    [Fact]
+    public void UnwritableDirectory_UsesDefaults_InsteadOfThrowing()
+    {
+        File.WriteAllText(_dir.File("not-a-directory"), "x");
+        var store = new JsonConfigStore(_dir.File("not-a-directory"));
+        var result = store.Load("sample.json", new SampleConfig());
+        Assert.Equal(3, result.Config.Count);
+        Assert.False(result.CreatedDefault);
+        Assert.Single(result.Issues);
+    }
+
+    [Fact]
     public void Validator_SanitizesAndReports()
     {
         File.WriteAllText(_dir.File("sample.json"), """{ "Version": 2, "Count": -4 }""");
