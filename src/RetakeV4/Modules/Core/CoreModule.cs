@@ -16,6 +16,7 @@ public sealed class CoreModule : IRetakeModule
     private CoreConfig _config = new();
     private ModuleContext? _context;
     private WarmupTracker _warmup = WarmupTracker.Start(16f);
+    private MapConfigGate _configGate = MapConfigGate.Idle;
     private Timer? _watchdog;
     private string _mapName = string.Empty;
 
@@ -72,6 +73,12 @@ public sealed class CoreModule : IRetakeModule
 
     private void OnRoundStart()
     {
+        var (gate, execute) = _configGate.RoundStarted();
+        _configGate = gate;
+        if (execute)
+        {
+            ReapplyConfig();
+        }
         if (GameRulesAccessor.Get()?.WarmupPeriod == true)
         {
             Context.Rounds.Handle(RoundSignal.WarmupStarted);
@@ -85,6 +92,10 @@ public sealed class CoreModule : IRetakeModule
     {
         _mapName = mapName;
         Server.ExecuteCommand($"exec {_config.ExecConfig}");
+        if (!isHotReload)
+        {
+            _configGate = _configGate.MapStarted();
+        }
         _warmup = WarmupTracker.Start(_config.WarmupFallbackSeconds);
         var isWarmup = GameRulesAccessor.Get()?.WarmupPeriod ?? true;
         Context.Rounds.Reset(RoundTracker.InitialStateFor(isWarmup));
@@ -94,6 +105,18 @@ public sealed class CoreModule : IRetakeModule
         {
             Server.ExecuteCommand("mp_restartgame 1");
         }
+    }
+
+    // The gamemode config ran after our map start (bots, competitive warmup and timings): apply ours again, and restart a
+    // warmup that was started with the competitive duration so the retake one is used.
+    private void ReapplyConfig()
+    {
+        Server.ExecuteCommand($"exec {_config.ExecConfig}");
+        if (GameRulesAccessor.Get()?.WarmupPeriod == true)
+        {
+            Server.ExecuteCommand("mp_warmup_start");
+        }
+        Context.Logger.LogInformation("Retake config {Config} applied again after the server configs", _config.ExecConfig);
     }
 
     private void RestartWatchdog()
