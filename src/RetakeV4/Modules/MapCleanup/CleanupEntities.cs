@@ -30,7 +30,9 @@ internal static class CleanupEntities
     private static EntityFacts Facts(CBaseEntity entity)
     {
         var origin = entity.AbsOrigin;
-        var model = entity.CBodyComponent?.SceneNode?.GetSkeletonInstance()?.ModelState.ModelName;
+        // The native call may hand back a wrapper around a null pointer for nodes without a skeleton.
+        var skeleton = entity.CBodyComponent?.SceneNode?.GetSkeletonInstance();
+        var model = skeleton is not null && skeleton.Handle != IntPtr.Zero ? skeleton.ModelState.ModelName : null;
         var name = entity.Entity?.Name;
         return new EntityFacts(entity.DesignerName, string.IsNullOrEmpty(model) ? null : model, string.IsNullOrEmpty(name) ? null : name,
             origin is null ? new Vec3(0, 0, 0) : new Vec3(origin.X, origin.Y, origin.Z));

@@ -173,20 +173,23 @@ public sealed class MapCleanupModule : IRetakeModule
     {
         var applied = 0;
         var failed = 0;
+        Exception? lastError = null;
         foreach (var (target, className) in targets)
         {
             try
             {
                 applied += CleanupEntities.Apply(target, className) ? 1 : 0;
             }
-            catch (Exception ex) when (ex is InvalidOperationException or ArgumentException or NullReferenceException)
+            catch (Exception ex) when (ex is not OutOfMemoryException)
             {
+                // Spec: a failing entity is skipped and counted, whatever CounterStrikeSharp threw for it.
                 failed++;
+                lastError = ex;
             }
         }
         if (failed > 0)
         {
-            _context?.Logger.LogWarning("Map cleanup: {Failed} of {Count} entities failed on {Map}", failed, targets.Count, _map);
+            _context?.Logger.LogWarning(lastError, "Map cleanup: {Failed} of {Count} entities failed on {Map}", failed, targets.Count, _map);
         }
         return applied;
     }
