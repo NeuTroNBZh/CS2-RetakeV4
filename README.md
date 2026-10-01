@@ -37,7 +37,7 @@ Un fichier par module dans `addons/counterstrikesharp/configs/plugins/RetakeV4/`
 | `links.json` | commandes communautaires |
 | `api.json` | API publique |
 
-Une valeur invalide est remplacée par sa valeur par défaut avec un avertissement dans les logs. Textes : `plugins/RetakeV4/lang/en.json` et `fr.json`.
+Une valeur invalide est remplacée par sa valeur par défaut avec un avertissement dans les logs. SQLite (par défaut) fonctionne sur les hôtes Linux avec glibc 2.28 ou plus récente ; sinon utiliser MySQL (`Database.Type`). Textes : `plugins/RetakeV4/lang/en.json` et `fr.json`.
 
 ## Commandes
 | Commande | Permission | Rôle |

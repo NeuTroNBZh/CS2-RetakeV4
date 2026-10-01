@@ -26,4 +26,9 @@ if ($noConfigEntries | Where-Object { $_ -like "addons/counterstrikesharp/config
 if (-not ($fullEntries -contains "addons/counterstrikesharp/configs/plugins/RetakeV4/core.json")) { throw "The full zip has no configs" }
 if (-not ($fullEntries -contains "addons/counterstrikesharp/shared/RetakeV4.Contracts/RetakeV4.Contracts.dll")) { throw "The zip has no RetakeV4.Contracts" }
 
+$sqlite = Join-Path $staging "addons/counterstrikesharp/plugins/RetakeV4/runtimes/linux-x64/native/libe_sqlite3.so"
+$glibc = [regex]::Matches([System.Text.Encoding]::ASCII.GetString([System.IO.File]::ReadAllBytes($sqlite)), "GLIBC_2\.(\d+)") |
+    ForEach-Object { [int]$_.Groups[1].Value } | Measure-Object -Maximum
+if ($glibc.Maximum -gt 31) { throw "libe_sqlite3.so needs GLIBC_2.$($glibc.Maximum): game hosts with glibc 2.31 could not load it" }
+
 Write-Host "Release ready: $full, $noConfigs"

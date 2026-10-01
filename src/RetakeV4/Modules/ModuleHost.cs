@@ -8,15 +8,18 @@ public sealed class ModuleHost
 {
     private readonly IReadOnlyList<IRetakeModule> _modules;
     private readonly ILogger _logger;
+    private readonly Action<string> _disableModule;
     private readonly List<IRetakeModule> _loaded = new();
     private readonly Dictionary<string, ModuleRegistrations> _registrations = new();
 
-    public ModuleHost(IReadOnlyList<IRetakeModule> modules, ILogger logger)
+    public ModuleHost(IReadOnlyList<IRetakeModule> modules, ILogger logger, Action<string> disableModule)
     {
         ArgumentNullException.ThrowIfNull(modules);
         ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(disableModule);
         _modules = modules;
         _logger = logger;
+        _disableModule = disableModule;
     }
 
     public IReadOnlyList<string> LoadedModules => _loaded.Select(m => m.Name).ToList();
@@ -42,6 +45,11 @@ public sealed class ModuleHost
             Release(module);
         }
         _loaded.Clear();
+        foreach (var failed in _registrations.Keys.ToList())
+        {
+            _registrations.Remove(failed, out var registrations);
+            registrations?.Dispose();
+        }
     }
 
     private ModuleDescriptor Describe(IRetakeModule module, JsonConfigStore store)
@@ -77,8 +85,10 @@ public sealed class ModuleHost
         catch (Exception ex)
         {
             _logger.LogError(ex, "Module {Module} failed to load and is disabled", module.Name);
+            // Its handlers stay registered but the guard turns them into no-ops: CounterStrikeSharp cannot unhook an event
+            // registered before the game loop starts, so releasing now would leave the engine calling a freed delegate.
+            _disableModule(module.Name);
             SafeUnload(module);
-            Release(module);
         }
     }
 

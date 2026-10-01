@@ -22,7 +22,7 @@ public sealed class RetakeV4Plugin : BasePlugin
     private IDisposable? _roundResetSubscription;
 
     public override string ModuleName => "RetakeV4";
-    public override string ModuleVersion => "4.0.0";
+    public override string ModuleVersion => "4.0.1";
     public override string ModuleAuthor => "NeuTroNBZh";
     public override string ModuleDescription => "Modular CS2 retake plugin";
 
@@ -44,7 +44,7 @@ public sealed class RetakeV4Plugin : BasePlugin
             }
         });
 
-        _host = new ModuleHost(ModuleCatalog.CreateAll(), Logger);
+        _host = new ModuleHost(ModuleCatalog.CreateAll(), Logger, guard.Disable);
         _host.Start(new JsonConfigStore(ConfigDirectory()), (module, registrations) =>
             new ModuleContext(this, bus, guard, text, Logger, rounds,
                 new ModuleHooks(this, bus, pipeline, guard, module.Name, registrations)));

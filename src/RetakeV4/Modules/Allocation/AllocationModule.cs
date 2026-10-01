@@ -97,10 +97,18 @@ public sealed class AllocationModule : IRetakeModule
             hooks.RepeatTimer("howto", _config.HowToIntervalMinutes * 60f, () => Context.Text.ChatAll(AllocationModes.HowToKey(_config.Mode)));
         }
         ApplyBuyCvars();
-        foreach (var player in PlayerQueries.Humans())
+        // Players already on the server only exist after a hot reload; at server start the engine globals are not ready yet.
+        hooks.OnBus<ModulesReady>(e =>
         {
-            OnConnected(player);
-        }
+            if (!e.HotReload)
+            {
+                return;
+            }
+            foreach (var player in PlayerQueries.Humans())
+            {
+                OnConnected(player);
+            }
+        });
     }
 
     public void Unload()
@@ -108,8 +116,25 @@ public sealed class AllocationModule : IRetakeModule
         _preferences?.DisposeAsync().AsTask().Wait(TimeSpan.FromSeconds(5));
         _preferences = null;
         _nativeBuy = null;
-        SqliteConnection.ClearAllPools();
+        ReleaseSqliteFiles();
         _context = null;
+    }
+
+    // Pooled connections keep the .db file open; a host where the native SQLite library cannot load has nothing to release.
+    private void ReleaseSqliteFiles()
+    {
+        if (_config.Database.Type != DatabaseType.Sqlite)
+        {
+            return;
+        }
+        try
+        {
+            SqliteConnection.ClearAllPools();
+        }
+        catch (TypeInitializationException ex)
+        {
+            _context?.Logger.LogWarning(ex, "SQLite is not available on this server: nothing to release");
+        }
     }
 
     private IPreferenceRepository CreateStore(ModuleContext context)
