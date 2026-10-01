@@ -137,4 +137,21 @@ public class PreferenceBookTests
         var book = Loaded(Alice).Replace(Alice, new[] { Weapons(Bob, TeamSide.T, "Mid", "weapon_mp9") });
         Assert.Null(book.RequestFor(Bob, TeamSide.T, "Mid"));
     }
+
+    [Fact]
+    public void Merge_KeepsInGameEntries_AndAddsStoredOnes()
+    {
+        var (book, _) = PreferenceBook.Empty.StartSession(Alice);
+        var edited = book.SetWeapon(Alice, TeamSide.CT, "FullBuy", WeaponSlot.Primary, "weapon_aug").Book;
+        var merged = edited.Merge(Alice, new[] { Weapons(Alice, TeamSide.CT, "FullBuy", "weapon_m4a1_silencer"), Weapons(Alice, TeamSide.T, "Mid", "weapon_mac10") });
+        Assert.Equal("weapon_aug", merged.RequestFor(Alice, TeamSide.CT, "FullBuy")?.Primary);
+        Assert.Equal("weapon_mac10", merged.RequestFor(Alice, TeamSide.T, "Mid")?.Primary);
+    }
+
+    [Fact]
+    public void Merge_IgnoresDisconnectedPlayers()
+    {
+        var book = Loaded(Alice).WithoutPlayer(Alice);
+        Assert.Same(book, book.Merge(Alice, new[] { Weapons(Alice, TeamSide.T, "Mid", "weapon_mp9") }));
+    }
 }

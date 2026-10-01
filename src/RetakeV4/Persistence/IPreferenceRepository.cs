@@ -18,5 +18,6 @@ public interface IPreferenceRepository
 
     Task ImportAsync(IReadOnlyList<StoredPreference> preferences, CancellationToken ct);
 
-    Task PublishCatalogAsync(PublishedCatalog catalog, CancellationToken ct);
+    // False when the store is unavailable: the caller retries later.
+    Task<bool> PublishCatalogAsync(PublishedCatalog catalog, CancellationToken ct);
 }

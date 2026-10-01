@@ -19,5 +19,5 @@ public sealed class NoOpPreferenceRepository : IPreferenceRepository
     public Task<IReadOnlyDictionary<ulong, string>?> StampsAsync(IReadOnlyCollection<ulong> steamIds, CancellationToken ct) =>
         Task.FromResult<IReadOnlyDictionary<ulong, string>?>(new Dictionary<ulong, string>());
 
-    public Task PublishCatalogAsync(PublishedCatalog catalog, CancellationToken ct) => Task.CompletedTask;
+    public Task<bool> PublishCatalogAsync(PublishedCatalog catalog, CancellationToken ct) => Task.FromResult(true);
 }

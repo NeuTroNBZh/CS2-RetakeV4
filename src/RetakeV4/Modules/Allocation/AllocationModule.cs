@@ -84,7 +84,8 @@ public sealed class AllocationModule : IRetakeModule
             _definitions = e.Definitions;
             _preferences?.PublishCatalog(_config.Database.ServerKey, CatalogExport.Build(e.Definitions));
         });
-        hooks.OnEvent<EventRoundStart>("preferences_check", _ => _preferences?.CheckForExternalChanges());
+        // Loadouts are assigned at round_start: checking at round_end lets a reload land during the end-of-round delay.
+        hooks.OnEvent<EventRoundEnd>("preferences_check", _ => _preferences?.CheckForExternalChanges());
         hooks.OnBus<HudMenuSelected>(OnMenuSelected);
         hooks.OnBus<RoundPhaseChanged>(OnPhaseChanged);
         foreach (var alias in GunsAliases)

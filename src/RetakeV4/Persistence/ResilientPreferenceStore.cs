@@ -78,12 +78,9 @@ public sealed class ResilientPreferenceStore : IPreferenceRepository
     public Task<IReadOnlyDictionary<ulong, string>?> StampsAsync(IReadOnlyCollection<ulong> steamIds, CancellationToken ct) =>
         GuardedAsync("check", () => _inner.StampsAsync(steamIds, ct), ct);
 
-    public async Task PublishCatalogAsync(PublishedCatalog catalog, CancellationToken ct) =>
+    public async Task<bool> PublishCatalogAsync(PublishedCatalog catalog, CancellationToken ct) =>
         await GuardedAsync<object>("publish catalog", async () =>
-        {
-            await _inner.PublishCatalogAsync(catalog, ct).ConfigureAwait(false);
-            return new object();
-        }, ct).ConfigureAwait(false);
+            await _inner.PublishCatalogAsync(catalog, ct).ConfigureAwait(false) ? new object() : null, ct).ConfigureAwait(false) is not null;
 
     private async Task<T?> GuardedAsync<T>(string operation, Func<Task<T?>> action, CancellationToken ct) where T : class
     {

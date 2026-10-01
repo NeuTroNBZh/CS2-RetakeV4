@@ -15,9 +15,10 @@ public sealed class PreferenceServiceTests : IAsyncDisposable
 
     private readonly FakePreferenceRepository _store = new();
     private readonly BlockingCollection<Action> _gameThread = new();
+    private readonly ListLogger _logger = new();
     private readonly PreferenceService _service;
 
-    public PreferenceServiceTests() => _service = new PreferenceService(_store, new ListLogger(), _gameThread.Add);
+    public PreferenceServiceTests() => _service = new PreferenceService(_store, _logger, _gameThread.Add);
 
     public ValueTask DisposeAsync() => _service.DisposeAsync();
 
@@ -105,5 +106,44 @@ public sealed class PreferenceServiceTests : IAsyncDisposable
         _service.PublishCatalog("agora-1", """{"roundTypes":[]}""");
         Assert.True(SpinWait.SpinUntil(() => !_store.Published.IsEmpty, Wait));
         Assert.Equal(new PublishedCatalog("agora-1", CatalogExport.FormatVersion, """{"roundTypes":[]}"""), Assert.Single(_store.Published));
+    }
+
+    // A player who joined while the database was down has no stamp: his in-game choices are merged, never replaced.
+    [Fact]
+    public void InGameChoice_MadeWhileTheDatabaseWasDown_IsKeptOnRecovery()
+    {
+        _store.Fail = true;
+        _service.PlayerConnected(Alice);
+        Assert.True(SpinWait.SpinUntil(() => _logger.Entries.Count >= 1, Wait));
+        _service.SetWeapon(Alice, TeamSide.CT, "FullBuy", WeaponSlot.Primary, "weapon_aug");
+        RunGameThread();
+        _store.Fail = false;
+        _store.Stored.Add(FullBuy("weapon_m4a1_silencer"));
+        _store.StampValues[Alice] = "s1";
+        _service.CheckForExternalChanges();
+        RunGameThread();
+        RunGameThread();
+        Assert.Equal("weapon_aug", _service.RequestFor(Alice, TeamSide.CT, "FullBuy")?.Primary);
+    }
+
+    [Fact]
+    public void CatalogNotPublished_IsRetriedAtTheNextCheck()
+    {
+        _store.Fail = true;
+        _service.PublishCatalog("default", """{"roundTypes":[]}""");
+        Assert.True(SpinWait.SpinUntil(() => _logger.Entries.Count >= 1, Wait));
+        _store.Fail = false;
+        _service.CheckForExternalChanges();
+        Assert.True(SpinWait.SpinUntil(() => !_store.Published.IsEmpty, Wait));
+    }
+
+    [Fact]
+    public void PublishedCatalog_IsNotPublishedAgain()
+    {
+        _service.PublishCatalog("default", """{"roundTypes":[]}""");
+        RunGameThread();
+        _service.CheckForExternalChanges();
+        AssertNothingForTheGameThread();
+        Assert.Single(_store.Published);
     }
 }

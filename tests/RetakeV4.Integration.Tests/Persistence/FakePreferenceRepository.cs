@@ -79,11 +79,11 @@ public sealed class FakePreferenceRepository : IPreferenceRepository
         return Task.FromResult<IReadOnlyDictionary<ulong, string>?>(stamps);
     }
 
-    public Task PublishCatalogAsync(PublishedCatalog catalog, CancellationToken ct)
+    public Task<bool> PublishCatalogAsync(PublishedCatalog catalog, CancellationToken ct)
     {
         ThrowIfFailing();
         Published.Enqueue(catalog);
-        return Task.CompletedTask;
+        return Task.FromResult(true);
     }
 
     private void ThrowIfFailing()

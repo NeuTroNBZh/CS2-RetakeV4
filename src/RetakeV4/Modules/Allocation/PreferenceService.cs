@@ -15,6 +15,7 @@ public sealed class PreferenceService : IAsyncDisposable
     private readonly PreferenceWriteQueue _writes;
     private PreferenceBook _book = PreferenceBook.Empty;
     private PreferenceSync _sync = PreferenceSync.Empty;
+    private PublishedCatalog? _unpublished;
 
     public PreferenceService(IPreferenceRepository store, ILogger logger, Action<Action> onGameThread)
     {
@@ -78,6 +79,7 @@ public sealed class PreferenceService : IAsyncDisposable
     // Preferences edited on the web panel apply from the next round, without reconnecting.
     public void CheckForExternalChanges()
     {
+        TryPublishCatalog();
         var connected = _book.Sessions.Keys.ToList();
         if (connected.Count == 0)
         {
@@ -93,9 +95,12 @@ public sealed class PreferenceService : IAsyncDisposable
         });
     }
 
-    public void PublishCatalog(string serverKey, string json) =>
-        InBackground("publish catalog", 0, () =>
-            _store.PublishCatalogAsync(new PublishedCatalog(serverKey, CatalogExport.FormatVersion, json), CancellationToken.None));
+    // Kept until the store accepts it: the database may be down when the round types load.
+    public void PublishCatalog(string serverKey, string json)
+    {
+        _unpublished = new PublishedCatalog(serverKey, CatalogExport.FormatVersion, json);
+        TryPublishCatalog();
+    }
 
     public async Task<int> ImportV3Async(string databaseFile, CancellationToken ct)
     {
@@ -113,6 +118,21 @@ public sealed class PreferenceService : IAsyncDisposable
         var steamId = change.Key.SteamId;
         _sync = _sync.Edited(steamId);
         _writes.Enqueue(change, () => _onGameThread(() => _sync = _sync.Flushed(steamId)));
+    }
+
+    private void TryPublishCatalog()
+    {
+        if (_unpublished is not { } catalog)
+        {
+            return;
+        }
+        InBackground("publish catalog", 0, async () =>
+        {
+            if (await _store.PublishCatalogAsync(catalog, CancellationToken.None).ConfigureAwait(false))
+            {
+                _onGameThread(() => _unpublished = ReferenceEquals(_unpublished, catalog) ? null : _unpublished);
+            }
+        });
     }
 
     private void ReloadChanged(IReadOnlyCollection<ulong> connected, IReadOnlyDictionary<ulong, string> current)
@@ -137,7 +157,8 @@ public sealed class PreferenceService : IAsyncDisposable
         {
             return;
         }
-        _book = _book.Replace(steamId, snapshot.Preferences);
+        // Never stamped means the first load failed: what the player chose in game since then is newer than the database.
+        _book = _sync.Stamps.ContainsKey(steamId) ? _book.Replace(steamId, snapshot.Preferences) : _book.Merge(steamId, snapshot.Preferences);
         _sync = _sync.Stamped(steamId, snapshot.Stamp);
     }
 

@@ -71,8 +71,9 @@ public sealed class MySqlPreferenceRepository : IPreferenceRepository
     public async Task<PlayerSnapshot?> SnapshotAsync(ulong steamId, CancellationToken ct)
     {
         await using var connection = await OpenAsync(ct).ConfigureAwait(false);
-        var rows = await ReadRowsAsync(connection, steamId, ct).ConfigureAwait(false);
+        // Stamp first: a write landing between the two reads then shows up as a change at the next check.
         var stamps = await ReadStampsAsync(connection, new[] { steamId }, ct).ConfigureAwait(false);
+        var rows = await ReadRowsAsync(connection, steamId, ct).ConfigureAwait(false);
         return new PlayerSnapshot(rows, stamps.GetValueOrDefault(steamId, PreferenceSync.NoRows));
     }
 
@@ -86,7 +87,7 @@ public sealed class MySqlPreferenceRepository : IPreferenceRepository
         return await ReadStampsAsync(connection, steamIds, ct).ConfigureAwait(false);
     }
 
-    public async Task PublishCatalogAsync(PublishedCatalog catalog, CancellationToken ct)
+    public async Task<bool> PublishCatalogAsync(PublishedCatalog catalog, CancellationToken ct)
     {
         await using var connection = await OpenAsync(ct).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
@@ -96,6 +97,7 @@ public sealed class MySqlPreferenceRepository : IPreferenceRepository
         command.Parameters.AddWithValue("@catalog", catalog.Json);
         command.Parameters.AddWithValue("@updated_at", DateTime.UtcNow);
         await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+        return true;
     }
 
     private static async Task<IReadOnlyList<StoredPreference>> ReadRowsAsync(MySqlConnection connection, ulong steamId, CancellationToken ct)
