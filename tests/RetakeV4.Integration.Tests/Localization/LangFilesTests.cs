@@ -126,4 +126,50 @@ public partial class LangFilesTests
     {
         Assert.Contains(key, Load("en").Keys);
     }
+
+    [Theory]
+    [InlineData("spawns.editor.entered")]
+    [InlineData("spawns.editor.left")]
+    [InlineData("spawns.editor.saved")]
+    [InlineData("spawns.editor.save_failed")]
+    [InlineData("spawns.editor.reloaded")]
+    [InlineData("spawns.editor.added")]
+    [InlineData("spawns.editor.deleted")]
+    [InlineData("spawns.editor.updated")]
+    [InlineData("spawns.editor.none_nearby")]
+    [InlineData("spawns.editor.teleported")]
+    [InlineData("spawns.editor.not_found")]
+    [InlineData("spawns.editor.noclip_on")]
+    [InlineData("spawns.editor.noclip_off")]
+    [InlineData("spawns.editor.usage_add")]
+    [InlineData("spawns.editor.usage_tp")]
+    [InlineData("spawns.editor.usage_teleport")]
+    [InlineData("spawns.editor.usage_edit")]
+    [InlineData("spawns.editor.unsaved")]
+    [InlineData("spawns.editor.player_only")]
+    [InlineData("spawns.editor.no_permission")]
+    [InlineData("spawns.editor.menu.title")]
+    [InlineData("spawns.editor.menu.add")]
+    [InlineData("spawns.editor.menu.nearest")]
+    [InlineData("spawns.editor.menu.teleport")]
+    [InlineData("spawns.editor.menu.save")]
+    [InlineData("spawns.editor.menu.reload")]
+    [InlineData("spawns.editor.menu.noclip")]
+    [InlineData("spawns.editor.menu.exit")]
+    [InlineData("spawns.editor.menu.exit_save")]
+    [InlineData("spawns.editor.menu.exit_discard")]
+    [InlineData("spawns.editor.menu.delete")]
+    [InlineData("spawns.editor.menu.set_team")]
+    [InlineData("spawns.editor.menu.set_site")]
+    [InlineData("spawns.editor.menu.can_plant")]
+    [InlineData("spawns.forcesite.set_once")]
+    [InlineData("spawns.forcesite.set_sticky")]
+    [InlineData("spawns.forcesite.cleared")]
+    [InlineData("spawns.forcesite.usage")]
+    [InlineData("spawns.forcesite.no_spawns")]
+    [InlineData("spawns.missing.admin")]
+    public void Phase4aKeys_ArePresent(string key)
+    {
+        Assert.Contains(key, Load("en").Keys);
+    }
 }
