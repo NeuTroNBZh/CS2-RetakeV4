@@ -36,3 +36,19 @@ Préparation : `pwsh -NoProfile -File scripts/package-dev.ps1`, copier `artifact
 - [ ] Un joueur qui ne choisit pas d'équipe (auto-assign du moteur à l'expiration de `mp_force_pick_time`) est remis spectateur au freeze end, mis en file et prévenu de sa position.
 - [ ] Un joueur en jeu qui passe spectateur (commande `spectate` ou menu) quitte la partie sans relancer le round ; le round suivant rééquilibre.
 - [ ] Incohérence persistante : au plus un round relancé (« Les équipes étaient incohérentes »), jamais deux de suite.
+
+## Phase 2b — Armes, plant, InstaDefuse
+- [ ] Log `… loaded with modules: Core, RoundTypes, Teams, Spawns, Allocation, Plant, InstaDefuse` ; `grenades.json`, `allocation.json`, `plant.json`, `instadefuse.json` créés ; `roundtypes.json` (version 2) contient les pools d'armes. Un ancien `roundtypes.json` (version 1, phase 2a) affiche « has no weapon pools (pre-v2 file); using the built-in … definition » pour Pistol, Mid et FullBuy, et les rounds utilisent bien les armes V3.
+- [ ] Round Pistol : T glock, CT usp-s, kevlar sans casque, couteau conservé ; environ 1 CT sur 3 a un kit et **au moins un** CT en a un.
+- [ ] Round Mid : T mac-10 + deagle, CT mp9 + deagle, kevlar + casque ; tous les CT ont un kit.
+- [ ] Round FullBuy : T ak-47 + deagle, CT m4a4 + deagle, kevlar + casque ; aucune AWP (pas encore de préférences, phase 3).
+- [ ] Chaque joueur a un kit de grenades aléatoire cohérent avec son camp (molotov côté T, incendiaire côté CT) ; certains n'en ont aucune.
+- [ ] Un couteau personnalisé / une baïonnette est conservé ; aucune C4 dans les inventaires (AutoPlant).
+- [ ] AutoPlant : au freeze end, la bombe est posée sous les pieds du planteur (T en zone de plant), le compte à rebours de 40 s démarre, l'annonce « bombe posée » apparaît.
+- [ ] `plant.json` en `FastPlant` : seul le planteur reçoit la C4, message central, le plant est instantané ; s'il ne pose pas en 5 s : message et victoire CT.
+- [ ] InstaDefuse : tous les T morts, un CT commence à défuser → défuse immédiat et message « … a instadefuse avec Xs restantes ».
+- [ ] Un T encore en vie → défuse normal, aucun message.
+- [ ] HE ou molotov lancée juste avant le défuse → message de blocage correspondant, défuse normal.
+- [ ] Molotov qui brûle près de la bombe → message « du feu brûle près de la bombe ».
+- [ ] Défuse commencé avec moins de 10 s (sans kit) → message « il manque Xs » et la bombe explose immédiatement.
+- [ ] Un CT qui survit à un round Pistol ne garde pas son kit : au round suivant, seuls les CT tirés au sort en ont un.

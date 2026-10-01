@@ -1,3 +1,4 @@
+using RetakeV4.Domain.Common;
 using RetakeV4.Domain.Rounds;
 
 namespace RetakeV4.Domain.Events;
@@ -11,3 +12,5 @@ public sealed record MapStarted(string MapName);
 public sealed record WarmupForcedEnd(string MapName);
 
 public sealed record ModulesReady(bool HotReload);
+
+public sealed record BombPlanted(BombSite? Site, PlayerId? Planter);

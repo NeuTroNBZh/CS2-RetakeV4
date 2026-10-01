@@ -27,4 +27,6 @@ Plugin CounterStrikeSharp (C# / .NET 10, CSSharp 1.0.370+) de retake CS2, rééc
 - Tout hasard passe par `IRandom` (`SystemRandom.Shared` en jeu, `FixedRandom` en test).
 - Textes joueurs uniquement via `lang/*.json` (clés `module.section.key`, en + fr synchronisés) ; logs en anglais avec templates constants.
 - Valeurs par défaut de config uniquement dans les records C# (`*Config.cs`).
+- Tout callback `Server.NextFrame` ou timer d'un module passe par `context.Guard.Run` (via `_context?.Guard`, le module a pu être déchargé entre-temps).
+- Les définitions de types de round (armes, armure, AWP, kits, Zeus, pool de grenades) vivent dans `roundtypes.json` et arrivent aux modules via `PreparationContext.RoundTypeDefinition`.
 - Tests en jeu : `docs/CHECKLIST-INGAME.md`, une section par phase.

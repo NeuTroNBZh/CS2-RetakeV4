@@ -12,5 +12,12 @@
   "teams.scramble.requested": "An admin requested a scramble: teams will be scrambled at the end of the round.",
   "teams.round.t_streak": "Terrorists have won {0} round(s) in a row.",
   "teams.inconsistent": "Teams were inconsistent: restarting the round.",
-  "teams.no_permission": "You do not have permission to use this command."
+  "teams.no_permission": "You do not have permission to use this command.",
+  "plant.fast.instructions": "You have {0} seconds to plant the bomb!",
+  "plant.failed": "{0} did not plant the bomb in time: Counter-Terrorists win the round.",
+  "instadefuse.blocked.he": "Instant defuse impossible: an HE grenade is in the air.",
+  "instadefuse.blocked.molotov": "Instant defuse impossible: a molotov is in the air.",
+  "instadefuse.blocked.inferno": "Instant defuse impossible: fire is burning near the bomb.",
+  "instadefuse.not_enough_time": "{0} cannot instadefuse: {1}s missing.",
+  "instadefuse.success": "{0} instadefused with {1}s left."
 }

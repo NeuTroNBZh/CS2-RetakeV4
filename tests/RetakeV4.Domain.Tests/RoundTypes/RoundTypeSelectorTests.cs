@@ -1,3 +1,4 @@
+using RetakeV4.Domain.Loadouts;
 using RetakeV4.Domain.RoundTypes;
 using RetakeV4.Domain.Rounds;
 using RetakeV4.Domain.Tests.TestDoubles;
@@ -75,12 +76,26 @@ public class RoundTypeSelectorTests
     }
 
     [Fact]
-    public void Step_WritesRoundTypeIntoContext()
+    public void Step_WritesRoundTypeAndDefinitionIntoContext()
     {
-        var step = new RoundTypeStep(Default, new FixedRandom());
+        var definitions = new Dictionary<string, RoundTypeDefinition> { ["Mid"] = Definition("Mid") };
+        var step = new RoundTypeStep(Default, definitions, new FixedRandom());
         var result = step.Execute(new PreparationContext(4) { RoundsPlayed = 3 });
         Assert.Equal("Mid", result.RoundType);
+        Assert.Equal("Mid", result.RoundTypeDefinition?.Name);
         Assert.Equal(PreparationOrder.RoundType, step.Order);
         Assert.Equal("round_type", step.Name);
     }
+
+    [Fact]
+    public void Step_UnknownDefinition_LeavesDefinitionNull()
+    {
+        var step = new RoundTypeStep(Default, new Dictionary<string, RoundTypeDefinition>(), new FixedRandom());
+        Assert.Null(step.Execute(new PreparationContext(1)).RoundTypeDefinition);
+    }
+
+    private static RoundTypeDefinition Definition(string name) => new(
+        name, ArmorKind.Kevlar, TeamWeapons.Empty, TeamWeapons.Empty,
+        new TeamDefault(null, "weapon_glock"), new TeamDefault(null, "weapon_usp_silencer"),
+        new AwpSettings(false, 1, 5, 30), new DefuseKitSettings(DefuseKitMode.All, 1, 100, false), new ZeusSettings(false, 20), "Default");
 }
