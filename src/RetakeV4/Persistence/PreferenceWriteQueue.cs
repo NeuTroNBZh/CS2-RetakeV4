@@ -8,7 +8,8 @@ public sealed class PreferenceWriteQueue : IAsyncDisposable
 {
     private static readonly TimeSpan DrainTimeout = TimeSpan.FromSeconds(5);
 
-    private readonly Channel<StoredPreference> _channel = Channel.CreateUnbounded<StoredPreference>(new UnboundedChannelOptions { SingleReader = true });
+    private readonly Channel<(StoredPreference Preference, Action? Written)> _channel =
+        Channel.CreateUnbounded<(StoredPreference, Action?)>(new UnboundedChannelOptions { SingleReader = true });
     private readonly IPreferenceRepository _store;
     private readonly ILogger _logger;
     private readonly Task _worker;
@@ -20,7 +21,7 @@ public sealed class PreferenceWriteQueue : IAsyncDisposable
         _worker = Task.Run(RunAsync);
     }
 
-    public void Enqueue(StoredPreference preference) => _channel.Writer.TryWrite(preference);
+    public void Enqueue(StoredPreference preference, Action? written = null) => _channel.Writer.TryWrite((preference, written));
 
     public async ValueTask DisposeAsync()
     {
@@ -30,7 +31,7 @@ public sealed class PreferenceWriteQueue : IAsyncDisposable
 
     private async Task RunAsync()
     {
-        await foreach (var preference in _channel.Reader.ReadAllAsync().ConfigureAwait(false))
+        await foreach (var (preference, written) in _channel.Reader.ReadAllAsync().ConfigureAwait(false))
         {
             try
             {
@@ -40,6 +41,7 @@ public sealed class PreferenceWriteQueue : IAsyncDisposable
             {
                 _logger.LogWarning(ex, "Could not save a preference for {SteamId}", preference.Key.SteamId);
             }
+            written?.Invoke();
         }
     }
 }

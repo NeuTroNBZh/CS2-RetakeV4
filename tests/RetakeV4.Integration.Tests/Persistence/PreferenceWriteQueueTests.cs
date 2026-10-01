@@ -34,4 +34,16 @@ public class PreferenceWriteQueueTests
         Assert.Equal("weapon_galilar", Assert.Single(repository.Upserts).Preference.Primary);
         Assert.NotEmpty(logger.Entries);
     }
+
+    [Fact]
+    public async Task WrittenCallback_RunsAfterEachAttempt_EvenOnFailure()
+    {
+        var repository = new FakePreferenceRepository { FailUpsertFor = p => p.Key.SteamId == 1 };
+        var queue = new PreferenceWriteQueue(repository, new ListLogger());
+        var written = new System.Collections.Concurrent.ConcurrentQueue<ulong>();
+        queue.Enqueue(Preference(1, "weapon_mac10"), () => written.Enqueue(1));
+        queue.Enqueue(Preference(2, "weapon_galilar"), () => written.Enqueue(2));
+        await queue.DisposeAsync();
+        Assert.Equal(new ulong[] { 1, 2 }, written);
+    }
 }

@@ -59,7 +59,8 @@ public sealed class AllocationModule : IRetakeModule
     public void Load(ModuleContext context)
     {
         _context = context;
-        _preferences = new PreferenceService(CreateStore(context), context.Logger);
+        _preferences = new PreferenceService(CreateStore(context), context.Logger,
+            apply => Server.NextFrame(() => _context?.Guard.Run(Name, "preferences", apply)));
         var hooks = context.Hooks;
         hooks.PreparationStep(new DelegatePreparationStep("loadout", PreparationOrder.Loadout, AssignLoadouts));
         hooks.OnEvent<EventPlayerConnectFull>("player_connect_full", e => OnConnected(e.Userid));
@@ -155,7 +156,7 @@ public sealed class AllocationModule : IRetakeModule
     {
         if (player is { IsValid: true, IsBot: false, IsHLTV: false } && player.SteamID != 0)
         {
-            _preferences?.PlayerConnected(player.SteamID, apply => Server.NextFrame(() => _context?.Guard.Run(Name, "preferences_loaded", apply)));
+            _preferences?.PlayerConnected(player.SteamID);
         }
     }
 
