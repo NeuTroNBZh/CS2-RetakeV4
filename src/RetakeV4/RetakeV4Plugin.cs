@@ -3,6 +3,7 @@ using CounterStrikeSharp.API.Core.Attributes;
 using Microsoft.Extensions.Logging;
 using RetakeV4.Adapters;
 using RetakeV4.Configuration;
+using RetakeV4.Contracts;
 using RetakeV4.Domain.Events;
 using RetakeV4.Domain.Modules;
 using RetakeV4.Domain.Rounds;
@@ -27,6 +28,8 @@ public sealed class RetakeV4Plugin : BasePlugin
 
     public override void Load(bool hotReload)
     {
+        // Registers the API capability even if the Api module is disabled: consumers then get null instead of an exception.
+        RetakeApiHost.Publish(null);
         var bus = new EventBus(OnBusError);
         _bus = bus;
         var guard = new ModuleGuard(MaxErrorsPerRound, OnGuardFailure);

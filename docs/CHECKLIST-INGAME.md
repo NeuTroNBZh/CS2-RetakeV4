@@ -140,4 +140,5 @@ Remplir aussi `docs/spikes/hud-probe-findings.md` : les réglages `hud.json` →
 - [ ] Un plugin de test qui lit `RetakeApi.Capability.Get()` dans `OnAllPluginsLoaded` reçoit `RoundPrepared` (type, site, poseur), `LoadoutAssigned`, `BombPlanted`, `RoundEnded` (vainqueur) et `PlayerQueued`.
 - [ ] `LastPlayerAlive` : déclenché une fois quand une équipe de 2+ joueurs n'a plus qu'un vivant ; jamais pour une équipe d'un seul joueur.
 - [ ] Un abonné qui lève une exception : avertissement dans les logs, le round continue.
-- [ ] `css_plugins reload RetakeV4` : l'API reste disponible (pas d'erreur d'enregistrement bloquante).
+- [ ] `css_plugins reload RetakeV4` : un nouvel appel à `Get()` renvoie l'API rechargée (et non null).
+- [ ] `api.json` → `Enabled: false` : `Get()` renvoie null, sans exception.

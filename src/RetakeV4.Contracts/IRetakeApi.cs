@@ -45,7 +45,8 @@ public sealed record RoundEndedEvent(int RoundNumber, RetakeTeam? Winner);
 
 public sealed record PlayerQueuedEvent(RetakePlayer Player, int Position);
 
-// Events are raised on the game thread. An exception thrown by a subscriber is logged by RetakeV4 and never stops the retake.
+// Every member must be used from the game thread, and events are raised on it. An exception thrown by a subscriber is logged
+// by RetakeV4 and never stops the retake.
 public interface IRetakeApi
 {
     int ApiVersion { get; }
@@ -79,6 +80,7 @@ public static class RetakeApi
 {
     public const int Version = 1;
 
-    // Get() returns null while RetakeV4 (or its Api module) is not loaded.
+    // Get() returns null while the Api module is not loaded (or disabled). It throws KeyNotFoundException only if RetakeV4 itself
+    // never started on this server. After a RetakeV4 reload, call Get() again: the previous instance no longer raises events.
     public static PluginCapability<IRetakeApi?> Capability { get; } = new("retakev4:api");
 }

@@ -1,6 +1,5 @@
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
-using CounterStrikeSharp.API.Core.Capabilities;
 using CounterStrikeSharp.API.Modules.Utils;
 using Microsoft.Extensions.Logging;
 using RetakeV4.Adapters;
@@ -38,7 +37,7 @@ public sealed class ApiModule : IRetakeModule
         _context = context;
         var service = new RetakeApiService(context.Bus, context.Logger, SlotOf, SteamIdOf);
         _service = service;
-        Register(context.Logger);
+        RetakeApiHost.Publish(service);
         var hooks = context.Hooks;
         hooks.OnBus<RoundPhaseChanged>(service.OnPhase);
         hooks.OnBus<RoundPrepared>(service.OnRoundPrepared);
@@ -53,20 +52,9 @@ public sealed class ApiModule : IRetakeModule
 
     public void Unload()
     {
+        RetakeApiHost.Publish(null);
         _service = null;
         _context = null;
-    }
-
-    private void Register(ILogger logger)
-    {
-        try
-        {
-            Capabilities.RegisterPluginCapability(RetakeApi.Capability, () => _service);
-        }
-        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
-        {
-            logger.LogWarning(ex, "The retakev4:api capability could not be registered");
-        }
     }
 
     // The death is processed on the next frame, once the victim is no longer counted as alive.

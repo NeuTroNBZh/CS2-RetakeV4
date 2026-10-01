@@ -60,13 +60,21 @@ using RetakeV4.Contracts;
 
 public override void OnAllPluginsLoaded(bool hotReload)
 {
-    var retake = RetakeApi.Capability.Get();
-    if (retake is null) return;
+    IRetakeApi? retake;
+    try
+    {
+        retake = RetakeApi.Capability.Get();
+    }
+    catch (KeyNotFoundException)
+    {
+        return; // RetakeV4 is not installed on this server
+    }
+    if (retake is null) return; // Api module disabled
     retake.LastPlayerAlive += e => Logger.LogInformation("Clutch for {Team}: slot {Slot}", e.Team, e.Player.Slot);
     retake.RoundPrepared += e => Logger.LogInformation("Round {Round}: {Type} on {Site}", e.RoundNumber, e.RoundType, e.Site);
 }
 ```
-Événements : `RoundPrepared`, `BombPlanted`, `LoadoutAssigned`, `LastPlayerAlive`, `RoundEnded`, `PlayerQueued`. Actions : `ForceSite`, `RequestScramble`. Les événements arrivent sur le thread de jeu ; une exception dans un abonné est journalisée et n'arrête pas le retake.
+Événements : `RoundPrepared`, `BombPlanted`, `LoadoutAssigned`, `LastPlayerAlive`, `RoundEnded`, `PlayerQueued`. Actions : `ForceSite`, `RequestScramble`. Tous les membres s'utilisent depuis le thread de jeu, où arrivent aussi les événements ; une exception dans un abonné est journalisée et n'arrête pas le retake. Après un rechargement de RetakeV4 (`css_plugins reload RetakeV4`), rappeler `Get()` : l'ancienne instance ne déclenche plus d'événements. Évolutions de l'API : uniquement par ajouts (nouvelles propriétés, événements ou interfaces), `RetakeApi.Version` augmente à chaque ajout.
 
 ## Développement
 - Build : `dotnet build RetakeV4.sln -c Release` ; tests : `dotnet test RetakeV4.sln`.
