@@ -24,6 +24,13 @@ public static class LoadoutPlanner
         return (primary, secondary);
     }
 
+    // A freeze-time weapon change keeps what was already handed out (AWP, armor, kit, Zeus, grenades) and only swaps the guns.
+    public static Loadout WithWeapons(Loadout current, RoundTypeDefinition definition, LoadoutRequest request)
+    {
+        var (primary, secondary) = ResolveWeapons(definition, request);
+        return current with { Primary = current.Primary == WeaponCatalog.Awp ? WeaponCatalog.Awp : primary, Secondary = secondary };
+    }
+
     public static IReadOnlySet<PlayerId> PickAwpRecipients(AwpSettings settings, IReadOnlyList<LoadoutRequest> players, IRandom random)
     {
         var recipients = new HashSet<PlayerId>();

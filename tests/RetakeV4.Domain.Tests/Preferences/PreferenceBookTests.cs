@@ -93,4 +93,17 @@ public class PreferenceBookTests
             .With(Weapons(Alice, TeamSide.T, "Mid", "weapon_galilar"));
         Assert.Equal("weapon_galilar", book.RequestFor(Alice, TeamSide.T, "Mid")?.Primary);
     }
+
+    [Fact]
+    public void SetWeapon_ChangesOneSlot_AndKeepsTheOther()
+    {
+        var book = Loaded(Alice, Weapons(Alice, TeamSide.CT, "FullBuy", "weapon_m4a1", "weapon_deagle"));
+        var (after, change) = book.SetWeapon(Alice, TeamSide.CT, "FullBuy", WeaponSlot.Primary, "weapon_aug");
+        Assert.Equal(new PreferenceKey(Alice, TeamSide.CT, "FullBuy"), change.Key);
+        Assert.Equal(new LoadoutPreference("weapon_aug", "weapon_deagle", false), change.Preference);
+        Assert.Equal("weapon_aug", after.RequestFor(Alice, TeamSide.CT, "FullBuy")?.Primary);
+        var (fresh, secondary) = PreferenceBook.Empty.SetWeapon(Bob, TeamSide.T, "Pistol", WeaponSlot.Secondary, "weapon_tec9");
+        Assert.Equal(new LoadoutPreference(null, "weapon_tec9", false), secondary.Preference);
+        Assert.Equal("weapon_tec9", fresh.RequestFor(Bob, TeamSide.T, "Pistol")?.Secondary);
+    }
 }

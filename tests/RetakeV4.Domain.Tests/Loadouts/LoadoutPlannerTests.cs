@@ -165,4 +165,26 @@ public class LoadoutPlannerTests
         var plan = LoadoutPlanner.Plan(definition, Lobby(1, 1), Array.Empty<GrenadeKit>(), new FixedRandom());
         Assert.All(plan.Values, l => Assert.True(l.Zeus));
     }
+
+    [Fact]
+    public void WithWeapons_KeepsTheAwpAndTheRestOfTheLoadout()
+    {
+        var definition = new RoundTypeDefinition(
+            "FullBuy",
+            ArmorKind.KevlarHelmet,
+            new TeamWeapons(new[] { "weapon_ak47", "weapon_galilar" }, Array.Empty<string>(), Array.Empty<string>()),
+            new TeamWeapons(new[] { "weapon_deagle" }, Array.Empty<string>(), Array.Empty<string>()),
+            new TeamDefault("weapon_ak47", "weapon_glock"),
+            new TeamDefault("weapon_m4a1", "weapon_usp_silencer"),
+            new AwpSettings(true, 1, 0, 1.0),
+            new DefuseKitSettings(DefuseKitMode.All, 0, 1.0, false),
+            new ZeusSettings(false, 0),
+            "default");
+        var request = new LoadoutRequest(new PlayerId(3), TeamSide.T, new LoadoutPreference("weapon_galilar", "weapon_deagle", true));
+        var withAwp = new Loadout(WeaponCatalog.Awp, "weapon_glock", ArmorKind.KevlarHelmet, false, true, new[] { "weapon_flashbang" });
+        var adjusted = LoadoutPlanner.WithWeapons(withAwp, definition, request);
+        Assert.Equal(withAwp with { Secondary = "weapon_deagle" }, adjusted);
+        var withRifle = withAwp with { Primary = "weapon_ak47" };
+        Assert.Equal("weapon_galilar", LoadoutPlanner.WithWeapons(withRifle, definition, request).Primary);
+    }
 }
