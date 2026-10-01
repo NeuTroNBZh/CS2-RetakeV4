@@ -172,7 +172,8 @@ public sealed class AllocationModule : IRetakeModule
         {
             return;
         }
-        var optIn = _preferences.ToggleAwp(player.SteamID);
+        // The AWP is volunteered per team: the command toggles the player's current team (both without a team).
+        var optIn = _preferences.ToggleAwp(player.SteamID, PlayerQueries.SideOf(player));
         Context.Text.Chat(player, optIn ? "allocation.awp.enabled" : "allocation.awp.disabled");
     }
 
@@ -292,7 +293,7 @@ public sealed class AllocationModule : IRetakeModule
             _current,
             PlayerQueries.SideOf(player),
             (team, roundType) => preferences.RequestFor(steamId, team, roundType),
-            preferences.IsAwpVolunteer(steamId));
+            side => preferences.IsAwpVolunteer(steamId, side));
         Context.Bus.Publish(new HudMenuOpen(new PlayerId(player.Slot), WeaponMenu.Build(state), refreshOnly));
     }
 
@@ -307,9 +308,9 @@ public sealed class AllocationModule : IRetakeModule
         {
             return;
         }
-        if (e.ItemId == WeaponMenu.AwpItemId)
+        if (WeaponMenu.ParseAwp(e.ItemId) is { } awpSide)
         {
-            preferences.ToggleAwp(player.SteamID);
+            preferences.ToggleAwp(player.SteamID, awpSide);
         }
         else if (WeaponMenuSelection.Parse(e.ItemId) is { } selection && WeaponMenu.IsAllowed(selection, _definitions))
         {
@@ -406,9 +407,9 @@ public sealed class AllocationModule : IRetakeModule
                 ApplySelection(player, preferences, selection);
                 break;
             case BuyOutcome.AwpVolunteer:
-                if (!preferences.IsAwpVolunteer(player.SteamID))
+                if (PlayerQueries.SideOf(player) is { } side && !preferences.IsAwpVolunteer(player.SteamID, side))
                 {
-                    preferences.ToggleAwp(player.SteamID);
+                    preferences.ToggleAwp(player.SteamID, side);
                 }
                 Context.Bus.Publish(new HudAlert(id, HudText.Of("allocation.buy.awp_volunteer")));
                 break;

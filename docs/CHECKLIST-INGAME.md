@@ -76,7 +76,7 @@ Remplir aussi `docs/spikes/hud-probe-findings.md` : les réglages `hud.json` →
 - [ ] Choisir une arme principale pendant le freeze time : l'arme est remplacée immédiatement, alerte « Armes mises à jour. » ; kit, grenades et AWP éventuelle conservés.
 - [ ] Choisir une arme en round live ou pour une autre configuration : alerte « Enregistré, utilisé dès le prochain round. », appliqué au round suivant.
 - [ ] Les sections Terroristes / Antiterroristes listent les types de round qui offrent un choix ; un pistol round ne propose que le pistolet.
-- [ ] AWP : ON/OFF bascule et persiste après reconnexion ; recevoir l'AWP affiche « Tu as l'AWP ce round. ».
+- [ ] AWP : l'interrupteur n'apparaît que dans les types de round qui distribuent l'AWP (FullBuy par défaut), séparément pour T et CT ; ON/OFF persiste après reconnexion ; `!awp` bascule l'équipe actuelle ; recevoir l'AWP affiche « Tu as l'AWP ce round. ».
 - [ ] Nouveau joueur : le menu s'ouvre seul au freeze time, puis se ferme au début du round live ; il se rouvre quand le type de round change.
 - [ ] Menu ouvert pendant la fin de round / le restart : aucune erreur console, le menu réapparaît au round suivant.
 - [ ] Mort ou spectateur : le menu s'ouvre et se pilote au viseur.
@@ -165,7 +165,8 @@ Remplir aussi `docs/spikes/hud-probe-findings.md` : les réglages `hud.json` →
 ## Panneau central et échauffement (4.2.0)
 
 - [ ] Sans `hud.json` (créé par défaut) : `!guns` ouvre le panneau au centre de l'écran, le bloc d'infos réapparaît à la fermeture.
-- [ ] Avancer / reculer déplace la ligne surlignée (en boucle en haut et en bas) ; Utiliser (E) valide hors round, Recharger (R) valide en round vivant (E reste libre pour désamorcer et ouvrir les portes).
+- [ ] Avancer / reculer déplace la ligne surlignée (en boucle en haut et en bas) ; Utiliser (E) valide, dans toutes les phases.
+- [ ] Liste longue (pistolets) : le panneau défile avec le curseur, flèches ▲ / ▼ quand des lignes sont cachées ; `Menu.CenterVisibleLines` règle le nombre de lignes.
 - [ ] Tenir avancer au moment où le menu s'ouvre seul ne déplace pas le curseur.
 - [ ] Après un choix, la confirmation (« Armes mises à jour » / « Enregistré… ») s'affiche dans le panneau.
 - [ ] Le panneau tient en entier à l'écran avec 7 lignes ou plus (titre, lignes, confirmation, aide).

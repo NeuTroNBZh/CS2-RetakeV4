@@ -154,4 +154,16 @@ public class PreferenceBookTests
         var book = Loaded(Alice).WithoutPlayer(Alice);
         Assert.Same(book, book.Merge(Alice, new[] { Weapons(Alice, TeamSide.T, "Mid", "weapon_mp9") }));
     }
+
+    [Fact]
+    public void ToggleAwp_ForOneSide_LeavesTheOtherSide()
+    {
+        var (book, changes, optIn) = Loaded(Alice).ToggleAwp(Alice, TeamSide.CT);
+        Assert.True(optIn);
+        Assert.Equal(new PreferenceKey(Alice, TeamSide.CT, PreferenceKey.AnyRoundType), Assert.Single(changes).Key);
+        Assert.True(book.IsAwpVolunteer(Alice, TeamSide.CT));
+        Assert.False(book.IsAwpVolunteer(Alice, TeamSide.T));
+        Assert.True(book.RequestFor(Alice, TeamSide.CT, "FullBuy")!.AwpOptIn);
+        Assert.Null(book.RequestFor(Alice, TeamSide.T, "FullBuy"));
+    }
 }

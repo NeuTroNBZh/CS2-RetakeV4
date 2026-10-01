@@ -77,12 +77,12 @@ RetakeV4 est une réécriture complète de CS2RetakeV3. Il est modulaire (chaque
 | Commande | Effet |
 |---|---|
 | `!guns` (alias : `!gun`, `!g`, `!weapons`, `!menu`…) | Ouvre le menu d'armes |
-| `!awp` | Se porter volontaire (ou non) pour l'AWP |
-| Avancer / reculer, puis Utiliser (E) — ou Recharger (R) en round | Naviguer et choisir dans le menu |
+| `!awp` | Se porter volontaire (ou non) pour l'AWP, pour ton équipe actuelle |
+| Avancer / reculer, puis Utiliser (E) | Naviguer et choisir dans le menu |
 | `!1`, `!2`… | Choisir dans un menu de chat (si le serveur utilise ce mode) |
 
 - **Choix des armes** : pour chaque équipe et chaque type de round, vous choisissez votre arme principale et votre pistolet. Le choix est enregistré et réutilisé à chaque round du même type. Un choix fait pendant le freeze time s'applique tout de suite.
-- **AWP** : à chaque round qui en distribue, une AWP par équipe est tirée au sort parmi les volontaires.
+- **AWP** : le volontariat se règle par équipe, dans le menu de chaque type de round qui distribue des AWP (FullBuy par défaut). À chaque round concerné, une AWP par équipe est tirée au sort parmi les volontaires de cette équipe.
 - **Achat CS2** : si le serveur l'active, ouvrir le menu d'achat de CS2 et « acheter » une arme revient à la choisir comme préférence. Rien n'est réellement acheté.
 - **Langue** : les messages s'affichent en français ou en anglais selon votre langue CounterStrikeSharp.
 
@@ -144,7 +144,7 @@ Dans `hud.json`, `Menu.Display` choisit comment les menus (armes, admin, éditeu
 
 - `WorldText` : le menu flotte devant le joueur ; on choisit en visant une ligne et en tirant, ou avec avancer / reculer et Utiliser hors round.
 - `Chat` : liste numérotée dans le chat, comme en V3. On choisit avec `!1`, `!2`…
-- `CenterHtml` (par défaut) : grand panneau au centre de l'écran (titre, sections T / CT en couleur, arme choisie cochée, aide des touches). Avancer / reculer pour naviguer ; Utiliser (E) valide hors round, Recharger (R) en round (E reste libre pour désamorcer). `Menu.Input` ne s'applique pas à ce mode.
+- `CenterHtml` (par défaut) : grand panneau au centre de l'écran (titre, sections T / CT en couleur, arme choisie cochée, aide des touches). Avancer / reculer pour naviguer, Utiliser (E) pour valider, à tout moment. Les listes longues défilent (`Menu.CenterVisibleLines`, 6 lignes par défaut). `Menu.Input` ne s'applique pas à ce mode.
 
 Ce réglage est pris en compte au redémarrage du serveur ou au rechargement du plugin.
 
