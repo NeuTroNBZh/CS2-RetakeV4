@@ -31,7 +31,7 @@ public sealed class MySqlPreferenceRepository : IPreferenceRepository
 
     private const string UpsertSql = """
         INSERT INTO player_loadout (steam_id, team, round_type, primary_weapon, secondary_weapon, awp_opt_in, updated_at)
-        VALUES (@steam_id, @team, @round_type, @primary, @secondary, @awp, @updated_at)
+        VALUES (@steam_id, @team, @round_type, @primary, @secondary, @awp, UTC_TIMESTAMP(6))
         ON DUPLICATE KEY UPDATE
             primary_weapon = VALUES(primary_weapon),
             secondary_weapon = VALUES(secondary_weapon),
@@ -41,7 +41,7 @@ public sealed class MySqlPreferenceRepository : IPreferenceRepository
 
     private const string PublishCatalogSql = """
         INSERT INTO retake_catalog (server_key, format_version, catalog, updated_at)
-        VALUES (@server_key, @format_version, @catalog, @updated_at)
+        VALUES (@server_key, @format_version, @catalog, UTC_TIMESTAMP(6))
         ON DUPLICATE KEY UPDATE
             format_version = VALUES(format_version),
             catalog = VALUES(catalog),
@@ -95,7 +95,6 @@ public sealed class MySqlPreferenceRepository : IPreferenceRepository
         command.Parameters.AddWithValue("@server_key", catalog.ServerKey);
         command.Parameters.AddWithValue("@format_version", catalog.FormatVersion);
         command.Parameters.AddWithValue("@catalog", catalog.Json);
-        command.Parameters.AddWithValue("@updated_at", DateTime.UtcNow);
         await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
         return true;
     }
@@ -172,7 +171,6 @@ public sealed class MySqlPreferenceRepository : IPreferenceRepository
         command.Parameters.AddWithValue("@primary", (object?)preference.Preference.Primary ?? DBNull.Value);
         command.Parameters.AddWithValue("@secondary", (object?)preference.Preference.Secondary ?? DBNull.Value);
         command.Parameters.AddWithValue("@awp", preference.Preference.AwpOptIn);
-        command.Parameters.AddWithValue("@updated_at", DateTime.UtcNow);
         return command;
     }
 
