@@ -128,5 +128,6 @@
   "mapcleanup.editor.save_failed": "Échec de la sauvegarde, voir les logs du serveur.",
   "mapcleanup.editor.tested": "Nettoyage rejoué : {0} entité(s).",
   "mapcleanup.editor.busy": "Un autre admin édite déjà le nettoyage de la map.",
-  "mapcleanup.editor.left": "Éditeur de nettoyage fermé."
+  "mapcleanup.editor.left": "Éditeur de nettoyage fermé.",
+  "mapcleanup.editor.expired": "Éditeur de nettoyage fermé après 3 minutes sans action ; le nettoyage automatique reprend."
 }

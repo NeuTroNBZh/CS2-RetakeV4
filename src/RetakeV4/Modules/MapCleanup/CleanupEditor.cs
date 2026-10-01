@@ -22,7 +22,7 @@ internal sealed class CleanupEditor
     private readonly CleanupEditorHost _host;
     private Dictionary<string, CleanupOverride> _working = new(StringComparer.Ordinal);
     private CleanupCandidate? _aimed;
-    private int? _slot;
+    private CleanupEditorSession? _session;
     private bool _dirty;
 
     public CleanupEditor(ModuleContext context, CleanupEditorHost host)
@@ -31,18 +31,19 @@ internal sealed class CleanupEditor
         _host = host;
     }
 
-    public bool Active => _slot is not null;
+    public bool Active => _session is not null;
 
     public void Enter(CCSPlayerController player)
     {
-        if (_slot is { } slot && slot != player.Slot)
+        ExpireIfIdle();
+        if (_session is { } session && session.Slot != player.Slot)
         {
             _context.Text.ChatAlert(player, "mapcleanup.editor.busy");
             return;
         }
-        if (_slot is null)
+        if (_session is null)
         {
-            _slot = player.Slot;
+            _session = new CleanupEditorSession(player.Slot, DateTimeOffset.UtcNow);
             _working = _host.Current().ToDictionary(o => o.Key, StringComparer.Ordinal);
             _dirty = false;
             _context.Text.Chat(player, "mapcleanup.editor.entered", _working.Count);
@@ -53,10 +54,12 @@ internal sealed class CleanupEditor
 
     public void OnSelected(HudMenuSelected e)
     {
-        if (e.MenuId != CleanupEditorMenu.MenuId || e.Player.Slot != _slot || CleanupEditorMenu.Parse(e.ItemId) is not { } command)
+        if (e.MenuId != CleanupEditorMenu.MenuId || _session is not { } session || e.Player.Slot != session.Slot
+            || CleanupEditorMenu.Parse(e.ItemId) is not { } command)
         {
             return;
         }
+        _session = session.Touched(DateTimeOffset.UtcNow);
         if (Utilities.GetPlayerFromSlot(e.Player.Slot) is not { IsValid: true } player)
         {
             End(null);
@@ -67,14 +70,31 @@ internal sealed class CleanupEditor
 
     public void OnDisconnect(int slot)
     {
-        if (slot == _slot)
+        if (slot == _session?.Slot)
         {
             End(null);
         }
     }
 
+    // Opening another menu replaces the editor panel: the session ends instead of pausing the cleanup unseen.
+    public void OnMenuOpened(HudMenuOpen e)
+    {
+        if (_session is { } session && session.IsReplacedBy(e.Player.Slot, e.Menu.Id, e.RefreshOnly))
+        {
+            End(Utilities.GetPlayerFromSlot(session.Slot));
+        }
+    }
+
+    public void ExpireIfIdle()
+    {
+        if (_session is { } session && session.IsIdle(DateTimeOffset.UtcNow))
+        {
+            End(Utilities.GetPlayerFromSlot(session.Slot), "mapcleanup.editor.expired");
+        }
+    }
+
     // Map change or unload: the session ends without saving (the corrections belong to the previous map).
-    public void Reset() => End(_slot is { } slot ? Utilities.GetPlayerFromSlot(slot) : null);
+    public void Reset() => End(_session is { } session ? Utilities.GetPlayerFromSlot(session.Slot) : null);
 
     private void Run(CCSPlayerController player, CleanupEditorCommand command)
     {
@@ -151,20 +171,20 @@ internal sealed class CleanupEditor
         _context.Bus.Publish(new HudMenuOpen(new PlayerId(player.Slot), CleanupEditorMenu.Build(view), refreshOnly));
     }
 
-    private void End(CCSPlayerController? player)
+    private void End(CCSPlayerController? player, string message = "mapcleanup.editor.left")
     {
-        if (_slot is not { } slot)
+        if (_session is not { Slot: var slot })
         {
             return;
         }
-        _slot = null;
+        _session = null;
         _aimed = null;
         _working = new Dictionary<string, CleanupOverride>(StringComparer.Ordinal);
         _dirty = false;
         _context.Bus.Publish(new HudMenuClose(new PlayerId(slot), CleanupEditorMenu.MenuId));
         if (player is { IsValid: true })
         {
-            _context.Text.Chat(player, "mapcleanup.editor.left");
+            _context.Text.Chat(player, message);
         }
         _context.Logger.LogDebug("Map cleanup editor closed");
     }

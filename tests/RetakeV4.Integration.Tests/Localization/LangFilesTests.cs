@@ -111,6 +111,7 @@ public partial class LangFilesTests
     [InlineData("mapcleanup.editor.tested")]
     [InlineData("mapcleanup.editor.busy")]
     [InlineData("mapcleanup.editor.left")]
+    [InlineData("mapcleanup.editor.expired")]
     public void MapCleanupKeys_ArePresent(string key)
     {
         Assert.Contains(key, Load("en").Keys);

@@ -128,5 +128,6 @@
   "mapcleanup.editor.save_failed": "Save failed, see the server logs.",
   "mapcleanup.editor.tested": "Cleanup replayed: {0} entity(ies).",
   "mapcleanup.editor.busy": "Another admin is already editing the map cleanup.",
-  "mapcleanup.editor.left": "Map cleanup editor closed."
+  "mapcleanup.editor.left": "Map cleanup editor closed.",
+  "mapcleanup.editor.expired": "Map cleanup editor closed after 3 minutes without action; automatic cleanup resumes."
 }

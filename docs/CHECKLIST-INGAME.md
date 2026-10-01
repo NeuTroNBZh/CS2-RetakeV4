@@ -205,3 +205,4 @@ Préparation : `pwsh -NoProfile -File scripts/package-dev.ps1`, copier `artifact
 - [ ] « Auto » retire la correction ; « Rejouer le nettoyage » applique tout de suite la sélection en cours.
 - [ ] Un second admin qui ouvre l'éditeur reçoit « déjà en cours ».
 - [ ] Changement de map avec l'éditeur ouvert : il se ferme, aucune erreur dans les logs.
+- [ ] Éditeur ouvert puis `!guns` (ou 3 minutes sans action) : l'éditeur se ferme et le nettoyage reprend au round suivant.

@@ -49,10 +49,7 @@ public sealed class MapCleanupModule : IRetakeModule
         hooks.OnBus<SpawnEditorStateChanged>(e => _spawnEditing = e.Active);
         hooks.PreparationStep(new DelegatePreparationStep("cleanup", PreparationOrder.Cleanup, ctx =>
         {
-            if (ShouldRun())
-            {
-                RunPass(_overrides);
-            }
+            Prepare();
             return ctx;
         }));
         if (_config.FreezeEndCheck)
@@ -61,6 +58,7 @@ public sealed class MapCleanupModule : IRetakeModule
         }
         hooks.OnBus<MapCleanupEditorRequested>(e => OpenEditor(e.Player));
         hooks.OnBus<HudMenuSelected>(e => _editor?.OnSelected(e));
+        hooks.OnBus<HudMenuOpen>(e => _editor?.OnMenuOpened(e));
         hooks.OnEvent<EventPlayerDisconnect>("editor_disconnect", e =>
         {
             if (e.Userid is { } player)
@@ -80,6 +78,17 @@ public sealed class MapCleanupModule : IRetakeModule
 
     private bool ShouldRun() =>
         _context is not null && !_spawnEditing && _editor is { Active: false } && !GameRulesAccessor.IsWarmup();
+
+    // Targets from an earlier round point at entities recreated since: the freeze-end check only replays this round's pass.
+    private void Prepare()
+    {
+        _editor?.ExpireIfIdle();
+        _lastTargets = Array.Empty<(CleanupTarget, string)>();
+        if (ShouldRun())
+        {
+            RunPass(_overrides);
+        }
+    }
 
     private void StartMap(string map)
     {
