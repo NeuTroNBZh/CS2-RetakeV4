@@ -23,27 +23,22 @@ internal static class CleanupEntities
         .OrderBy(g => g.Key, StringComparer.Ordinal)
         .Select(g => $"{g.Key}={g.Count()}"));
 
-    // Debug only: the entities of any class closest to the admin's line of sight, to find what a window or vent really is.
-    public static IReadOnlyList<string> DescribeAround(Vec3 eye, Vec3 forward)
-    {
-        var entities = Utilities.GetAllEntities()
+    // Debug only: the entities of any class closest to the admin, whatever the direction, to find what a window or vent really is.
+    public static IReadOnlyList<string> DescribeAround(Vec3 eye) =>
+        Utilities.GetAllEntities()
             .Where(e => e.IsValid)
             .Select(e => e.As<CBaseEntity>())
-            .Select(e => (Entity: e, Origin: e.AbsOrigin))
-            .Where(e => e.Origin is not null)
-            .ToDictionary(e => (int)e.Entity.Index, e => e.Entity);
-        var ranked = AimPicker.Ranked(eye, forward,
-            entities.Select(e => (e.Key, Facts(e.Value).Origin)).ToList(), DebugConeDegrees, DebugRange, DebugTake);
-        return ranked.Select(index =>
-        {
-            var facts = Facts(entities[index]);
-            return $"#{index} {facts.ClassName} model={facts.ModelName ?? "-"} name={facts.TargetName ?? "-"} hp={entities[index].Health} at {facts.Origin.X:0},{facts.Origin.Y:0},{facts.Origin.Z:0}";
-        }).ToList();
-    }
+            .Where(e => e.AbsOrigin is not null)
+            .Select(e => (Entity: e, Facts: Facts(e)))
+            .Select(e => (e.Entity, e.Facts, Distance: (e.Facts.Origin - eye).Length))
+            .Where(e => e.Distance <= DebugRange)
+            .OrderBy(e => e.Distance)
+            .Take(DebugTake)
+            .Select(e => $"#{e.Entity.Index} {e.Facts.ClassName} model={e.Facts.ModelName ?? "-"} name={e.Facts.TargetName ?? "-"} hp={e.Entity.Health} d={e.Distance:0} at {e.Facts.Origin.X:0},{e.Facts.Origin.Y:0},{e.Facts.Origin.Z:0}")
+            .ToList();
 
-    private const float DebugConeDegrees = 25f;
-    private const float DebugRange = 2500f;
-    private const int DebugTake = 12;
+    private const float DebugRange = 800f;
+    private const int DebugTake = 20;
 
     private static readonly string[] RelatedTokens = { "glass", "break", "shatter", "window", "vent", "door" };
 

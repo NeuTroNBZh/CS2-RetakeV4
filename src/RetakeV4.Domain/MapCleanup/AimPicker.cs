@@ -21,6 +21,15 @@ public static class AimPicker
             .ToList();
     }
 
+    // Fallback when nothing is in the cone: CS2 mesh entities often have their origin away from their visible center.
+    public static int? Nearest(Vec3 eye, IReadOnlyList<(int Handle, Vec3 Center)> candidates, float maxDistance) =>
+        candidates
+            .Select(c => (c.Handle, Distance: (c.Center - eye).Length))
+            .Where(c => c.Distance <= maxDistance)
+            .OrderBy(c => c.Distance)
+            .Select(c => (int?)c.Handle)
+            .FirstOrDefault();
+
     public static int? Pick(Vec3 eye, Vec3 forward, IReadOnlyList<(int Handle, Vec3 Center)> candidates, float maxDegrees = 12f, float maxDistance = 1500f)
     {
         var axis = forward * (1f / Math.Max(forward.Length, float.Epsilon));

@@ -45,3 +45,14 @@ public class AimPickerRankedTests
         Assert.Equal(3, AimPicker.Ranked(new Vec3(0, 0, 0), new Vec3(1, 0, 0), many, 12f, 1500f, 3).Count);
     }
 }
+
+public class AimPickerNearestTests
+{
+    [Fact]
+    public void Nearest_IgnoresDirection_AndRespectsTheRange()
+    {
+        var candidates = new[] { (1, new Vec3(-300, 0, 0)), (2, new Vec3(0, 200, 0)), (3, new Vec3(900, 0, 0)) };
+        Assert.Equal(2, AimPicker.Nearest(new Vec3(0, 0, 0), candidates, 600f));
+        Assert.Null(AimPicker.Nearest(new Vec3(0, 0, 0), candidates, 100f));
+    }
+}

@@ -19,6 +19,8 @@ internal sealed record CleanupEditorHost(
 // Game thread only. One admin edits at a time; the automatic pass is paused while a session is open.
 internal sealed class CleanupEditor
 {
+    private const float NearestFallbackRange = 600f;
+
     private readonly ModuleContext _context;
     private readonly CleanupEditorHost _host;
     private Dictionary<string, CleanupOverride> _working = new(StringComparer.Ordinal);
@@ -160,12 +162,13 @@ internal sealed class CleanupEditor
         }
         var forward = ViewGeometry.Forward(view.Angles);
         var candidates = CleanupEntities.Candidates();
-        var handle = AimPicker.Pick(view.Eye, forward, candidates.Select(c => (c.Handle, c.Facts.Origin)).ToList());
+        var points = candidates.Select(c => (c.Handle, c.Facts.Origin)).ToList();
+        var handle = AimPicker.Pick(view.Eye, forward, points) ?? AimPicker.Nearest(view.Eye, points, NearestFallbackRange);
         _aimed = candidates.FirstOrDefault(c => c.Handle == handle);
         if (_host.Debug)
         {
             _context.Logger.LogInformation("Map cleanup pick from {Eye} towards {Forward}: {Picked}; around: {Around}",
-                view.Eye, forward, _aimed?.Key ?? "nothing", string.Join(" | ", CleanupEntities.DescribeAround(view.Eye, forward)));
+                view.Eye, forward, _aimed?.Key ?? "nothing", string.Join(" | ", CleanupEntities.DescribeAround(view.Eye)));
         }
     }
 
