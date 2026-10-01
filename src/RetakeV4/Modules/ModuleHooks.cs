@@ -1,3 +1,4 @@
+using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Modules.Commands;
 using CounterStrikeSharp.API.Modules.Events;
@@ -43,6 +44,27 @@ public sealed class ModuleHooks
     public void OnMapStart(string stage, Action<string> handler)
     {
         Listeners.OnMapStart wrapper = map => _guard.Run(_module, stage, () => handler(map));
+        _plugin.RegisterListener(wrapper);
+        _registrations.Track(() => _plugin.RemoveListener(wrapper));
+    }
+
+    public void OnTick(string stage, Action handler)
+    {
+        Listeners.OnTick wrapper = () => _guard.Run(_module, stage, handler);
+        _plugin.RegisterListener(wrapper);
+        _registrations.Track(() => _plugin.RemoveListener(wrapper));
+    }
+
+    public void OnCheckTransmit(string stage, Action<CCheckTransmitInfoList> handler)
+    {
+        Listeners.CheckTransmit wrapper = infoList => _guard.Run(_module, stage, () => handler(infoList));
+        _plugin.RegisterListener(wrapper);
+        _registrations.Track(() => _plugin.RemoveListener(wrapper));
+    }
+
+    public void OnPlayerButtons(string stage, Action<CCSPlayerController, PlayerButtons, PlayerButtons> handler)
+    {
+        Listeners.OnPlayerButtonsChanged wrapper = (player, pressed, released) => _guard.Run(_module, stage, () => handler(player, pressed, released));
         _plugin.RegisterListener(wrapper);
         _registrations.Track(() => _plugin.RemoveListener(wrapper));
     }
