@@ -115,4 +115,12 @@ public class HudConfigValidatorTests
         Assert.Equal(expected, result.Config.Menu.CenterVisibleLines);
         Assert.Equal(issues, result.Keys.Count);
     }
+
+    // Like MenuManager (WeaponPaints menus): the player cannot walk away while forward / back drive the menu.
+    [Fact]
+    public void FreezeWhileOpen_IsOnByDefault_AndCanBeTurnedOff()
+    {
+        Assert.True(Defaults.Menu.FreezeWhileOpen);
+        Assert.False(Validate(Defaults with { Menu = Defaults.Menu with { FreezeWhileOpen = false } }).Config.Menu.FreezeWhileOpen);
+    }
 }

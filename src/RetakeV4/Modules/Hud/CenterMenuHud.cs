@@ -24,6 +24,7 @@ internal sealed class CenterMenuHud
     private readonly Dictionary<int, int> _cursor = new();
     private readonly Dictionary<int, ulong> _held = new();
     private readonly Dictionary<int, (HudText Text, DateTimeOffset Until)> _notices = new();
+    private readonly HashSet<int> _frozen = new();
 
     public CenterMenuHud(HudConfig config, ITextService text, IEventBus bus, ILogger logger, Func<DateTimeOffset> clock)
     {
@@ -71,6 +72,7 @@ internal sealed class CenterMenuHud
 
     public void Forget(int slot)
     {
+        Unfreeze(slot);
         _open.Remove(slot);
         _cursor.Remove(slot);
         _held.Remove(slot);
@@ -79,6 +81,10 @@ internal sealed class CenterMenuHud
 
     public void CloseAll()
     {
+        foreach (var slot in _frozen.ToList())
+        {
+            Unfreeze(slot);
+        }
         _open.Clear();
         _cursor.Clear();
         _held.Clear();
@@ -104,6 +110,7 @@ internal sealed class CenterMenuHud
             {
                 continue;
             }
+            Freeze(player);
             var pressed = (PlayerButtons)ButtonEdges.Pressed(_held.GetValueOrDefault(slot), held);
             _held[slot] = held;
             if (pressed != 0 && _config.Debug)
@@ -133,6 +140,25 @@ internal sealed class CenterMenuHud
     }
 
     public MenuNavigator? OpenNavigator(int slot) => _open.GetValueOrDefault(slot);
+
+    // Forward / back move the cursor: like MenuManager, the pawn's speed is held at 0 every tick while the menu is open.
+    private void Freeze(CCSPlayerController player)
+    {
+        if (_config.Menu.FreezeWhileOpen && player.PlayerPawn.Value is { IsValid: true } pawn)
+        {
+            pawn.VelocityModifier = 0f;
+            _frozen.Add(player.Slot);
+        }
+    }
+
+    private void Unfreeze(int slot)
+    {
+        if (_frozen.Remove(slot) && Utilities.GetPlayerFromSlot(slot) is { IsValid: true } player
+            && player.PlayerPawn.Value is { IsValid: true } pawn)
+        {
+            pawn.VelocityModifier = 1f;
+        }
+    }
 
     // Reading the buttons needs a pawn (none while choosing a team or connecting): no pawn, no input this tick.
     private static ulong? HeldButtons(CCSPlayerController player) =>

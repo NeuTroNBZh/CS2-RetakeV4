@@ -145,7 +145,7 @@ Dans `hud.json`, `Menu.Display` choisit comment les menus (armes, admin, éditeu
 
 - `WorldText` : le menu flotte devant le joueur ; on choisit en visant une ligne et en tirant, ou avec avancer / reculer et Utiliser hors round.
 - `Chat` : liste numérotée dans le chat, comme en V3. On choisit avec `!1`, `!2`…
-- `CenterHtml` (par défaut) : grand panneau au centre de l'écran (titre, sections T / CT en couleur, arme choisie cochée, aide des touches). Avancer / reculer pour naviguer, Utiliser (E) pour valider, à tout moment. Les listes longues défilent (`Menu.CenterVisibleLines`, 6 lignes par défaut). `Menu.Input` ne s'applique pas à ce mode.
+- `CenterHtml` (par défaut) : grand panneau au centre de l'écran (titre, sections T / CT en couleur, arme choisie cochée, aide des touches). Avancer / reculer pour naviguer, Utiliser (E) pour valider, à tout moment. Les listes longues défilent (`Menu.CenterVisibleLines`, 6 lignes par défaut). `Menu.Input` ne s'applique pas à ce mode. Le joueur ne peut pas se déplacer tant que le menu est ouvert, comme dans les menus de WeaponPaints (`Menu.FreezeWhileOpen`, activé par défaut).
 
 Ce réglage est pris en compte au redémarrage du serveur ou au rechargement du plugin.
 
