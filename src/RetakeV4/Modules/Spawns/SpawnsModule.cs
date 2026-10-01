@@ -1,11 +1,15 @@
 using System.Collections.Immutable;
+using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
+using CounterStrikeSharp.API.Modules.Admin;
+using CounterStrikeSharp.API.Modules.Commands;
 using CounterStrikeSharp.API.Modules.Utils;
 using Microsoft.Extensions.Logging;
 using RetakeV4.Adapters;
 using RetakeV4.Configuration;
 using RetakeV4.Domain.Common;
 using RetakeV4.Domain.Events;
+using RetakeV4.Domain.Hud;
 using RetakeV4.Domain.Rounds;
 using RetakeV4.Domain.Spawns;
 using SpawnPoint = RetakeV4.Domain.Spawns.SpawnPoint;
@@ -14,18 +18,23 @@ namespace RetakeV4.Modules.Spawns;
 
 public sealed class SpawnsModule : IRetakeModule
 {
+    private const string AdminFlag = "@retakev4/admin";
+
     private readonly IRandom _random = SystemRandom.Shared;
     private SpawnsConfig _config = new();
     private ModuleContext? _context;
-    private IReadOnlyList<SpawnPoint> _spawns = Array.Empty<SpawnPoint>();
     private SiteHistory _history = SiteHistory.Empty;
     private ImmutableDictionary<int, SpawnPoint> _assignments = ImmutableDictionary<int, SpawnPoint>.Empty;
+    private SpawnCatalog? _catalog;
+    private SiteForce? _force;
 
     public string Name => "Spawns";
 
     public IReadOnlyList<string> DependsOn { get; } = new[] { "Core" };
 
     private ModuleContext Context => _context ?? throw new InvalidOperationException("Spawns module is not loaded");
+
+    private SpawnCatalog Catalog => _catalog ?? throw new InvalidOperationException("Spawns module is not loaded");
 
     public ModuleConfig LoadConfig(JsonConfigStore store, ILogger logger)
     {
@@ -38,8 +47,10 @@ public sealed class SpawnsModule : IRetakeModule
     public void Load(ModuleContext context)
     {
         _context = context;
+        _catalog = new SpawnCatalog(new SpawnFileStore(Path.Combine(context.Plugin.ModuleDirectory, "spawns")), context.Logger);
         var hooks = context.Hooks;
-        hooks.OnBus<MapStarted>(e => LoadSpawns(e.MapName));
+        hooks.OnBus<MapStarted>(e => LoadMap(e.MapName));
+        hooks.Command("css_retake_forcesite", "Forces the bombsite: css_retake_forcesite <A|B|off> [once|sticky]", OnForceSite);
         hooks.PreparationStep(new DelegatePreparationStep("site", PreparationOrder.Site, ChooseSite));
         hooks.PreparationStep(new DelegatePreparationStep("placement", PreparationOrder.Placement, PlacePlayers));
         hooks.OnEvent<EventPlayerSpawn>("player_spawn", OnPlayerSpawn);
@@ -50,40 +61,32 @@ public sealed class SpawnsModule : IRetakeModule
                 _assignments = ImmutableDictionary<int, SpawnPoint>.Empty;
             }
         });
-        hooks.OnBus<RoundPrepared>(Announce);
+        hooks.OnBus<RoundPrepared>(e =>
+        {
+            Announce(e);
+            WarnAdminsIfNoSpawns();
+        });
     }
 
-    public void Unload() => _context = null;
-
-    private void LoadSpawns(string mapName)
+    public void Unload()
     {
-        _spawns = Array.Empty<SpawnPoint>();
+        _catalog = null;
+        _context = null;
+    }
+
+    private void LoadMap(string mapName)
+    {
         _history = SiteHistory.Empty;
-        if (!MapNames.IsSafe(mapName))
-        {
-            Context.Logger.LogWarning("Map name {Map} is not a plain file name: default CS2 spawns will be used", mapName);
-            return;
-        }
-        var path = Path.Combine(Context.Plugin.ModuleDirectory, "spawns", mapName + ".json");
-        if (!File.Exists(path))
-        {
-            Context.Logger.LogWarning("No spawn file for {Map} at {Path}: default CS2 spawns will be used", mapName, path);
-            return;
-        }
-        var result = SpawnFileFormat.Parse(File.ReadAllText(path));
-        foreach (var issue in result.Issues)
-        {
-            Context.Logger.LogWarning("Spawn file {Map}: {Issue}", mapName, issue);
-        }
-        _spawns = result.Spawns;
-        Context.Logger.LogInformation("Loaded {Count} spawns for {Map} (legacy format: {Legacy})", _spawns.Count, mapName, result.IsLegacyFormat);
+        _force = null;
+        Catalog.Load(mapName);
     }
 
     private PreparationContext ChooseSite(PreparationContext context)
     {
-        var available = _spawns.Select(s => s.Site).Distinct().ToList();
-        var decision = SiteSelector.Choose(_history, null, _config.MaxSameSiteInRow, available, _random);
+        var available = Catalog.Set.Spawns.Select(s => s.Site).Distinct().ToList();
+        var decision = SiteSelector.Choose(_history, _force, _config.MaxSameSiteInRow, available, _random);
         _history = decision.History;
+        _force = decision.Force;
         return context with { Site = decision.Site };
     }
 
@@ -99,13 +102,13 @@ public sealed class SpawnsModule : IRetakeModule
             .Where(p => p.Side is not null)
             .Select(p => new SpawnRequest(new PlayerId(p.Player.Slot), p.Side!.Value))
             .ToList();
-        var result = SpawnSelector.Place(requests, _spawns, site, _random);
+        var result = SpawnSelector.Place(requests, Catalog.Set.Spawns, site, _random);
         _assignments = result.Assignments.ToImmutableDictionary(a => a.Player.Slot, a => a.Spawn);
         foreach (var player in humans.Where(p => _assignments.ContainsKey(p.Slot)))
         {
             Teleport(player, _assignments[player.Slot]);
         }
-        if (result.Unplaced.Count > 0 && _spawns.Count > 0)
+        if (result.Unplaced.Count > 0 && Catalog.Set.Spawns.Count > 0)
         {
             Context.Logger.LogWarning("{Count} player(s) kept the default spawn: not enough spawns on site {Site}", result.Unplaced.Count, site);
         }
@@ -144,5 +147,59 @@ public sealed class SpawnsModule : IRetakeModule
         {
             Context.Text.ChatAll("spawns.round.announce", e.Context.RoundType ?? "-", site.ToString());
         }
+    }
+
+    private void OnForceSite(CCSPlayerController? player, CommandInfo command)
+    {
+        if (!IsAdmin(player))
+        {
+            Reply(player, "spawns.editor.no_permission");
+            return;
+        }
+        if (ForceSiteCommand.Parse(command.GetArg(1), command.ArgCount > 2 ? command.GetArg(2) : null) is not { } request)
+        {
+            Reply(player, "spawns.forcesite.usage");
+            return;
+        }
+        if (request.Force is not { } force)
+        {
+            _force = null;
+            Reply(player, "spawns.forcesite.cleared");
+            return;
+        }
+        var spawns = Catalog.Set.Spawns;
+        if (spawns.Count > 0 && spawns.All(s => s.Site != force.Site))
+        {
+            Reply(player, "spawns.forcesite.no_spawns", force.Site.ToString());
+            return;
+        }
+        _force = force;
+        Reply(player, force.Mode == ForceSiteMode.Sticky ? "spawns.forcesite.set_sticky" : "spawns.forcesite.set_once", force.Site.ToString());
+    }
+
+    private void WarnAdminsIfNoSpawns()
+    {
+        if (Catalog.Set.Spawns.Count > 0 || Catalog.MapName is not { } map)
+        {
+            return;
+        }
+        foreach (var admin in PlayerQueries.Humans().Where(p => AdminManager.PlayerHasPermissions(p, AdminFlag)))
+        {
+            Context.Bus.Publish(new HudAlert(new PlayerId(admin.Slot), HudText.Of("spawns.missing.admin", map)));
+        }
+    }
+
+    // The server console is always allowed.
+    private static bool IsAdmin(CCSPlayerController? player) =>
+        player is null || (player.IsValid && AdminManager.PlayerHasPermissions(player, AdminFlag));
+
+    private void Reply(CCSPlayerController? player, string key, params object[] args)
+    {
+        if (player is { IsValid: true })
+        {
+            Context.Text.Chat(player, key, args);
+            return;
+        }
+        Server.PrintToConsole(Context.Text.Server(key, args));
     }
 }
