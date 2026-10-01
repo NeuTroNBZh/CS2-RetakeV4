@@ -40,9 +40,7 @@ public sealed record MenuNavigator
     public IReadOnlyList<MenuLine> Lines()
     {
         var items = Current.Items;
-        var exit = Path.IsEmpty
-            ? new MenuLine(CloseId, HudText.Of("hud.menu.close"), MenuLineKind.Close)
-            : new MenuLine(BackId, HudText.Of("hud.menu.back"), MenuLineKind.Back);
+        var exit = ExitLine();
         if (items.Count < MaxLines)
         {
             return items.Select(ToLine).Append(exit).ToList();
@@ -59,6 +57,20 @@ public sealed record MenuNavigator
         }
         lines.Add(exit);
         return lines;
+    }
+
+    // Unpaged view for displays that paginate by themselves (chat menus): every item, then back or close.
+    public IReadOnlyList<MenuLine> AllLines() => Current.Items.Select(ToLine).Append(ExitLine()).ToList();
+
+    // Activation by line id, independent of the page: an id no longer in the level changes nothing.
+    public (MenuNavigator Next, MenuOutcome Outcome) Choose(string lineId)
+    {
+        if (lineId == (Path.IsEmpty ? CloseId : BackId))
+        {
+            return Path.IsEmpty ? (this, MenuOutcome.Closed) : (Pop(), MenuOutcome.None);
+        }
+        var item = Current.Items.FirstOrDefault(i => i.Id == lineId);
+        return item is null ? (this, MenuOutcome.None) : ActivateItem(item, 0);
     }
 
     public MenuNavigator Move(int delta) => this with { Cursor = Math.Clamp(Cursor + delta, 0, Lines().Count - 1) };
@@ -138,6 +150,10 @@ public sealed record MenuNavigator
         }
         return (menu, valid);
     }
+
+    private MenuLine ExitLine() => Path.IsEmpty
+        ? new MenuLine(CloseId, HudText.Of("hud.menu.close"), MenuLineKind.Close)
+        : new MenuLine(BackId, HudText.Of("hud.menu.back"), MenuLineKind.Back);
 
     private static MenuLine ToLine(MenuItem item) => new(item.Id, item.Label, MenuLineKind.Item, item.Kind, item.IsOn);
 

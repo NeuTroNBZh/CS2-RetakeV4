@@ -15,6 +15,7 @@ internal sealed class ChatMenuHud
     private readonly IEventBus _bus;
     private readonly Action<string, Action> _nextFrame;
     private readonly Dictionary<int, MenuNavigator> _open = new();
+    private readonly Dictionary<int, ChatMenu> _shown = new();
 
     public ChatMenuHud(ITextService text, IEventBus bus, Action<string, Action> nextFrame)
     {
@@ -47,7 +48,11 @@ internal sealed class ChatMenuHud
         }
     }
 
-    public void Forget(int slot) => _open.Remove(slot);
+    public void Forget(int slot)
+    {
+        _open.Remove(slot);
+        _shown.Remove(slot);
+    }
 
     public void CloseAll()
     {
@@ -60,17 +65,21 @@ internal sealed class ChatMenuHud
     private void Close(int slot)
     {
         _open.Remove(slot);
-        if (Utilities.GetPlayerFromSlot(slot) is { IsValid: true } player)
+        _shown.Remove(slot, out var shown);
+        // Only our own menu is closed: another plugin's chat menu may be the active one.
+        if (Utilities.GetPlayerFromSlot(slot) is { IsValid: true } player
+            && MenuManager.GetActiveMenu(player) is BaseMenuInstance { Menu: var active } && ReferenceEquals(active, shown))
         {
             MenuManager.CloseActiveMenu(player);
         }
     }
 
+    // Every item of the level is listed: the chat menu paginates by itself (6 per page with its own next/previous).
     private void Show(int slot)
     {
         if (Utilities.GetPlayerFromSlot(slot) is not { IsValid: true } player || !_open.TryGetValue(slot, out var navigator))
         {
-            _open.Remove(slot);
+            Forget(slot);
             return;
         }
         var menu = new ChatMenu(HudTextFormatter.Format(_text, player, navigator.Current.Title))
@@ -78,32 +87,32 @@ internal sealed class ChatMenuHud
             ExitButton = false,
             PostSelectAction = PostSelectAction.Close,
         };
-        var lines = navigator.Lines();
-        for (var index = 0; index < lines.Count; index++)
+        var rootId = navigator.Root.Id;
+        foreach (var line in navigator.AllLines())
         {
-            var lineIndex = index;
+            var lineId = line.Id;
             // Chat commands are processed with the client's messages: the choice runs on the next frame.
-            menu.AddMenuOption(MenuLineLabel.Format(_text, player, lines[index]),
-                (_, _) => _nextFrame("chat_menu", () => Choose(slot, navigator, lineIndex)), false);
+            menu.AddMenuOption(MenuLineLabel.Format(_text, player, line), (_, _) => _nextFrame("chat_menu", () => Choose(slot, rootId, lineId)), false);
         }
+        _shown[slot] = menu;
         MenuManager.OpenChatMenu(player, menu);
     }
 
-    private void Choose(int slot, MenuNavigator shown, int lineIndex)
+    // Resolved by line id against the current state, so a refresh between print and choice still applies the choice.
+    private void Choose(int slot, string rootId, string lineId)
     {
-        // A menu opened, closed or refreshed since this one was printed wins.
-        if (!_open.TryGetValue(slot, out var current) || !ReferenceEquals(current, shown))
+        if (!_open.TryGetValue(slot, out var current) || current.Root.Id != rootId)
         {
             return;
         }
-        var (next, outcome) = current.Activate(lineIndex);
+        var (next, outcome) = current.Choose(lineId);
         if (outcome is { Kind: MenuOutcomeKind.Selected, ItemId: { } itemId })
         {
-            _bus.Publish(new HudMenuSelected(new PlayerId(slot), current.Root.Id, itemId));
+            _bus.Publish(new HudMenuSelected(new PlayerId(slot), rootId, itemId));
         }
         if (!ChatMenuFlow.ShowsNextLevel(outcome))
         {
-            _open.Remove(slot);
+            Forget(slot);
             return;
         }
         _open[slot] = next;

@@ -32,7 +32,7 @@ Un fichier par module dans `addons/counterstrikesharp/configs/plugins/RetakeV4/`
 | `grenades.json` | kits de grenades par pool |
 | `plant.json` | `AutoPlant`/`FastPlant` |
 | `instadefuse.json` | règles de l'InstaDefuse |
-| `hud.json` | thème, widgets, menus : `Menu.Display` = `WorldText` (menus devant le joueur, défaut) ou `Chat` (menus de chat, choix avec `!1`, `!2`…), orientation, distance, entrée |
+| `hud.json` | thème, widgets, menus : `Menu.Display` = `WorldText` (menus devant le joueur, défaut) ou `Chat` (menus de chat, choix avec `!1`, `!2`…, pris en compte au redémarrage), orientation, distance, entrée |
 | `admin.json` | pont CS2-SimpleAdmin |
 | `links.json` | commandes communautaires |
 | `api.json` | API publique |
