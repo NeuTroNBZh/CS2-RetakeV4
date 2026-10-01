@@ -133,3 +133,11 @@ Remplir aussi `docs/spikes/hud-probe-findings.md` : les réglages `hud.json` →
 - [ ] `Mode: Both` : `!guns` et le menu d'achat modifient la même préférence.
 - [ ] `HowToIntervalMinutes: 0` : aucun rappel ; changement de map puis `css_plugins reload RetakeV4` : un seul rappel par intervalle (pas de timer en double).
 - [ ] Mode FastPlant + achat pendant le freeze time : le poseur garde la C4.
+
+## Phase 5b — API publique et release
+- [ ] Installer le zip `RetakeV4-4.0.0.zip` sur un serveur propre : le plugin démarre, `css_retake_info` affiche 4.0.0, les configs fournies sont lues sans avertissement.
+- [ ] Mise à jour avec `RetakeV4-4.0.0-no-configs.zip` : vos configs existantes ne sont pas touchées.
+- [ ] Un plugin de test qui lit `RetakeApi.Capability.Get()` dans `OnAllPluginsLoaded` reçoit `RoundPrepared` (type, site, poseur), `LoadoutAssigned`, `BombPlanted`, `RoundEnded` (vainqueur) et `PlayerQueued`.
+- [ ] `LastPlayerAlive` : déclenché une fois quand une équipe de 2+ joueurs n'a plus qu'un vivant ; jamais pour une équipe d'un seul joueur.
+- [ ] Un abonné qui lève une exception : avertissement dans les logs, le round continue.
+- [ ] `css_plugins reload RetakeV4` : l'API reste disponible (pas d'erreur d'enregistrement bloquante).
