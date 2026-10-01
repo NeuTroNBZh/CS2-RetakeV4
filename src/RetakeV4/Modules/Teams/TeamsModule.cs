@@ -173,15 +173,21 @@ public sealed class TeamsModule : IRetakeModule
         {
             return;
         }
+        var timer = new StepTimer();
         AdoptPlayersOnTeams();
+        timer.Mark("adopt");
         var plan = TeamPlanner.PlanRoundEnd(_state, RoundWinner.None, true, _config.ToRules(), _random);
+        timer.Mark("plan");
         ApplyPlan(plan);
+        timer.Mark($"apply ({plan.Moves.Count} moves)");
         if (plan.Moves.Count > 0)
         {
             // Players already respawned in their warmup team for round 1: restart so they spawn
             // in their new team (also resets TotalRoundsPlayed for the round type sequence).
             Server.ExecuteCommand("mp_restartgame 1");
+            timer.Mark("restart");
         }
+        timer.ReportIfSlow(Context.Logger, "Teams/warmup end");
     }
 
     private void ResetForMap()

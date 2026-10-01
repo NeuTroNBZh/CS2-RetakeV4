@@ -116,4 +116,16 @@ public class WarmupTrackerTests
         var (_, forceEnd) = tracker.Evaluate(new WarmupSnapshot(true, 1f, 100f));
         Assert.False(forceEnd);
     }
+
+    // Observed on Dathost: an endless warmup reports WarmupPeriodEnd = +Infinity, not 0.
+    [Theory]
+    [InlineData(float.PositiveInfinity)]
+    [InlineData(float.NaN)]
+    public void EndlessWarmup_ReportedAsNonFinite_UsesTheFallback(float end)
+    {
+        var (_, early) = Feed(WarmupTracker.Start(16f), new WarmupSnapshot(true, end, 222f), new WarmupSnapshot(true, end, 230f));
+        Assert.False(early);
+        var (_, force) = Feed(WarmupTracker.Start(16f), new WarmupSnapshot(true, end, 222f), new WarmupSnapshot(true, end, 238f));
+        Assert.True(force);
+    }
 }

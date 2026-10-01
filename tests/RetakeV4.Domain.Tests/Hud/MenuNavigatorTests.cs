@@ -150,4 +150,15 @@ public class MenuNavigatorTests
         var (inside, _) = MenuNavigator.Open(Root(Weapons(0))).Activate(0);
         Assert.Equal(new[] { MenuNavigator.BackId }, inside.Lines().Select(l => l.Id));
     }
+
+    // The center panel wraps: going up from the first line lands on the last, and down from the last on the first.
+    [Fact]
+    public void MoveWrapping_GoesAroundTheEnds()
+    {
+        var navigator = MenuNavigator.Open(Root());
+        var last = navigator.Lines().Count - 1;
+        Assert.Equal(last, navigator.MoveWrapping(-1).Cursor);
+        Assert.Equal(0, navigator.MoveWrapping(-1).MoveWrapping(1).Cursor);
+        Assert.Equal(1, navigator.MoveWrapping(1).Cursor);
+    }
 }

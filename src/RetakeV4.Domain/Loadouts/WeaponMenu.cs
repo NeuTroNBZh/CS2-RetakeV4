@@ -45,7 +45,6 @@ public static class WeaponMenu
     public const string MenuId = "allocation.weapons";
     public const string AwpItemId = "awp";
     public const string CurrentItemId = "current";
-    public const string OthersItemId = "others";
 
     private static readonly TeamSide[] Sides = { TeamSide.T, TeamSide.CT };
 
@@ -85,31 +84,37 @@ public static class WeaponMenu
                 MenuItemKind.Submenu,
                 Submenu: ConfigMenu(state, current, team)));
         }
-        var others = state.Definitions
-            .SelectMany(d => Sides.Select(side => (Definition: d, Side: side)))
-            .Where(c => HasChoice(c.Definition, c.Side) && !(c.Side == state.Team && c.Definition.Name == state.Current?.Name))
-            .Select(c => new MenuItem(
-                ConfigId(c.Side, c.Definition.Name),
-                HudText.Of("allocation.menu.config", c.Definition.Name, c.Side.ToString()),
-                MenuItemKind.Submenu,
-                Submenu: ConfigMenu(state, c.Definition, c.Side)))
-            .ToList();
-        if (others.Count > 0)
+        foreach (var side in Sides)
         {
-            items.Add(new MenuItem(
-                OthersItemId,
-                HudText.Of("allocation.menu.others"),
-                MenuItemKind.Submenu,
-                Submenu: new Menu(OthersItemId, HudText.Of("allocation.menu.others"), others)));
+            var configs = state.Definitions
+                .Where(d => HasChoice(d, side))
+                .Select(d => new MenuItem(ConfigId(side, d.Name), Summary(state, d, side), MenuItemKind.Submenu, Submenu: ConfigMenu(state, d, side), Team: side))
+                .ToList();
+            if (configs.Count > 0)
+            {
+                var title = HudText.Of($"allocation.menu.team_{side.ToString().ToLowerInvariant()}");
+                items.Add(new MenuItem(TeamItemId(side), title, MenuItemKind.Submenu, Submenu: new Menu(TeamItemId(side), title, configs), Team: side));
+            }
         }
         items.Add(new MenuItem(AwpItemId, HudText.Of("allocation.menu.awp"), MenuItemKind.Toggle, IsOn: state.AwpOptIn));
         return new Menu(MenuId, HudText.Of("allocation.menu.title"), items);
     }
 
+    // "FullBuy : AK-47 / Glock-18": what the player gets on this round type, before entering it.
+    private static HudText Summary(WeaponMenuState state, RoundTypeDefinition definition, TeamSide team)
+    {
+        var (primary, secondary) = Effective(state, definition, team);
+        return HudText.Of("allocation.menu.summary", definition.Name, WeaponNames.Display(primary), WeaponNames.Display(secondary));
+    }
+
+    private static (string? Primary, string? Secondary) Effective(WeaponMenuState state, RoundTypeDefinition definition, TeamSide team) =>
+        LoadoutPlanner.ResolveWeapons(definition, new LoadoutRequest(new PlayerId(0), team, state.PreferenceFor(team, definition.Name)));
+
+    private static string TeamItemId(TeamSide team) => $"team:{team}";
+
     private static Menu ConfigMenu(WeaponMenuState state, RoundTypeDefinition definition, TeamSide team)
     {
-        var request = new LoadoutRequest(new PlayerId(0), team, state.PreferenceFor(team, definition.Name));
-        var (primary, secondary) = LoadoutPlanner.ResolveWeapons(definition, request);
+        var (primary, secondary) = Effective(state, definition, team);
         var items = new[]
             {
                 SlotItem(definition, team, WeaponSlot.Primary, primary, "allocation.menu.primary"),

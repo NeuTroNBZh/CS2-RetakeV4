@@ -16,6 +16,15 @@ foreach ($file in @("RetakeV4.dll", "RetakeV4.Domain.dll", "RetakeV4.deps.json",
     if (-not (Test-Path $source)) { throw "Missing build output: $file" }
     Copy-Item $source $pluginDir
 }
+# Ahead-of-time compiled for Linux game hosts: the first round after a (re)load no longer pays the JIT (measured 586 ms -> 75 ms
+# on Dathost), which stalled the server long enough to kick players. Other platforms ignore the native code and JIT as before.
+$r2r = Join-Path $root "artifacts/r2r"
+if (Test-Path $r2r) { Remove-Item $r2r -Recurse -Force }
+dotnet publish "$root/src/RetakeV4/RetakeV4.csproj" -c $Configuration -r linux-x64 --self-contained false -p:PublishReadyToRun=true -o $r2r --nologo
+if ($LASTEXITCODE -ne 0) { throw "ReadyToRun publish failed" }
+foreach ($file in @("RetakeV4.dll", "RetakeV4.Domain.dll")) {
+    Copy-Item (Join-Path $r2r $file) $pluginDir -Force
+}
 Copy-Item (Join-Path $bin "lang") $pluginDir -Recurse
 Copy-Item (Join-Path $bin "spawns") $pluginDir -Recurse
 foreach ($dependency in @("Microsoft.Data.Sqlite.dll", "SQLitePCLRaw.core.dll", "SQLitePCLRaw.batteries_v2.dll", "SQLitePCLRaw.provider.e_sqlite3.dll", "MySqlConnector.dll")) {

@@ -16,6 +16,8 @@ public sealed class CoreModule : IRetakeModule
     private CoreConfig _config = new();
     private ModuleContext? _context;
     private WarmupTracker _warmup = WarmupTracker.Start(16f);
+    private const int WatchdogTraceEvery = 20;
+    private int _watchdogTicks;
     private MapConfigGate _configGate = MapConfigGate.Idle;
     private Timer? _watchdog;
     private string _mapName = string.Empty;
@@ -135,7 +137,9 @@ public sealed class CoreModule : IRetakeModule
         {
             return;
         }
-        var (next, forceEnd) = _warmup.Evaluate(new WarmupSnapshot(rules.WarmupPeriod, rules.WarmupPeriodEnd, Server.CurrentTime));
+        var snapshot = new WarmupSnapshot(rules.WarmupPeriod, rules.WarmupPeriodEnd, Server.CurrentTime);
+        var (next, forceEnd) = _warmup.Evaluate(snapshot);
+        TraceWarmup(snapshot, next, forceEnd);
         _warmup = next;
         if (!forceEnd)
         {
@@ -145,6 +149,18 @@ public sealed class CoreModule : IRetakeModule
         Server.ExecuteCommand("mp_warmup_end");
         Context.Bus.Publish(new WarmupForcedEnd(_mapName));
         Context.Text.ChatAll("core.warmup.forced_end");
+    }
+
+    // Diagnostic (core.json Debug): the warmup state the watchdog sees, every few seconds and whenever it decides.
+    private void TraceWarmup(WarmupSnapshot snapshot, WarmupTracker next, bool forceEnd)
+    {
+        if (!_config.Debug || (++_watchdogTicks % WatchdogTraceEvery != 0 && !forceEnd))
+        {
+            return;
+        }
+        Context.Logger.LogInformation(
+            "Warmup watchdog: warmup={Warmup} end={End} now={Now} seenAt={SeenAt} settled={Settled} forceEnd={ForceEnd} phase={Phase}",
+            snapshot.IsWarmup, snapshot.WarmupPeriodEnd, snapshot.Now, next.WarmupSeenAt, next.Settled, forceEnd, Context.Rounds.State.Phase);
     }
 
     private void OnInfoCommand(CCSPlayerController? player, CommandInfo command)

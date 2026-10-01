@@ -73,6 +73,12 @@ public sealed record MenuNavigator
         return item is null ? (this, MenuOutcome.None) : ActivateItem(item, 0);
     }
 
+    public MenuNavigator MoveWrapping(int delta)
+    {
+        var count = Lines().Count;
+        return this with { Cursor = ((Cursor + delta) % count + count) % count };
+    }
+
     public MenuNavigator Move(int delta) => this with { Cursor = Math.Clamp(Cursor + delta, 0, Lines().Count - 1) };
 
     public (MenuNavigator Next, MenuOutcome Outcome) ActivateCursor() => Activate(Cursor);
@@ -155,7 +161,7 @@ public sealed record MenuNavigator
         ? new MenuLine(CloseId, HudText.Of("hud.menu.close"), MenuLineKind.Close)
         : new MenuLine(BackId, HudText.Of("hud.menu.back"), MenuLineKind.Back);
 
-    private static MenuLine ToLine(MenuItem item) => new(item.Id, item.Label, MenuLineKind.Item, item.Kind, item.IsOn);
+    private static MenuLine ToLine(MenuItem item) => new(item.Id, item.Label, MenuLineKind.Item, item.Kind, item.IsOn, item.Team);
 
     private static int PageCount(int itemCount) => (itemCount + ItemsPerPage - 1) / ItemsPerPage;
 

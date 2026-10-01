@@ -66,19 +66,44 @@ public class WeaponMenuTests
     }
 
     [Fact]
-    public void Build_Others_ExcludeTheCurrentConfig_AndConfigsWithoutChoice()
+    public void Build_HasOneSectionPerTeam_ListingEveryRoundTypeWithAChoice()
     {
-        var menu = WeaponMenu.Build(State(TeamSide.T, FullBuy, definitions: new[] { FullBuy, Fixed }));
-        var others = Item(menu, WeaponMenu.OthersItemId).Submenu!;
-        Assert.Equal(new[] { "cfg:CT:FullBuy" }, others.Items.Select(i => i.Id));
+        var menu = WeaponMenu.Build(State(TeamSide.T, FullBuy, definitions: new[] { FullBuy, Pistol, Fixed }));
+        Assert.Equal(new[] { WeaponMenu.CurrentItemId, "team:T", "team:CT", WeaponMenu.AwpItemId }, menu.Items.Select(i => i.Id));
+        var terrorists = Item(menu, "team:T");
+        Assert.Equal(TeamSide.T, terrorists.Team);
+        Assert.Equal(new[] { "cfg:T:FullBuy", "cfg:T:Pistol" }, terrorists.Submenu!.Items.Select(i => i.Id));
+        Assert.All(terrorists.Submenu.Items, i => Assert.Equal(TeamSide.T, i.Team));
+    }
+
+    // The section shows what the player gets, before entering the round type.
+    [Fact]
+    public void Build_RoundTypeEntries_SummariseTheEffectiveWeapons()
+    {
+        var menu = WeaponMenu.Build(State(TeamSide.CT, FullBuy, new LoadoutPreference("weapon_m4a1_silencer", null, false), definitions: new[] { FullBuy, Pistol }));
+        var fullBuy = Item(Item(menu, "team:CT").Submenu!, "cfg:CT:FullBuy");
+        Assert.Equal("allocation.menu.summary", fullBuy.Label.Key);
+        Assert.Equal(new object[] { "FullBuy", "M4A1-S", "USP-S" }, fullBuy.Label.Args);
+        var pistol = Item(Item(menu, "team:CT").Submenu!, "cfg:CT:Pistol");
+        Assert.Equal(new object[] { "Pistol", "-", "USP-S" }, pistol.Label.Args);
     }
 
     [Fact]
-    public void Build_ForASpectator_HasNoCurrentEntry_ButOffersEveryConfig()
+    public void Build_SkipsATeamWithoutAnyChoice()
+    {
+        var tOnly = Definition("TOnly", Array.Empty<string>(), Array.Empty<string>()) with
+        {
+            Secondaries = new TeamWeapons(new[] { "weapon_glock", "weapon_tec9" }, Array.Empty<string>(), Array.Empty<string>()),
+        };
+        var menu = WeaponMenu.Build(State(null, null, definitions: new[] { tOnly }));
+        Assert.Equal(new[] { "team:T", WeaponMenu.AwpItemId }, menu.Items.Select(i => i.Id));
+    }
+
+    [Fact]
+    public void Build_ForASpectator_HasNoCurrentEntry_ButBothSections()
     {
         var menu = WeaponMenu.Build(State(null, FullBuy));
-        Assert.DoesNotContain(menu.Items, i => i.Id == WeaponMenu.CurrentItemId);
-        Assert.Equal(new[] { "cfg:T:FullBuy", "cfg:CT:FullBuy" }, Item(menu, WeaponMenu.OthersItemId).Submenu!.Items.Select(i => i.Id));
+        Assert.Equal(new[] { "team:T", "team:CT", WeaponMenu.AwpItemId }, menu.Items.Select(i => i.Id));
     }
 
     [Fact]

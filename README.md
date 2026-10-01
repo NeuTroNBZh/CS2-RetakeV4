@@ -78,7 +78,7 @@ RetakeV4 est une réécriture complète de CS2RetakeV3. Il est modulaire (chaque
 |---|---|
 | `!guns` (alias : `!gun`, `!g`, `!weapons`, `!menu`…) | Ouvre le menu d'armes |
 | `!awp` | Se porter volontaire (ou non) pour l'AWP |
-| Touches `1` à `9`, ou viser une ligne et tirer | Choisir dans un menu HUD |
+| Avancer / reculer, puis Utiliser (E) — ou Recharger (R) en round | Naviguer et choisir dans le menu |
 | `!1`, `!2`… | Choisir dans un menu de chat (si le serveur utilise ce mode) |
 
 - **Choix des armes** : pour chaque équipe et chaque type de round, vous choisissez votre arme principale et votre pistolet. Le choix est enregistré et réutilisé à chaque round du même type. Un choix fait pendant le freeze time s'applique tout de suite.
@@ -133,7 +133,7 @@ Chaque module a son fichier dans `addons/counterstrikesharp/configs/plugins/Reta
 | `grenades.json` | kits de grenades par pool et par équipe | — |
 | `plant.json` | `AutoPlant` ou `FastPlant` | `AutoPlant` |
 | `instadefuse.json` | conditions de l'InstaDefuse | activé, bloqué par HE, molotov et feu |
-| `hud.json` | thème, widgets, affichage des menus | menus devant le joueur |
+| `hud.json` | thème (couleurs, couleurs d'équipe), widgets, affichage des menus | panneau au centre de l'écran |
 | `admin.json` | pont CS2-SimpleAdmin | activé |
 | `links.json` | commandes communautaires (`!discord` → message) | — |
 | `api.json` | API publique | activée |
@@ -142,8 +142,9 @@ Chaque module a son fichier dans `addons/counterstrikesharp/configs/plugins/Reta
 
 Dans `hud.json`, `Menu.Display` choisit comment les menus (armes, admin, éditeur) s'affichent :
 
-- `WorldText` (par défaut) : le menu flotte devant le joueur. On choisit avec les touches `1`-`9` ou en visant une ligne et en tirant.
+- `WorldText` : le menu flotte devant le joueur ; on choisit en visant une ligne et en tirant, ou avec avancer / reculer et Utiliser hors round.
 - `Chat` : liste numérotée dans le chat, comme en V3. On choisit avec `!1`, `!2`…
+- `CenterHtml` (par défaut) : grand panneau au centre de l'écran (titre, sections T / CT en couleur, arme choisie cochée, aide des touches). Avancer / reculer pour naviguer ; Utiliser (E) valide hors round, Recharger (R) en round (E reste libre pour désamorcer). `Menu.Input` ne s'applique pas à ce mode.
 
 Ce réglage est pris en compte au redémarrage du serveur ou au rechargement du plugin.
 

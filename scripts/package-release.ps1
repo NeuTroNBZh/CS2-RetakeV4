@@ -26,6 +26,15 @@ if ($noConfigEntries | Where-Object { $_ -like "addons/counterstrikesharp/config
 if (-not ($fullEntries -contains "addons/counterstrikesharp/configs/plugins/RetakeV4/core.json")) { throw "The full zip has no configs" }
 if (-not ($fullEntries -contains "addons/counterstrikesharp/shared/RetakeV4.Contracts/RetakeV4.Contracts.dll")) { throw "The zip has no RetakeV4.Contracts" }
 
+foreach ($file in @("RetakeV4.dll", "RetakeV4.Domain.dll")) {
+    $stream = [System.IO.File]::OpenRead((Join-Path $staging "addons/counterstrikesharp/plugins/RetakeV4/$file"))
+    try {
+        $headers = [System.Reflection.PortableExecutable.PEReader]::new($stream).PEHeaders
+        if ($headers.CorHeader.ManagedNativeHeaderDirectory.Size -le 0) { throw "$file is not ReadyToRun compiled" }
+    }
+    finally { $stream.Dispose() }
+}
+
 $sqlite = Join-Path $staging "addons/counterstrikesharp/plugins/RetakeV4/runtimes/linux-x64/native/libe_sqlite3.so"
 $glibc = [regex]::Matches([System.Text.Encoding]::ASCII.GetString([System.IO.File]::ReadAllBytes($sqlite)), "GLIBC_2\.(\d+)") |
     ForEach-Object { [int]$_.Groups[1].Value } | Measure-Object -Maximum

@@ -28,6 +28,7 @@ internal sealed class MenuHud
     private readonly Color _muted;
     private readonly Dictionary<int, MenuSession> _sessions = new();
     private bool _entitiesAllowed = true;
+    private readonly Dictionary<int, ulong> _held = new();
     private KeyMute _keyMute = KeyMute.Empty;
 
     public MenuHud(HudConfig config, ITextService text, IEventBus bus, ILogger logger, Func<RoundPhase> phase, Func<DateTimeOffset> clock)
@@ -58,6 +59,10 @@ internal sealed class MenuHud
         {
             Close(slot);
             _sessions[slot] = new MenuSession(MenuNavigator.Open(e.Menu));
+            // A button already held when the menu opens (attack, moving) is not a press.
+            _held[slot] = Utilities.GetPlayerFromSlot(slot) is { IsValid: true, Pawn.IsValid: true } player && player.Pawn.Value is { IsValid: true }
+                ? (ulong)player.Buttons
+                : 0;
         }
         Render(slot);
     }
@@ -67,6 +72,7 @@ internal sealed class MenuHud
     public void Forget(int slot)
     {
         Close(slot);
+        _held.Remove(slot);
         _keyMute = _keyMute.Forget(slot);
     }
 
@@ -138,13 +144,40 @@ internal sealed class MenuHud
         }
     }
 
+    // Every tick: OnPlayerButtonsChanged does not fire on all servers, so the held buttons are read directly.
+    public void PollButtons()
+    {
+        if (_sessions.Count == 0)
+        {
+            return;
+        }
+        foreach (var (slot, session) in _sessions.ToList())
+        {
+            if (Utilities.GetPlayerFromSlot(slot) is not { IsValid: true } player
+                || player.Pawn is not { IsValid: true } pawn || pawn.Value is not { IsValid: true })
+            {
+                continue;
+            }
+            var held = (ulong)player.Buttons;
+            var pressed = (PlayerButtons)ButtonEdges.Pressed(_held.GetValueOrDefault(slot), held);
+            // Tracked even while the entities are suspended, so the next press is compared with the real previous state.
+            _held[slot] = held;
+            if (pressed != 0 && session.View is not null)
+            {
+                OnButtons(slot, pressed, session.Navigator);
+            }
+        }
+    }
+
     public void OnButtons(int slot, PlayerButtons pressed, MenuNavigator claimed)
     {
         if (Current(slot, claimed) is not var (player, session))
         {
+            Trace("buttons {Pressed} of slot {Slot} dropped: the menu changed or closed since the press", pressed, slot);
             return;
         }
         var controls = Controls(player);
+        Trace("buttons {Pressed} of slot {Slot}: controls {Controls}, aimed line {Aimed}", pressed, slot, controls, session.Aimed);
         if (controls.Aim && Pressed(pressed, PlayerButtons.Attack) && session.Aimed is { } aimed)
         {
             Activate(player, session, aimed);
@@ -169,15 +202,35 @@ internal sealed class MenuHud
         _sessions.TryGetValue(slot, out var session) && session.View is not null ? session.Navigator : null;
 
     public MenuNavigator? ClaimKey(CCSPlayerController? player, int key) =>
-        player is { IsValid: true } && OpenNavigator(player.Slot) is { } navigator
-        && Controls(player).Keys && key <= navigator.Lines().Count && !_keyMute.IsMuted(player.Slot, _clock())
-            ? navigator
-            : null;
+        KeyRefusal(player, key) is null ? OpenNavigator(player!.Slot) : null;
+
+    // Diagnostic (hud.json Debug): why a number key is left to the game instead of driving the menu.
+    public string? KeyRefusal(CCSPlayerController? player, int key)
+    {
+        if (player is not { IsValid: true })
+        {
+            return "invalid player";
+        }
+        if (OpenNavigator(player.Slot) is not { } navigator)
+        {
+            return "no open menu";
+        }
+        if (!Controls(player).Keys)
+        {
+            return "keys disabled in this phase";
+        }
+        if (key > navigator.Lines().Count)
+        {
+            return $"key beyond the {navigator.Lines().Count} lines";
+        }
+        return _keyMute.IsMuted(player.Slot, _clock()) ? "muted right after a loadout" : null;
+    }
 
     public void PressKey(int slot, int key, MenuNavigator claimed)
     {
         if (Current(slot, claimed) is not var (player, session) || !Controls(player).Keys)
         {
+            Trace("key {Key} of slot {Slot} dropped: the menu changed or closed since the press", key, slot);
             return;
         }
         Activate(player, session, key - 1);
@@ -281,8 +334,19 @@ internal sealed class MenuHud
     }
 
     // The navigation is updated and shown before the selection is published: the owner may refresh the menu in its handler.
+    private void Trace(string message, params object?[] args)
+    {
+        if (_config.Debug)
+        {
+#pragma warning disable CA2254 // Templates are constant strings passed by this class only.
+            _logger.LogInformation("Menu input: " + message, args);
+#pragma warning restore CA2254
+        }
+    }
+
     private void Activate(CCSPlayerController player, MenuSession session, int lineIndex)
     {
+        Trace("slot {Slot} activates line {Line} of {Menu}", player.Slot, lineIndex, session.Navigator.Current.Id);
         var menuId = session.Navigator.Root.Id;
         var (next, outcome) = session.Navigator.Activate(lineIndex);
         session.Navigator = next;

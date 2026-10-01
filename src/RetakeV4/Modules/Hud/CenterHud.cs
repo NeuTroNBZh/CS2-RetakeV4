@@ -18,6 +18,7 @@ internal sealed class CenterHud
     private readonly HudConfig _config;
     private readonly ITextService _text;
     private readonly Func<DateTimeOffset> _clock;
+    private readonly Func<CCSPlayerController, string?> _menu;
     private readonly Dictionary<int, string> _html = new();
     private RoundInfoWidget _roundInfo = RoundInfoWidget.Empty;
     private QueueStatusWidget _queue = QueueStatusWidget.Empty;
@@ -25,11 +26,13 @@ internal sealed class CenterHud
     private TeamState _teams = TeamState.Empty;
     private DateTimeOffset _nextRefresh = DateTimeOffset.MinValue;
 
-    public CenterHud(HudConfig config, ITextService text, Func<DateTimeOffset> clock)
+    // menu: the HTML of an open center menu for a player, shown instead of the info block (null when none).
+    public CenterHud(HudConfig config, ITextService text, Func<DateTimeOffset> clock, Func<CCSPlayerController, string?>? menu = null)
     {
         _config = config;
         _text = text;
         _clock = clock;
+        _menu = menu ?? (_ => null);
     }
 
     public void OnRoundPrepared(RoundPrepared e)
@@ -64,7 +67,11 @@ internal sealed class CenterHud
         }
         foreach (var player in players)
         {
-            if (_html.TryGetValue(player.Slot, out var html))
+            if (_menu(player) is { } menu)
+            {
+                player.PrintToCenterHtml(menu);
+            }
+            else if (_html.TryGetValue(player.Slot, out var html))
             {
                 player.PrintToCenterHtml(html);
             }
