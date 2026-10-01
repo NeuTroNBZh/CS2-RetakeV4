@@ -8,24 +8,11 @@ namespace RetakeV4.Modules.MapCleanup;
 // The only place that touches map entities: reads the five candidate classes and sends Open or Break, nothing else.
 internal static class CleanupEntities
 {
-    public static IReadOnlyList<CleanupCandidate> Candidates()
-    {
-        var entities = CleanupClassifier.CandidateClasses
+    public static IReadOnlyList<CleanupCandidate> Candidates() =>
+        CleanupCandidates.Build(CleanupClassifier.CandidateClasses
             .SelectMany(Utilities.FindAllEntitiesByDesignerName<CBaseEntity>)
             .Where(e => e.IsValid)
-            .Select(e => (Index: (int)e.Index, Facts: Facts(e)))
-            .ToList();
-        var nameCounts = entities
-            .Select(e => e.Facts.TargetName)
-            .OfType<string>()
-            .Where(n => n.Length > 0)
-            .GroupBy(n => n, StringComparer.Ordinal)
-            .ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal);
-        return entities
-            .Select(e => new CleanupCandidate(e.Index, e.Facts,
-                EntityKey.For(e.Facts, e.Facts.TargetName is { } name && nameCounts.GetValueOrDefault(name) == 1)))
-            .ToList();
-    }
+            .Select(e => ((int)e.Index, Facts(e))));
 
     // Sends the input only if the slot still holds an entity of the planned class: an index freed by a broken window
     // may be reused by something else before the freeze-end check.
