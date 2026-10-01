@@ -40,4 +40,11 @@ $glibc = [regex]::Matches([System.Text.Encoding]::ASCII.GetString([System.IO.Fil
     ForEach-Object { [int]$_.Groups[1].Value } | Measure-Object -Maximum
 if ($glibc.Maximum -gt 31) { throw "libe_sqlite3.so needs GLIBC_2.$($glibc.Maximum): game hosts with glibc 2.31 could not load it" }
 
+$checkDir = Join-Path $root "artifacts/configcheck"
+if (Test-Path $checkDir) { Remove-Item $checkDir -Recurse -Force }
+dotnet publish (Join-Path $root "tools/RetakeV4.ConfigCheck") -c Release -o $checkDir --nologo
+if ($LASTEXITCODE -ne 0) { throw "ConfigCheck publish failed" }
+if (-not (Test-Path (Join-Path $checkDir "lang/fr.json"))) { throw "ConfigCheck has no lang files" }
+Compress-Archive -Path (Join-Path $checkDir "*") -DestinationPath (Join-Path $release "RetakeV4-$Version-configcheck.zip")
+
 Write-Host "Release ready: $full, $noConfigs"
