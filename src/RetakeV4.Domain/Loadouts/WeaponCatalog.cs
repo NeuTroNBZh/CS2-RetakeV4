@@ -23,6 +23,8 @@ public static class WeaponCatalog
         "weapon_hegrenade", "weapon_flashbang", "weapon_smokegrenade", "weapon_molotov", "weapon_incgrenade", "weapon_decoy",
     };
 
+    public static IReadOnlyCollection<string> Guns { get; } = Primaries.Concat(Secondaries).ToList();
+
     public static bool IsPrimary(string? id) => id is not null && Primaries.Contains(id);
 
     public static bool IsSecondary(string? id) => id is not null && Secondaries.Contains(id);

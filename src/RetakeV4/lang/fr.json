@@ -96,5 +96,12 @@
   "admin.menu.scramble": "Mélanger les équipes en fin de round",
   "admin.no_permission": "Tu n'as pas la permission d'utiliser le menu admin Retake.",
   "admin.usage": "Usage : !retake [edit]",
-  "admin.player_only": "Cette commande s'utilise en jeu."
+  "admin.player_only": "Cette commande s'utilise en jeu.",
+  "allocation.buy.auto_managed": "Armure, kit, grenades et Zeus sont donnés automatiquement.",
+  "allocation.buy.not_available": "Cette arme n'est pas disponible pour ce round.",
+  "allocation.buy.awp_volunteer": "Tu es maintenant volontaire pour l'AWP.",
+  "allocation.howto.menu": "Tape !guns pour choisir tes armes.",
+  "allocation.howto.native": "Utilise le menu d'achat (B) pour choisir tes armes : rien n'est acheté, ton choix est enregistré.",
+  "allocation.howto.both": "Tape !guns ou utilise le menu d'achat (B) pour choisir tes armes.",
+  "allocation.buy.freeze_only": "Le menu d'achat n'enregistre un choix que pendant le freeze time ; sinon utilise !guns ou un achat nommé (buy ak47)."
 }

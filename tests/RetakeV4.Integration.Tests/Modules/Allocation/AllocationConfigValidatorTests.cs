@@ -1,3 +1,4 @@
+using RetakeV4.Domain.Loadouts;
 using RetakeV4.Modules.Allocation;
 
 namespace RetakeV4.Integration.Tests.Modules.Allocation;
@@ -59,4 +60,33 @@ public class AllocationConfigValidatorTests
         Assert.Equal(DatabaseType.Sqlite, result.Config.Database.Type);
         Assert.Single(result.Issues);
     }
+
+    [Fact]
+    public void Defaults_UseTheMenuMode_AndAFiveMinuteReminder()
+    {
+        Assert.Equal(AllocationMode.Menu, Defaults.Mode);
+        Assert.Equal(5, Defaults.HowToIntervalMinutes);
+    }
+
+    [Fact]
+    public void UnknownMode_FallsBackToMenu()
+    {
+        var result = _validator.Validate(Defaults with { Mode = (AllocationMode)9 }, Defaults, "allocation.json");
+        Assert.Equal(AllocationMode.Menu, result.Config.Mode);
+        Assert.Single(result.Issues);
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(121)]
+    public void OutOfRangeReminder_FallsBack(int minutes)
+    {
+        var result = _validator.Validate(Defaults with { HowToIntervalMinutes = minutes }, Defaults, "allocation.json");
+        Assert.Equal(5, result.Config.HowToIntervalMinutes);
+        Assert.Single(result.Issues);
+    }
+
+    [Fact]
+    public void DisabledReminder_IsValid() =>
+        Assert.Empty(_validator.Validate(Defaults with { HowToIntervalMinutes = 0, Mode = AllocationMode.Both }, Defaults, "allocation.json").Issues);
 }

@@ -189,4 +189,17 @@ public partial class LangFilesTests
     {
         Assert.Contains(key, Load("en").Keys);
     }
+
+    [Theory]
+    [InlineData("allocation.buy.auto_managed")]
+    [InlineData("allocation.buy.not_available")]
+    [InlineData("allocation.buy.awp_volunteer")]
+    [InlineData("allocation.buy.freeze_only")]
+    [InlineData("allocation.howto.menu")]
+    [InlineData("allocation.howto.native")]
+    [InlineData("allocation.howto.both")]
+    public void Phase5aKeys_ArePresent(string key)
+    {
+        Assert.Contains(key, Load("en").Keys);
+    }
 }
