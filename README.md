@@ -8,6 +8,7 @@ RetakeV4 est une réécriture complète de CS2RetakeV3. Il est modulaire (chaque
 
 - **Joueurs** : armes choisies une fois puis retenues, menu `!guns` en jeu ou [panel web](#panel-web).
 - **Admins** : éditeur de spawns en jeu, menu `!retake`, intégration CS2-SimpleAdmin.
+- **Nettoyage de map** : portes ouvertes, vitres et aérations cassées à chaque round, sans toucher au reste ; corrections par map en jeu.
 - **Développeurs** : [API publique](#api-pour-les-autres-plugins) pour réagir aux rounds depuis un autre plugin.
 
 ---
@@ -94,8 +95,9 @@ Les commandes admin demandent la permission `@retakev4/admin` (et `@retakev4/roo
 
 | Commande | Effet |
 |---|---|
-| `!retake` | Menu admin : éditeur de spawns, forçage du site, scramble |
+| `!retake` | Menu admin : éditeur de spawns, forçage du site, scramble, nettoyage de map |
 | `!retake edit` ou `css_retake_edit [save\|discard\|exit]` | Entrer ou sortir de l'éditeur de spawns |
+| `!retake cleanup` | Ouvrir l'éditeur du nettoyage de map |
 | `css_retake_forcesite <A\|B\|off> [once\|sticky]` | Forcer le prochain site, ou tous les suivants |
 | `css_retake_scramble` | Mélanger les équipes à la fin du round |
 | `css_retake_addspawn <T\|CT> <A\|B> [plant]` | Ajouter un spawn à votre position |
@@ -112,6 +114,12 @@ Les commandes admin demandent la permission `@retakev4/admin` (et `@retakev4/roo
 3. **Enregistrer** écrit `plugins/RetakeV4/spawns/<map>.json` et garde une copie `.bak` de l'ancien fichier. **Annuler** recharge la dernière version enregistrée.
 
 Un spawn T marqué *plant* peut porter la bombe ; il en faut au moins un par site pour l'AutoPlant.
+
+### Nettoyage de map
+
+À chaque round, après la pose de la bombe, le module MapCleanup ouvre les portes et casse les vitres et les aérations ; à la fin du freeze time il renvoie la même action aux cibles encore présentes. Rien d'autre n'est touché : seules les classes `func_door`, `func_door_rotating`, `prop_door_rotating`, `func_breakable` et `func_breakable_surf` sont lues, et seules les entrées `Open` (portes) et `Break` (vitres, aérations) sont envoyées. Un `func_breakable` n'est une vitre que si son modèle contient `glass` ou `window`, une aération que s'il contient `vent` ou `grate` ; sinon il est laissé tel quel. Rien n'est fait pendant l'échauffement ni pendant l'éditeur de spawns.
+
+Pour corriger une map : `!retake cleanup` (ou **Nettoyage de map** dans le menu admin). Visez l'entité et validez la première ligne : le panneau affiche sa classe, son modèle et son nom. Choisissez **Porte**, **Vitre**, **Aération**, **Ne pas toucher** ou **Auto** (règle automatique), puis **Sauvegarder**. Les corrections vont dans `configs/plugins/RetakeV4/mapcleanup/<map>.json` (copie `.bak` de l'ancienne version) et s'appliquent dès le round suivant. Un seul admin édite à la fois ; le nettoyage automatique est suspendu tant que l'éditeur est ouvert (fermer le menu ne quitte pas l'éditeur : utilisez **Quitter**).
 
 ### CS2-SimpleAdmin
 
@@ -137,6 +145,7 @@ Chaque module a son fichier dans `addons/counterstrikesharp/configs/plugins/Reta
 | `admin.json` | pont CS2-SimpleAdmin | activé |
 | `links.json` | commandes communautaires (`!discord` → message, `!regles` → plusieurs lignes) | — |
 | `announcements.json` | messages réguliers (par map possible) et message d'accueil | désactivé (listes vides) |
+| `mapcleanup.json` | nettoyage de map : `OpenDoors`, `DoorOpenChancePercent` (0–100), `BreakWindows`, `BreakVents`, `MaxEntitiesPerRound` (1–4096), `FreezeEndCheck` | tout activé, portes ouvertes à 100 % |
 | `api.json` | API publique | activée |
 
 ### Menus : HUD ou chat
