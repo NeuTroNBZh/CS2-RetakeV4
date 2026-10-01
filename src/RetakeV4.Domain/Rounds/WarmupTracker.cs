@@ -27,8 +27,10 @@ public sealed record WarmupTracker(float FallbackSeconds, float? WarmupSeenAt, b
         }
 
         var seenAt = WarmupSeenAt ?? snapshot.Now;
-        var timerElapsed = snapshot.WarmupPeriodEnd > 0f && snapshot.Now >= snapshot.WarmupPeriodEnd;
-        var fallbackElapsed = snapshot.WarmupPeriodEnd <= 0f
+        // An endless warmup reports no end as 0 or, on some hosts, +Infinity: both mean "no timer, use the fallback".
+        var hasTimer = float.IsFinite(snapshot.WarmupPeriodEnd) && snapshot.WarmupPeriodEnd > 0f;
+        var timerElapsed = hasTimer && snapshot.Now >= snapshot.WarmupPeriodEnd;
+        var fallbackElapsed = !hasTimer
             && FallbackSeconds > 0f
             && snapshot.Now - seenAt >= FallbackSeconds;
 
