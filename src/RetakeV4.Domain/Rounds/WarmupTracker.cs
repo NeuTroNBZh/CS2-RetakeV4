@@ -12,6 +12,9 @@ public sealed record WarmupTracker(float FallbackSeconds, float? WarmupSeenAt, b
         return new WarmupTracker(fallbackSeconds, null, false);
     }
 
+    // An admin-driven warmup (spawn editor) must never be cut by the watchdog, even during the map's first warmup.
+    public WarmupTracker Settle() => this with { Settled = true };
+
     public (WarmupTracker Next, bool ForceEnd) Evaluate(WarmupSnapshot snapshot)
     {
         if (Settled)

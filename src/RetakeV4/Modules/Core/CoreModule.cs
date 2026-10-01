@@ -42,6 +42,13 @@ public sealed class CoreModule : IRetakeModule
         hooks.OnEvent<EventRoundFreezeEnd>("freeze_end", _ => Context.Rounds.Handle(RoundSignal.FreezeEnded));
         hooks.OnEvent<EventRoundEnd>("round_end", _ => Context.Rounds.Handle(RoundSignal.RoundEnded));
         hooks.Command("css_retake_info", "Shows the RetakeV4 version", OnInfoCommand);
+        hooks.OnBus<SpawnEditorStateChanged>(e =>
+        {
+            if (e.Active)
+            {
+                _warmup = _warmup.Settle();
+            }
+        });
         hooks.OnBus<ModulesReady>(e =>
         {
             if (!string.IsNullOrWhiteSpace(Server.MapName))

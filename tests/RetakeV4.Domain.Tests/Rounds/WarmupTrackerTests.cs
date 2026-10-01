@@ -108,4 +108,12 @@ public class WarmupTrackerTests
     {
         Assert.Throws<ArgumentOutOfRangeException>(() => WarmupTracker.Start(-1f));
     }
+
+    [Fact]
+    public void Settle_StopsTheWatchdog()
+    {
+        var tracker = WarmupTracker.Start(16f).Settle();
+        var (_, forceEnd) = tracker.Evaluate(new WarmupSnapshot(true, 1f, 100f));
+        Assert.False(forceEnd);
+    }
 }
