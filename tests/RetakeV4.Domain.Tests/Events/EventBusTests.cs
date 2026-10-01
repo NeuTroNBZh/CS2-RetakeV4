@@ -1,4 +1,6 @@
+using RetakeV4.Domain.Common;
 using RetakeV4.Domain.Events;
+using RetakeV4.Domain.Hud;
 
 namespace RetakeV4.Domain.Tests.Events;
 
@@ -94,5 +96,19 @@ public class EventBusTests
     public void Subscribe_RejectsBlankSubscriberName()
     {
         Assert.Throws<ArgumentException>(() => _bus.Subscribe<Ping>(" ", _ => { }));
+    }
+
+    [Fact]
+    public void Publish_FromAHandler_ReachesOtherSubscribers()
+    {
+        var bus = new EventBus(_ => { });
+        var menu = new Menu("m", HudText.Raw("t"), Array.Empty<MenuItem>());
+        var refreshed = new List<HudMenuOpen>();
+        bus.Subscribe<HudMenuSelected>("allocation", e => bus.Publish(new HudMenuOpen(e.Player, menu, RefreshOnly: true)));
+        bus.Subscribe<HudMenuOpen>("hud", refreshed.Add);
+        bus.Publish(new HudMenuSelected(new PlayerId(4), "m", "awp"));
+        var open = Assert.Single(refreshed);
+        Assert.Equal(new PlayerId(4), open.Player);
+        Assert.True(open.RefreshOnly);
     }
 }

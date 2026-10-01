@@ -56,17 +56,24 @@ public sealed class TeamsModule : IRetakeModule
         {
             if (e.Userid is { } player)
             {
-                _state = TeamPlanner.Leave(_state, new PlayerId(player.Slot));
+                SetState(TeamPlanner.Leave(_state, new PlayerId(player.Slot)));
             }
         });
         hooks.OnEvent<EventRoundEnd>("round_end", OnRoundEnd);
         hooks.OnEvent<EventRoundFreezeEnd>("freeze_end", _ => Reconcile());
         hooks.OnBus<MapStarted>(_ => ResetForMap());
         hooks.OnBus<RoundPhaseChanged>(OnPhaseChanged);
+        hooks.OnBus<ModulesReady>(_ => Context.Bus.Publish(new TeamStateChanged(_state)));
         hooks.Command("css_retake_scramble", "Scrambles the teams at the end of the round", OnScrambleCommand);
     }
 
     public void Unload() => _context = null;
+
+    private void SetState(TeamState state)
+    {
+        _state = state;
+        _context?.Bus.Publish(new TeamStateChanged(state));
+    }
 
     private HookResult OnJoinTeam(CCSPlayerController? player, CommandInfo info)
     {
@@ -81,12 +88,12 @@ public sealed class TeamsModule : IRetakeModule
         var id = new PlayerId(player.Slot);
         if (requestedArg == SpectatorArg)
         {
-            _state = TeamPlanner.Leave(_state, id);
+            SetState(TeamPlanner.Leave(_state, id));
             return HookResult.Continue;
         }
         var requested = requestedArg == TerroristArg ? TeamSide.T : TeamSide.CT;
         var result = TeamPlanner.RequestJoin(_state, id, PriorityOf(player), GameRulesAccessor.IsWarmup(), requested, _config.ToRules());
-        _state = result.State;
+        SetState(result.State);
         ApplyJoin(player, result, requested);
         return HookResult.Handled;
     }
@@ -165,7 +172,7 @@ public sealed class TeamsModule : IRetakeModule
 
     private void ResetForMap()
     {
-        _state = TeamState.Empty;
+        SetState(TeamState.Empty);
         _scrambleRequested = false;
         AdoptPlayersOnTeams();
     }
@@ -177,12 +184,12 @@ public sealed class TeamsModule : IRetakeModule
             .Where(p => p.Side is not null)
             .Select(p => (p.Player, p.Side!.Value))
             .ToList();
-        _state = TeamPlanner.Adopt(_state, onTeams, _config.ToRules());
+        SetState(TeamPlanner.Adopt(_state, onTeams, _config.ToRules()));
     }
 
     private void ApplyPlan(TeamPlan plan)
     {
-        _state = plan.State;
+        SetState(plan.State);
         foreach (var move in plan.Moves)
         {
             var player = Utilities.GetPlayerFromSlot(move.Player.Slot);
@@ -234,7 +241,7 @@ public sealed class TeamsModule : IRetakeModule
         var humans = PlayerQueries.Humans();
         var actual = humans.ToDictionary(p => new PlayerId(p.Slot), PlayerQueries.SideOf);
         var result = TeamPlanner.Reconcile(_state, actual, id => PriorityOf(humans.First(h => h.Slot == id.Slot)));
-        _state = result.State;
+        SetState(result.State);
         foreach (var intruder in result.ToSpectator.Select(i => Utilities.GetPlayerFromSlot(i.Slot)).OfType<CCSPlayerController>())
         {
             intruder.ChangeTeam(CsTeam.Spectator);
