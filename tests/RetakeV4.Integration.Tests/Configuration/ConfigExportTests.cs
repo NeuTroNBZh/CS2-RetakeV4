@@ -16,7 +16,7 @@ public sealed class ConfigExportTests : IDisposable
         Assert.Equal(
             new[]
             {
-                "admin.json", "allocation.json", "api.json", "core.json", "grenades.json", "hud.json", "instadefuse.json",
+                "admin.json", "allocation.json", "announcements.json", "api.json", "core.json", "grenades.json", "hud.json", "instadefuse.json",
                 "links.json", "plant.json", "roundtypes.json", "spawns.json", "teams.json",
             },
             files);

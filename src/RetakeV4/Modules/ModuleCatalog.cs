@@ -1,5 +1,6 @@
 using RetakeV4.Modules.Admin;
 using RetakeV4.Modules.Allocation;
+using RetakeV4.Modules.Announcements;
 using RetakeV4.Modules.Api;
 using RetakeV4.Modules.Core;
 using RetakeV4.Modules.Hud;
@@ -27,6 +28,7 @@ public static class ModuleCatalog
         new InstaDefuseModule(),
         new AdminModule(),
         new LinksModule(),
+        new AnnouncementsModule(),
         new ApiModule(),
     };
 }
