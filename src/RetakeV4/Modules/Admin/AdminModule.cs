@@ -1,9 +1,9 @@
 using System.Reflection;
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
-using CounterStrikeSharp.API.Modules.Admin;
 using CounterStrikeSharp.API.Modules.Commands;
 using Microsoft.Extensions.Logging;
+using RetakeV4.Adapters;
 using RetakeV4.Configuration;
 using RetakeV4.Domain.Admin;
 using RetakeV4.Domain.Common;
@@ -55,7 +55,7 @@ public sealed class AdminModule : IRetakeModule
     }
 
     internal static bool IsAdmin(CCSPlayerController player) =>
-        player.IsValid && AdminManager.PlayerHasPermissions(player, AdminFlag);
+        RetakePermissions.IsAdmin(player);
 
     internal void Execute(CCSPlayerController player, AdminSelection selection)
     {

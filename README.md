@@ -91,7 +91,7 @@ RetakeV4 est une réécriture complète de CS2RetakeV3. Il est modulaire (chaque
 
 ## Pour les admins
 
-Les commandes admin demandent la permission `@retakev4/admin` (et `@retakev4/root` pour l'import V3), à donner via `admins.json` de CounterStrikeSharp ou CS2-SimpleAdmin.
+Les commandes admin demandent la permission `@retakev4/admin` (et `@retakev4/root` pour l'import V3) ; `@css/root` donne accès aux deux, à donner via `admins.json` de CounterStrikeSharp ou CS2-SimpleAdmin.
 
 | Commande | Effet |
 |---|---|

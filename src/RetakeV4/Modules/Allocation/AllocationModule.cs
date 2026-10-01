@@ -1,7 +1,6 @@
 using System.Collections.Immutable;
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
-using CounterStrikeSharp.API.Modules.Admin;
 using CounterStrikeSharp.API.Modules.Commands;
 using CounterStrikeSharp.API.Modules.Timers;
 using Microsoft.Data.Sqlite;
@@ -22,7 +21,6 @@ public sealed class AllocationModule : IRetakeModule
     // After a skin plugin has swapped the spawn knife (it kills the old one 10 ms after giving the new one).
     private const float KnifeCheckDelaySeconds = 0.3f;
 
-    private const string RootFlag = "@retakev4/root";
 
     private static readonly string[] GunsAliases =
     {
@@ -183,7 +181,7 @@ public sealed class AllocationModule : IRetakeModule
 
     private void OnImportCommand(CCSPlayerController? player, CommandInfo command)
     {
-        if (player is not null && !AdminManager.PlayerHasPermissions(player, RootFlag))
+        if (player is not null && !RetakePermissions.IsRoot(player))
         {
             Context.Text.ChatAlert(player, "allocation.no_permission");
             return;

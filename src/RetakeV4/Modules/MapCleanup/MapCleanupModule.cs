@@ -1,6 +1,5 @@
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
-using CounterStrikeSharp.API.Modules.Admin;
 using Microsoft.Extensions.Logging;
 using RetakeV4.Adapters;
 using RetakeV4.Configuration;
@@ -14,7 +13,8 @@ namespace RetakeV4.Modules.MapCleanup;
 // Opens doors and breaks windows and vents once per round (plus one check at freeze end), never anything else.
 public sealed class MapCleanupModule : IRetakeModule
 {
-    private const string AdminFlag = "@retakev4/admin";
+
+    private const int DebugIgnoredLimit = 40;
 
     private MapCleanupConfig _config = new();
     private ModuleContext? _context;
@@ -88,6 +88,11 @@ public sealed class MapCleanupModule : IRetakeModule
         {
             RunPass(_overrides);
         }
+        else if (_config.Debug)
+        {
+            _context?.Logger.LogInformation("Map cleanup skipped: spawn editor {SpawnEditing}, cleanup editor {Editing}, warmup {Warmup}",
+                _spawnEditing, _editor?.Active ?? false, GameRulesAccessor.IsWarmup());
+        }
     }
 
     private void StartMap(string map)
@@ -154,10 +159,31 @@ public sealed class MapCleanupModule : IRetakeModule
         _lastTargets = plan.Select(t => (t, classes[t.Handle])).ToList();
         if (_config.Debug)
         {
-            _context?.Logger.LogInformation("Map cleanup: {Doors} door(s), {Windows} window(s), {Vents} vent(s)",
-                plan.Count(t => t.Kind == CleanupKind.Door), plan.Count(t => t.Kind == CleanupKind.Window), plan.Count(t => t.Kind == CleanupKind.Vent));
+            LogPass(candidates, plan, overrides);
         }
         return ApplyAll(_lastTargets);
+    }
+
+    // Debug only: what the map offers and what was left alone, to write corrections or adjust the automatic rules.
+    private void LogPass(IReadOnlyList<CleanupCandidate> candidates, IReadOnlyList<CleanupTarget> plan, IReadOnlyDictionary<string, CleanupKind> overrides)
+    {
+        if (_context is not { } context)
+        {
+            return;
+        }
+        context.Logger.LogInformation("Map cleanup on {Map}: {Doors} door(s), {Windows} window(s), {Vents} vent(s) out of {Candidates} candidate(s) ({Classes})",
+            _map, plan.Count(t => t.Kind == CleanupKind.Door), plan.Count(t => t.Kind == CleanupKind.Window), plan.Count(t => t.Kind == CleanupKind.Vent),
+            candidates.Count, string.Join(", ", candidates.GroupBy(c => c.Facts.ClassName).Select(g => $"{g.Key}={g.Count()}")));
+        var ignored = candidates
+            .Where(c => CleanupClassifier.Classify(c.Facts, c.Key, overrides) == CleanupKind.Ignore)
+            .Select(c => $"{c.Key} [{c.Facts.ModelName ?? "no model"}]")
+            .Distinct()
+            .Take(DebugIgnoredLimit)
+            .ToList();
+        if (ignored.Count > 0)
+        {
+            context.Logger.LogInformation("Map cleanup on {Map}: left alone {Entities}", _map, string.Join(" | ", ignored));
+        }
     }
 
     private void Recheck()
@@ -200,7 +226,7 @@ public sealed class MapCleanupModule : IRetakeModule
         {
             return;
         }
-        if (!AdminManager.PlayerHasPermissions(player, AdminFlag))
+        if (!RetakePermissions.IsAdmin(player))
         {
             _context?.Text.ChatAlert(player, "admin.no_permission");
             return;

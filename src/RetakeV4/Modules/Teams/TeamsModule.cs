@@ -17,7 +17,6 @@ namespace RetakeV4.Modules.Teams;
 
 public sealed class TeamsModule : IRetakeModule
 {
-    private const string AdminFlag = "@retakev4/admin";
     private const int SpectatorArg = 1;
     private const int TerroristArg = 2;
     private const int CounterTerroristArg = 3;
@@ -284,7 +283,7 @@ public sealed class TeamsModule : IRetakeModule
 
     private void OnScrambleCommand(CCSPlayerController? player, CommandInfo command)
     {
-        if (player is not null && !AdminManager.PlayerHasPermissions(player, AdminFlag))
+        if (player is not null && !RetakePermissions.IsAdmin(player))
         {
             Context.Text.ChatAlert(player, "teams.no_permission");
             return;
