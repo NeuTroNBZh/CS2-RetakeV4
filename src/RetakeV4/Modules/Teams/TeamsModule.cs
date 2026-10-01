@@ -65,6 +65,7 @@ public sealed class TeamsModule : IRetakeModule
         hooks.OnBus<RoundPhaseChanged>(OnPhaseChanged);
         hooks.OnBus<ModulesReady>(_ => Context.Bus.Publish(new TeamStateChanged(_state)));
         hooks.Command("css_retake_scramble", "Scrambles the teams at the end of the round", OnScrambleCommand);
+        hooks.OnBus<ScrambleRequested>(_ => RequestScramble());
     }
 
     public void Unload() => _context = null;
@@ -267,6 +268,11 @@ public sealed class TeamsModule : IRetakeModule
             Context.Text.Chat(player, "teams.no_permission");
             return;
         }
+        RequestScramble();
+    }
+
+    private void RequestScramble()
+    {
         _scrambleRequested = true;
         Context.Text.ChatAll("teams.scramble.requested");
     }

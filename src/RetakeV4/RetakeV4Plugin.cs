@@ -25,6 +25,7 @@ public sealed class RetakeV4Plugin : BasePlugin
     private const int MaxErrorsPerRound = 5;
 
     private ModuleHost? _host;
+    private EventBus? _bus;
     private IDisposable? _roundResetSubscription;
 
     public override string ModuleName => "RetakeV4";
@@ -35,6 +36,7 @@ public sealed class RetakeV4Plugin : BasePlugin
     public override void Load(bool hotReload)
     {
         var bus = new EventBus(OnBusError);
+        _bus = bus;
         var guard = new ModuleGuard(MaxErrorsPerRound, OnGuardFailure);
         var pipeline = new PreparationPipeline(guard);
         var rounds = new RoundTracker(bus, pipeline, RoundState.Initial, GameRulesAccessor.TotalRoundsPlayed);
@@ -61,7 +63,10 @@ public sealed class RetakeV4Plugin : BasePlugin
         _host = null;
         _roundResetSubscription?.Dispose();
         _roundResetSubscription = null;
+        _bus = null;
     }
+
+    public override void OnAllPluginsLoaded(bool hotReload) => _bus?.Publish(new AllPluginsLoaded(hotReload));
 
     private static IReadOnlyList<IRetakeModule> CreateModules() => new IRetakeModule[]
     {
