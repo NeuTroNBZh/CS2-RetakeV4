@@ -15,4 +15,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\RetakeV4.Domain\RetakeV4.Domain.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="..\..\contract\**\*.json" LinkBase="contract" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

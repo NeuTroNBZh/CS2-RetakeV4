@@ -1,0 +1,18 @@
+{
+  "roundTypes": [
+    {
+      "name": "Pistol",
+      "teams": {
+        "T": { "primaries": [], "secondaries": ["weapon_glock", "weapon_tec9"], "defaultPrimary": null, "defaultSecondary": "weapon_glock", "awp": false },
+        "CT": { "primaries": [], "secondaries": ["weapon_usp_silencer", "weapon_p250"], "defaultPrimary": null, "defaultSecondary": "weapon_usp_silencer", "awp": false }
+      }
+    },
+    {
+      "name": "FullBuy",
+      "teams": {
+        "T": { "primaries": ["weapon_ak47", "weapon_sg556"], "secondaries": ["weapon_glock", "weapon_deagle"], "defaultPrimary": "weapon_ak47", "defaultSecondary": "weapon_glock", "awp": true },
+        "CT": { "primaries": ["weapon_m4a1_silencer", "weapon_aug"], "secondaries": ["weapon_usp_silencer", "weapon_deagle"], "defaultPrimary": "weapon_m4a1_silencer", "defaultSecondary": "weapon_usp_silencer", "awp": true }
+      }
+    }
+  ]
+}
