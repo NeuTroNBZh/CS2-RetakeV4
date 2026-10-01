@@ -14,7 +14,7 @@ public class CleanupPlanTests
     [Fact]
     public void DoorsOpen_WindowsAndVentsBreak_RestIgnored()
     {
-        var plan = CleanupPlan.Build(new[] { C(1, "func_door"), C(2, "func_breakable_surf"), C(3, "func_breakable", "vent"), C(4, "func_breakable", "crate") },
+        var plan = CleanupPlan.Build(new[] { C(1, "func_door"), C(2, "func_shatterglass"), C(3, "func_breakable", "vent"), C(4, "func_breakable", "crate") },
             new Dictionary<string, CleanupKind>(), All, new FixedRandom());
         Assert.Equal(new[] { (1, CleanupAction.Open), (2, CleanupAction.Break), (3, CleanupAction.Break) }, plan.Select(t => (t.Handle, t.Action)));
     }
@@ -23,7 +23,7 @@ public class CleanupPlanTests
     public void DisabledCategories_AreSkipped_AndZeroChanceOpensNoDoor()
     {
         var settings = All with { BreakVents = false, DoorOpenChancePercent = 0 };
-        var plan = CleanupPlan.Build(new[] { C(1, "func_door"), C(2, "func_breakable_surf"), C(3, "func_breakable", "vent") },
+        var plan = CleanupPlan.Build(new[] { C(1, "func_door"), C(2, "func_shatterglass"), C(3, "func_breakable", "vent") },
             new Dictionary<string, CleanupKind>(), settings, new FixedRandom());
         Assert.Equal(new[] { 2 }, plan.Select(t => t.Handle));
     }
@@ -39,7 +39,7 @@ public class CleanupPlanTests
     [Fact]
     public void MaxEntities_CapsThePass()
     {
-        var plan = CleanupPlan.Build(Enumerable.Range(1, 10).Select(i => C(i, "func_breakable_surf")).ToList(),
+        var plan = CleanupPlan.Build(Enumerable.Range(1, 10).Select(i => C(i, "func_shatterglass")).ToList(),
             new Dictionary<string, CleanupKind>(), All with { MaxEntities = 3 }, new FixedRandom());
         Assert.Equal(3, plan.Count);
     }

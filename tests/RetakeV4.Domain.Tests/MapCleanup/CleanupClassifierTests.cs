@@ -11,7 +11,7 @@ public class CleanupClassifierTests
     [InlineData("func_door", null, CleanupKind.Door)]
     [InlineData("func_door_rotating", null, CleanupKind.Door)]
     [InlineData("prop_door_rotating", "models/props/de_inferno/door.vmdl", CleanupKind.Door)]
-    [InlineData("func_breakable_surf", null, CleanupKind.Window)]
+    [InlineData("func_shatterglass", null, CleanupKind.Window)]
     [InlineData("func_breakable", "models/props_windows/glass_pane.vmdl", CleanupKind.Window)]
     [InlineData("func_breakable", "maps/de_mirage/WINDOW_frame.vmdl", CleanupKind.Window)]
     [InlineData("func_breakable", "models/props/de_nuke/vent_cover.vmdl", CleanupKind.Vent)]
@@ -39,7 +39,7 @@ public class CleanupClassifierTests
     [Fact]
     public void CandidateClasses_AreTheFiveKnownClasses()
     {
-        Assert.Equal(new[] { "func_breakable", "func_breakable_surf", "func_door", "func_door_rotating", "prop_door_rotating" },
+        Assert.Equal(new[] { "func_breakable", "func_door", "func_door_rotating", "func_shatterglass", "prop_door_rotating" },
             CleanupClassifier.CandidateClasses.Order());
     }
 }

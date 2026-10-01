@@ -11,7 +11,7 @@ public class CleanupCandidatesTests
     [Fact]
     public void SameEntityReturnedByTwoQueries_IsKeptOnce()
     {
-        var found = new[] { E(5, "func_door_rotating"), E(5, "func_door_rotating"), E(7, "func_breakable_surf"), E(7, "func_breakable_surf") };
+        var found = new[] { E(5, "func_door_rotating"), E(5, "func_door_rotating"), E(7, "func_shatterglass"), E(7, "func_shatterglass") };
         Assert.Equal(new[] { 5, 7 }, CleanupCandidates.Build(found).Select(c => c.Handle));
     }
 

@@ -6,7 +6,7 @@ public static class CleanupClassifier
 {
     public static IReadOnlyList<string> CandidateClasses { get; } = new[]
     {
-        "func_door", "func_door_rotating", "prop_door_rotating", "func_breakable", "func_breakable_surf",
+        "func_door", "func_door_rotating", "prop_door_rotating", "func_breakable", "func_shatterglass",
     };
 
     private static readonly string[] DoorClasses = { "func_door", "func_door_rotating", "prop_door_rotating" };
@@ -23,7 +23,7 @@ public static class CleanupClassifier
         {
             return CleanupKind.Door;
         }
-        if (cls == "func_breakable_surf")
+        if (cls == "func_shatterglass")
         {
             return CleanupKind.Window;
         }
