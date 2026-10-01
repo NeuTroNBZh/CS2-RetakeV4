@@ -13,6 +13,7 @@ using RetakeV4.Modules.Allocation;
 using RetakeV4.Modules.Core;
 using RetakeV4.Modules.Hud;
 using RetakeV4.Modules.InstaDefuse;
+using RetakeV4.Modules.Links;
 using RetakeV4.Modules.Plant;
 using RetakeV4.Modules.RoundTypes;
 using RetakeV4.Modules.Spawns;
@@ -80,6 +81,7 @@ public sealed class RetakeV4Plugin : BasePlugin
         new PlantModule(),
         new InstaDefuseModule(),
         new AdminModule(),
+        new LinksModule(),
     };
 
     private string ConfigDirectory() =>
