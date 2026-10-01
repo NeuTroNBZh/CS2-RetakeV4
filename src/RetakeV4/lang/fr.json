@@ -1,0 +1,5 @@
+{
+  "core.prefix": "{lightblue}[Retake]{default}",
+  "core.info.version": "{0} v{1} par {2}",
+  "core.warmup.forced_end": "Fin du warmup, le retake commence !"
+}

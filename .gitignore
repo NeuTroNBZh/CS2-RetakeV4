@@ -5,3 +5,5 @@ obj/
 artifacts/
 TestResults/
 coverage/
+.superpowers/
+coverage.json
