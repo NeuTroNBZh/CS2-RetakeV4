@@ -41,4 +41,20 @@ public class AnnouncementsConfigValidatorTests
         Assert.Equal(string.Empty, result.Config.Welcome);
         Assert.Single(result.Issues);
     }
+
+    [Fact]
+    public void SameMapWrittenTwice_IsMerged_AndReported()
+    {
+        var config = Defaults with
+        {
+            MapMessages = new Dictionary<string, IReadOnlyList<string>>
+            {
+                ["de_dust2"] = new[] { "a" },
+                ["De_Dust2 "] = new[] { "b" },
+            },
+        };
+        var result = _validator.Validate(config, Defaults, "announcements.json");
+        Assert.Equal(new[] { "a", "b" }, Assert.Single(result.Config.MapMessages).Value);
+        Assert.Single(result.Issues);
+    }
 }

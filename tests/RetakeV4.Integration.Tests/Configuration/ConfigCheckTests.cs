@@ -40,4 +40,12 @@ public class ConfigCheckTests : IDisposable
         File.WriteAllText(Path.Combine(spawns, "de_test.json"), "{ broken");
         Assert.Contains(ConfigCheck.Run(Path.Combine(_dir.Path, "none"), spawns, PluginLang), p => p.Contains("de_test", StringComparison.Ordinal));
     }
+
+    [Fact]
+    public void SameMapTwiceInAnnouncements_IsReported_WithoutCrashing()
+    {
+        File.WriteAllText(_dir.File("announcements.json"),
+            "{ \"Version\": 1, \"MapMessages\": { \"de_dust2\": [\"a\"], \"DE_DUST2\": [\"b\"] } }");
+        Assert.Contains(ConfigCheck.Run(_dir.Path, null, PluginLang), p => p.Contains("announcements.json", StringComparison.Ordinal));
+    }
 }

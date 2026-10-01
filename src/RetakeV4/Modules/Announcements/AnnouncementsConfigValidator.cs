@@ -17,9 +17,18 @@ public sealed class AnnouncementsConfigValidator : IConfigValidator<Announcement
             interval = defaults.IntervalSeconds;
         }
         var messages = Keep(config.Messages, nameof(config.Messages), file, issues);
-        var maps = (config.MapMessages ?? new Dictionary<string, IReadOnlyList<string>>())
-            .ToDictionary(kv => kv.Key.Trim().ToLowerInvariant(),
-                kv => Keep(kv.Value, $"{nameof(config.MapMessages)}.{kv.Key}", file, issues));
+        var maps = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
+        foreach (var (map, list) in config.MapMessages ?? new Dictionary<string, IReadOnlyList<string>>())
+        {
+            var key = map.Trim().ToLowerInvariant();
+            var kept = Keep(list, $"{nameof(config.MapMessages)}.{map}", file, issues);
+            if (maps.TryGetValue(key, out var existing))
+            {
+                issues.Add(new ConfigIssue(file, $"{nameof(config.MapMessages)}.{map}", $"map '{key}' is listed twice; messages merged"));
+                kept = existing.Concat(kept).ToList();
+            }
+            maps[key] = kept;
+        }
         var welcome = config.Welcome ?? string.Empty;
         if (welcome.Length > MaxMessageLength)
         {

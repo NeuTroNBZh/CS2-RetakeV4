@@ -26,7 +26,14 @@ public static class ConfigCheck
             var store = new JsonConfigStore(copy);
             foreach (var module in ModuleCatalog.CreateAll())
             {
-                module.LoadConfig(store, logger);
+                try
+                {
+                    module.LoadConfig(store, logger);
+                }
+                catch (Exception ex)
+                {
+                    problems.Add($"{module.Name}: config could not be loaded ({ex.Message})");
+                }
             }
             problems.AddRange(logger.Warnings);
         }
