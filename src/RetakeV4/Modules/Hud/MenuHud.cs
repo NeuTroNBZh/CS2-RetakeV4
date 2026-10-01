@@ -59,6 +59,10 @@ internal sealed class MenuHud
         {
             Close(slot);
             _sessions[slot] = new MenuSession(MenuNavigator.Open(e.Menu));
+            // A button already held when the menu opens (attack, moving) is not a press.
+            _held[slot] = Utilities.GetPlayerFromSlot(slot) is { IsValid: true, Pawn.IsValid: true } player && player.Pawn.Value is { IsValid: true }
+                ? (ulong)player.Buttons
+                : 0;
         }
         Render(slot);
     }
@@ -143,16 +147,22 @@ internal sealed class MenuHud
     // Every tick: OnPlayerButtonsChanged does not fire on all servers, so the held buttons are read directly.
     public void PollButtons()
     {
+        if (_sessions.Count == 0)
+        {
+            return;
+        }
         foreach (var (slot, session) in _sessions.ToList())
         {
-            if (Utilities.GetPlayerFromSlot(slot) is not { IsValid: true } player || session.View is null)
+            if (Utilities.GetPlayerFromSlot(slot) is not { IsValid: true } player
+                || player.Pawn is not { IsValid: true } pawn || pawn.Value is not { IsValid: true })
             {
                 continue;
             }
             var held = (ulong)player.Buttons;
             var pressed = (PlayerButtons)ButtonEdges.Pressed(_held.GetValueOrDefault(slot), held);
+            // Tracked even while the entities are suspended, so the next press is compared with the real previous state.
             _held[slot] = held;
-            if (pressed != 0)
+            if (pressed != 0 && session.View is not null)
             {
                 OnButtons(slot, pressed, session.Navigator);
             }

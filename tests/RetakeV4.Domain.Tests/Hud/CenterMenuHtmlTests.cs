@@ -13,7 +13,7 @@ public class CenterMenuHtmlTests
         Assert.StartsWith("<font class='fontSize-xl' color='#4FC3F7'><b>Weapons</b></font>", Format(new CenterMenuRow("AK-47", false)));
 
     [Fact]
-    public void Rows_AreNumbered_ForTheNumberKeys()
+    public void Rows_AreNumbered()
     {
         var html = Format(new CenterMenuRow("AK-47", false), new CenterMenuRow("M4A4", false));
         Assert.Contains("1. AK-47", html, StringComparison.Ordinal);
@@ -49,5 +49,13 @@ public class CenterMenuHtmlTests
         var html = Format(new CenterMenuRow("Terrorists", false, "#EAB54F"), new CenterMenuRow("Counter-Terrorists", true, "#5D9CEC"));
         Assert.Contains("<font class='fontSize-m' color='#EAB54F'>1. Terrorists</font>", html, StringComparison.Ordinal);
         Assert.Contains("color='#4FC3F7'>&#9654; 2. Counter-Terrorists", html, StringComparison.Ordinal);
+    }
+
+    // A confirmation published while the menu covers the info block ("applied next round") shows above the hint.
+    [Fact]
+    public void Notice_IsShownAboveTheHint()
+    {
+        var html = CenterMenuHtml.Format("Weapons", new[] { new CenterMenuRow("AK-47", false) }, "hint", Theme, "Saved <now>");
+        Assert.EndsWith("<font class='fontSize-m' color='#4FC3F7'>Saved &lt;now&gt;</font><br><font class='fontSize-s' color='#9E9E9E'>hint</font>", html);
     }
 }

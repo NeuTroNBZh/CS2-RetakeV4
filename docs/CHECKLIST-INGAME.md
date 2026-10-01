@@ -68,14 +68,14 @@ Remplir aussi `docs/spikes/hud-probe-findings.md` : les réglages `hud.json` →
 - [ ] Premier démarrage : `hud.json` est créé, aucun avertissement de config.
 - [ ] Début de round : le bloc centré affiche « <type> - site <A/B> » et « CT n contre n T » pendant ~6 s ; la série de victoires T apparaît quand elle existe.
 - [ ] Joueur en file d'attente : « File d'attente : position/total » visible en continu, « Accès prioritaire » pour un VIP.
-- [ ] `!guns` (et un alias, ex. `!gun`) : le menu s'ouvre face au joueur, lisible (sinon essayer `Menu.Orientation` 1 puis 2).
+- [ ] Avec `Menu.Display = WorldText` : `!guns` (et un alias, ex. `!gun`) ouvre le menu face au joueur, lisible (sinon essayer `Menu.Orientation` 1 puis 2).
 - [ ] Le menu suit le joueur sans tremblement gênant (sinon tester `Menu.FollowMode` = `Parent`).
-- [ ] Freeze time : viser une ligne la met en surbrillance ; clic gauche = sélection, sans tirer ; W/S déplacent le curseur, E valide ; touches 1-9 sélectionnent sans changer d'arme. Précision : < 2 erreurs sur 20 essais.
-- [ ] Round live, vivant : seules les touches 1-9 agissent ; viser/cliquer tire normalement, W/S/E bougent/interagissent normalement.
+- [ ] WorldText, freeze time : viser une ligne la met en surbrillance ; clic gauche = sélection, sans tirer ; avancer/reculer déplacent le curseur, E valide. Précision : < 2 erreurs sur 20 essais. (CS2 n'envoie pas les touches 1-9 au serveur.)
+- [ ] WorldText, round live, vivant : le menu n'intercepte rien (viser/cliquer tire, avancer/reculer/E bougent et interagissent normalement).
 - [ ] Un second joueur ne voit pas le menu du premier.
 - [ ] Choisir une arme principale pendant le freeze time : l'arme est remplacée immédiatement, alerte « Armes mises à jour. » ; kit, grenades et AWP éventuelle conservés.
 - [ ] Choisir une arme en round live ou pour une autre configuration : alerte « Enregistré, utilisé dès le prochain round. », appliqué au round suivant.
-- [ ] « Autres configurations » liste les couples équipe × type de round qui offrent un choix ; un pistol round ne propose que le pistolet.
+- [ ] Les sections Terroristes / Antiterroristes listent les types de round qui offrent un choix ; un pistol round ne propose que le pistolet.
 - [ ] AWP : ON/OFF bascule et persiste après reconnexion ; recevoir l'AWP affiche « Tu as l'AWP ce round. ».
 - [ ] Nouveau joueur : le menu s'ouvre seul au freeze time, puis se ferme au début du round live ; il se rouvre quand le type de round change.
 - [ ] Menu ouvert pendant la fin de round / le restart : aucune erreur console, le menu réapparaît au round suivant.
@@ -165,7 +165,10 @@ Remplir aussi `docs/spikes/hud-probe-findings.md` : les réglages `hud.json` →
 ## Panneau central et échauffement (4.2.0)
 
 - [ ] Sans `hud.json` (créé par défaut) : `!guns` ouvre le panneau au centre de l'écran, le bloc d'infos réapparaît à la fermeture.
-- [ ] Avancer / reculer déplace la ligne surlignée (en boucle en haut et en bas), Utiliser (E) valide, en freeze time comme en round.
+- [ ] Avancer / reculer déplace la ligne surlignée (en boucle en haut et en bas) ; Utiliser (E) valide hors round, Recharger (R) valide en round vivant (E reste libre pour désamorcer et ouvrir les portes).
+- [ ] Tenir avancer au moment où le menu s'ouvre seul ne déplace pas le curseur.
+- [ ] Après un choix, la confirmation (« Armes mises à jour » / « Enregistré… ») s'affiche dans le panneau.
+- [ ] Le panneau tient en entier à l'écran avec 7 lignes ou plus (titre, lignes, confirmation, aide).
 - [ ] Sections Terroristes (orange) et Antiterroristes (bleu), chaque type de round affiche son résumé « Type : principale / pistolet » ; l'arme choisie est cochée.
 - [ ] Échauffement sans fin (hébergeur qui annonce une fin infinie) : il se termine au bout de `WarmupFallbackSeconds`, avec le message de fin forcée.
 - [ ] Premier round après démarrage avec des joueurs : aucun `Slow handler` au-dessus de ~200 ms, aucun kick `NETWORK_DISCONNECT_OVERFLOW`.

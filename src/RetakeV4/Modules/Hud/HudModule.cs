@@ -38,7 +38,7 @@ public sealed class HudModule : IRetakeModule
                 LoadChatMenus(context);
                 break;
             case MenuDisplay.CenterHtml:
-                var centerMenus = new CenterMenuHud(_config, context.Text, context.Bus, context.Logger);
+                var centerMenus = new CenterMenuHud(_config, context.Text, context.Bus, context.Logger, () => context.Rounds.State.Phase, () => DateTimeOffset.UtcNow);
                 _centerMenus = centerMenus;
                 LoadCenter(context, centerMenus.Html);
                 LoadCenterMenus(context, centerMenus);
@@ -86,6 +86,7 @@ public sealed class HudModule : IRetakeModule
         hooks.OnBus<HudMenuClose>(e => NextFrame("menu_close", () => _centerMenus?.OnClose(e)));
         hooks.OnBus<MapStarted>(_ => menus.CloseAll());
         hooks.OnTick("menu_input", menus.PollButtons);
+        hooks.OnBus<HudAlert>(menus.OnAlert);
         hooks.OnEvent<EventPlayerDisconnect>("player_disconnect", e =>
         {
             if (e.Userid is { } player)
