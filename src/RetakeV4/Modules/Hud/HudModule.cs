@@ -15,6 +15,7 @@ public sealed class HudModule : IRetakeModule
     private MenuHud? _menus;
     private ChatMenuHud? _chatMenus;
     private CenterMenuHud? _centerMenus;
+    private ChatMenuHud? _chatOnlyMenus;
 
     public string Name => "Hud";
 
@@ -42,10 +43,12 @@ public sealed class HudModule : IRetakeModule
                 _centerMenus = centerMenus;
                 LoadCenter(context, centerMenus.Html);
                 LoadCenterMenus(context, centerMenus);
+                LoadChatOnlyMenus(context);
                 break;
             default:
                 LoadCenter(context, null);
                 LoadMenus(context);
+                LoadChatOnlyMenus(context);
                 break;
         }
     }
@@ -58,6 +61,8 @@ public sealed class HudModule : IRetakeModule
         _chatMenus = null;
         _centerMenus?.CloseAll();
         _centerMenus = null;
+        _chatOnlyMenus?.CloseAll();
+        _chatOnlyMenus = null;
         _context = null;
     }
 
@@ -77,6 +82,10 @@ public sealed class HudModule : IRetakeModule
         var hooks = context.Hooks;
         hooks.OnBus<HudMenuOpen>(e =>
         {
+            if (e.Menu.ChatOnly)
+            {
+                return;
+            }
             if (_config.Debug)
             {
                 context.Logger.LogInformation("Menu input: menu {Menu} opened for slot {Slot} (refresh: {Refresh})", e.Menu.Id, e.Player.Slot, e.RefreshOnly);
@@ -114,6 +123,31 @@ public sealed class HudModule : IRetakeModule
         });
     }
 
+    // Menus flagged ChatOnly (map vote) stay in the chat whatever the configured display: the center and world-text menus
+    // are driven by the movement keys and freeze the player.
+    private void LoadChatOnlyMenus(ModuleContext context)
+    {
+        var menus = new ChatMenuHud(context.Text, context.Bus, NextFrame);
+        _chatOnlyMenus = menus;
+        var hooks = context.Hooks;
+        hooks.OnBus<HudMenuOpen>(e =>
+        {
+            if (e.Menu.ChatOnly)
+            {
+                NextFrame("chat_only_open", () => _chatOnlyMenus?.OnOpen(e));
+            }
+        });
+        hooks.OnBus<HudMenuClose>(e => NextFrame("chat_only_close", () => _chatOnlyMenus?.OnClose(e)));
+        hooks.OnBus<MapStarted>(_ => menus.CloseAll());
+        hooks.OnEvent<EventPlayerDisconnect>("chat_only_disconnect", e =>
+        {
+            if (e.Userid is { } player)
+            {
+                menus.Forget(player.Slot);
+            }
+        });
+    }
+
     private void LoadMenus(ModuleContext context)
     {
         var menus = new MenuHud(_config, context.Text, context.Bus, context.Logger, () => context.Rounds.State.Phase, () => DateTimeOffset.UtcNow);
@@ -121,7 +155,13 @@ public sealed class HudModule : IRetakeModule
         var hooks = context.Hooks;
         // Opening, closing and activating a menu can take long the first time (JIT, entities): run them on the next frame,
         // outside the processing of the client's messages, which the engine aborts with a kick past ~500 ms.
-        hooks.OnBus<HudMenuOpen>(e => NextFrame("menu_open", () => _menus?.OnOpen(e)));
+        hooks.OnBus<HudMenuOpen>(e =>
+        {
+            if (!e.Menu.ChatOnly)
+            {
+                NextFrame("menu_open", () => _menus?.OnOpen(e));
+            }
+        });
         hooks.OnBus<HudMenuClose>(e => NextFrame("menu_close", () => _menus?.OnClose(e)));
         hooks.OnBus<MapStarted>(_ => menus.Reset());
         hooks.OnTick("menu_tick", menus.Tick);
