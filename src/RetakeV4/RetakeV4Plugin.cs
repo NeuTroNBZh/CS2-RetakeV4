@@ -1,6 +1,7 @@
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Core.Attributes;
 using Microsoft.Extensions.Logging;
+using RetakeV4.Adapters;
 using RetakeV4.Configuration;
 using RetakeV4.Domain.Events;
 using RetakeV4.Domain.Modules;
@@ -8,6 +9,9 @@ using RetakeV4.Domain.Rounds;
 using RetakeV4.Localization;
 using RetakeV4.Modules;
 using RetakeV4.Modules.Core;
+using RetakeV4.Modules.RoundTypes;
+using RetakeV4.Modules.Spawns;
+using RetakeV4.Modules.Teams;
 
 namespace RetakeV4;
 
@@ -29,7 +33,7 @@ public sealed class RetakeV4Plugin : BasePlugin
         var bus = new EventBus(OnBusError);
         var guard = new ModuleGuard(MaxErrorsPerRound, OnGuardFailure);
         var pipeline = new PreparationPipeline(guard);
-        var rounds = new RoundTracker(bus, pipeline, RoundState.Initial);
+        var rounds = new RoundTracker(bus, pipeline, RoundState.Initial, GameRulesAccessor.TotalRoundsPlayed);
         var text = new TextService(Localizer);
         _roundResetSubscription = bus.Subscribe<RoundPhaseChanged>("bootstrap", e =>
         {
@@ -40,9 +44,11 @@ public sealed class RetakeV4Plugin : BasePlugin
         });
 
         _host = new ModuleHost(CreateModules(), Logger);
-        _host.Start(new JsonConfigStore(ConfigDirectory()), _ =>
-            new ModuleContext(this, bus, guard, text, Logger, pipeline, rounds, hotReload));
+        _host.Start(new JsonConfigStore(ConfigDirectory()), (module, registrations) =>
+            new ModuleContext(this, bus, guard, text, Logger, rounds,
+                new ModuleHooks(this, bus, pipeline, guard, module.Name, registrations)));
         Logger.LogInformation("RetakeV4 {Version} loaded with modules: {Modules}", ModuleVersion, string.Join(", ", _host.LoadedModules));
+        bus.Publish(new ModulesReady(hotReload));
     }
 
     public override void Unload(bool hotReload)
@@ -53,7 +59,13 @@ public sealed class RetakeV4Plugin : BasePlugin
         _roundResetSubscription = null;
     }
 
-    private static IReadOnlyList<IRetakeModule> CreateModules() => new IRetakeModule[] { new CoreModule() };
+    private static IReadOnlyList<IRetakeModule> CreateModules() => new IRetakeModule[]
+    {
+        new CoreModule(),
+        new RoundTypesModule(),
+        new TeamsModule(),
+        new SpawnsModule(),
+    };
 
     private string ConfigDirectory() =>
         Path.GetFullPath(Path.Combine(ModuleDirectory, "..", "..", "configs", "plugins", "RetakeV4"));

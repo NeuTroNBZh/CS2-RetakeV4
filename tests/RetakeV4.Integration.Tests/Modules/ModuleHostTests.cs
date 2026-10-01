@@ -37,8 +37,29 @@ public sealed class ModuleHostTests : IDisposable
     private ModuleHost Start(params IRetakeModule[] modules)
     {
         var host = new ModuleHost(modules, _logger);
-        host.Start(new JsonConfigStore(_dir.Path), _ => null!);
+        host.Start(new JsonConfigStore(_dir.Path), (module, registrations) =>
+        {
+            registrations.Track(() => _journal.Add($"release:{module.Name}"));
+            return null!;
+        });
         return host;
+    }
+
+    [Fact]
+    public void ModuleFailingToLoad_ReleasesItsRegistrations()
+    {
+        Start(new FakeModule("Core", _journal, throwOnLoad: true));
+        Assert.Equal(new[] { "unload:Core", "release:Core" }, _journal);
+    }
+
+    [Fact]
+    public void Stop_ReleasesRegistrationsAfterUnload()
+    {
+        var host = Start(new FakeModule("Core", _journal), new FakeModule("Hud", _journal, deps: new[] { "Core" }));
+        _journal.Clear();
+        host.Stop();
+        Assert.Equal(new[] { "unload:Hud", "release:Hud", "unload:Core", "release:Core" }, _journal);
+        Assert.Empty(host.LoadedModules);
     }
 
     [Fact]
@@ -73,15 +94,5 @@ public sealed class ModuleHostTests : IDisposable
         var host = Start(new FakeModule("Core", _journal, throwOnConfig: true));
         Assert.Empty(host.LoadedModules);
         Assert.Contains(_logger.Entries, e => e.Level == LogLevel.Error);
-    }
-
-    [Fact]
-    public void Stop_UnloadsInReverseOrder()
-    {
-        var host = Start(new FakeModule("Core", _journal), new FakeModule("Hud", _journal, deps: new[] { "Core" }));
-        _journal.Clear();
-        host.Stop();
-        Assert.Equal(new[] { "unload:Hud", "unload:Core" }, _journal);
-        Assert.Empty(host.LoadedModules);
     }
 }

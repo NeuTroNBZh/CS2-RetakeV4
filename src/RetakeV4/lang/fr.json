@@ -1,5 +1,16 @@
 {
   "core.prefix": "{lightblue}[Retake]{default}",
   "core.info.version": "{0} v{1} par {2}",
-  "core.warmup.forced_end": "Fin du warmup, le retake commence !"
+  "core.warmup.forced_end": "Fin du warmup, le retake commence !",
+  "spawns.round.announce": "Round {0} — site {1}",
+  "teams.queue.joined": "Tu es dans la file d'attente (position {0}) : tu rejoindras la partie à la fin d'un round.",
+  "teams.switch.refused": "Tu ne peux pas changer d'équipe toi-même : c'est automatique.",
+  "teams.move.switched_after_ct_win": "Les CT ont gagné le round : tu passes {0}.",
+  "teams.move.entered_from_queue": "Tu sors de la file et tu joues {0}.",
+  "teams.move.scrambled": "Les équipes ont été mélangées : tu es maintenant {0}.",
+  "teams.move.balanced": "Les équipes ont été rééquilibrées : tu es maintenant {0}.",
+  "teams.scramble.requested": "Un admin a demandé un scramble : les équipes seront mélangées à la fin du round.",
+  "teams.round.t_streak": "Les terroristes ont gagné {0} round(s) d'affilée.",
+  "teams.inconsistent": "Les équipes étaient incohérentes : le round redémarre.",
+  "teams.no_permission": "Tu n'as pas la permission d'utiliser cette commande."
 }

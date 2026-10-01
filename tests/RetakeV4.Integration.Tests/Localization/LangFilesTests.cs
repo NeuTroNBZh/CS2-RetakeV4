@@ -44,6 +44,23 @@ public partial class LangFilesTests
         }
     }
 
+    [Theory]
+    [InlineData("spawns.round.announce")]
+    [InlineData("teams.queue.joined")]
+    [InlineData("teams.switch.refused")]
+    [InlineData("teams.move.switched_after_ct_win")]
+    [InlineData("teams.move.entered_from_queue")]
+    [InlineData("teams.move.scrambled")]
+    [InlineData("teams.move.balanced")]
+    [InlineData("teams.scramble.requested")]
+    [InlineData("teams.round.t_streak")]
+    [InlineData("teams.inconsistent")]
+    [InlineData("teams.no_permission")]
+    public void Phase2aKeys_ArePresent(string key)
+    {
+        Assert.Contains(key, Load("en").Keys);
+    }
+
     [Fact]
     public void Phase1Keys_ArePresent()
     {

@@ -9,6 +9,7 @@ public sealed class ModuleHost
     private readonly IReadOnlyList<IRetakeModule> _modules;
     private readonly ILogger _logger;
     private readonly List<IRetakeModule> _loaded = new();
+    private readonly Dictionary<string, ModuleRegistrations> _registrations = new();
 
     public ModuleHost(IReadOnlyList<IRetakeModule> modules, ILogger logger)
     {
@@ -20,7 +21,7 @@ public sealed class ModuleHost
 
     public IReadOnlyList<string> LoadedModules => _loaded.Select(m => m.Name).ToList();
 
-    public void Start(JsonConfigStore store, Func<IRetakeModule, ModuleContext> contextFor)
+    public void Start(JsonConfigStore store, Func<IRetakeModule, ModuleRegistrations, ModuleContext> contextFor)
     {
         var plan = ModuleLoadPlanner.Plan(_modules.Select(m => Describe(m, store)).ToList());
         foreach (var skipped in plan.Skipped)
@@ -38,6 +39,7 @@ public sealed class ModuleHost
         foreach (var module in Enumerable.Reverse(_loaded).ToList())
         {
             SafeUnload(module);
+            Release(module);
         }
         _loaded.Clear();
     }
@@ -56,7 +58,7 @@ public sealed class ModuleHost
         }
     }
 
-    private void TryLoad(IRetakeModule module, Func<IRetakeModule, ModuleContext> contextFor)
+    private void TryLoad(IRetakeModule module, Func<IRetakeModule, ModuleRegistrations, ModuleContext> contextFor)
     {
         var failedDependency = module.DependsOn.FirstOrDefault(d => _loaded.All(l => l.Name != d));
         if (failedDependency is not null)
@@ -64,9 +66,11 @@ public sealed class ModuleHost
             _logger.LogWarning("Module {Module} not loaded: dependency {Dependency} failed to load", module.Name, failedDependency);
             return;
         }
+        var registrations = new ModuleRegistrations(module.Name, _logger);
+        _registrations[module.Name] = registrations;
         try
         {
-            module.Load(contextFor(module));
+            module.Load(contextFor(module, registrations));
             _loaded.Add(module);
             _logger.LogInformation("Module {Module} loaded", module.Name);
         }
@@ -74,6 +78,15 @@ public sealed class ModuleHost
         {
             _logger.LogError(ex, "Module {Module} failed to load and is disabled", module.Name);
             SafeUnload(module);
+            Release(module);
+        }
+    }
+
+    private void Release(IRetakeModule module)
+    {
+        if (_registrations.Remove(module.Name, out var registrations))
+        {
+            registrations.Dispose();
         }
     }
 

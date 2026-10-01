@@ -1,5 +1,16 @@
 {
   "core.prefix": "{lightblue}[Retake]{default}",
   "core.info.version": "{0} v{1} by {2}",
-  "core.warmup.forced_end": "Warmup is over, the retake starts!"
+  "core.warmup.forced_end": "Warmup is over, the retake starts!",
+  "spawns.round.announce": "{0} round — bombsite {1}",
+  "teams.queue.joined": "You are in the queue (position {0}): you will join at the end of a round.",
+  "teams.switch.refused": "You cannot switch teams manually: it is done automatically.",
+  "teams.move.switched_after_ct_win": "CTs won the round: you are now {0}.",
+  "teams.move.entered_from_queue": "You leave the queue and play as {0}.",
+  "teams.move.scrambled": "Teams have been scrambled: you are now {0}.",
+  "teams.move.balanced": "Teams have been balanced: you are now {0}.",
+  "teams.scramble.requested": "An admin requested a scramble: teams will be scrambled at the end of the round.",
+  "teams.round.t_streak": "Terrorists have won {0} round(s) in a row.",
+  "teams.inconsistent": "Teams were inconsistent: restarting the round.",
+  "teams.no_permission": "You do not have permission to use this command."
 }
