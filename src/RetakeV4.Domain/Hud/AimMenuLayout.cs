@@ -15,6 +15,9 @@ public sealed record AimMenuLayout
         this.HalfWidthUnits = HalfWidthUnits;
     }
 
+    public static AimMenuLayout Centered(int lineCount, float distanceUnits, float lineHeightUnits, float halfWidthUnits) =>
+        new(lineCount, distanceUnits, lineHeightUnits, (lineCount - 1) * lineHeightUnits / 2f, halfWidthUnits);
+
     public int LineCount { get; }
     public float DistanceUnits { get; }
     public float LineHeightUnits { get; }
