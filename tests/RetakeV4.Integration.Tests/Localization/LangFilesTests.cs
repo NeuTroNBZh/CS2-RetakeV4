@@ -173,4 +173,20 @@ public partial class LangFilesTests
     {
         Assert.Contains(key, Load("en").Keys);
     }
+
+    [Theory]
+    [InlineData("admin.menu.title")]
+    [InlineData("admin.menu.editor")]
+    [InlineData("admin.menu.forcesite")]
+    [InlineData("admin.menu.force_once")]
+    [InlineData("admin.menu.force_sticky")]
+    [InlineData("admin.menu.force_off")]
+    [InlineData("admin.menu.scramble")]
+    [InlineData("admin.no_permission")]
+    [InlineData("admin.usage")]
+    [InlineData("admin.player_only")]
+    public void Phase4bKeys_ArePresent(string key)
+    {
+        Assert.Contains(key, Load("en").Keys);
+    }
 }

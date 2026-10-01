@@ -8,6 +8,7 @@ using RetakeV4.Domain.Modules;
 using RetakeV4.Domain.Rounds;
 using RetakeV4.Localization;
 using RetakeV4.Modules;
+using RetakeV4.Modules.Admin;
 using RetakeV4.Modules.Allocation;
 using RetakeV4.Modules.Core;
 using RetakeV4.Modules.Hud;
@@ -78,6 +79,7 @@ public sealed class RetakeV4Plugin : BasePlugin
         new AllocationModule(),
         new PlantModule(),
         new InstaDefuseModule(),
+        new AdminModule(),
     };
 
     private string ConfigDirectory() =>

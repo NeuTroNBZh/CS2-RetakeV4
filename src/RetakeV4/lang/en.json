@@ -86,5 +86,15 @@
   "spawns.forcesite.usage": "Usage: css_retake_forcesite <A|B|off> [once|sticky]",
   "spawns.forcesite.no_spawns": "No spawn on site {0}: forcing refused.",
   "spawns.missing.admin": "No spawns for {0}: default CS2 spawns are used (css_retake_edit).",
-  "spawns.editor.not_editing": "Enter the editor first: css_retake_edit."
+  "spawns.editor.not_editing": "Enter the editor first: css_retake_edit.",
+  "admin.menu.title": "Retake admin",
+  "admin.menu.editor": "Spawn editor",
+  "admin.menu.forcesite": "Force the bombsite",
+  "admin.menu.force_once": "Site {0} for the next round",
+  "admin.menu.force_sticky": "Site {0} until cancelled",
+  "admin.menu.force_off": "Cancel the forcing",
+  "admin.menu.scramble": "Scramble teams at round end",
+  "admin.no_permission": "You do not have permission to use the Retake admin menu.",
+  "admin.usage": "Usage: !retake [edit]",
+  "admin.player_only": "This command must be used in game."
 }
