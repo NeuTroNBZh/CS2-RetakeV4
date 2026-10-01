@@ -25,7 +25,7 @@ public sealed class RetakeV4Plugin : BasePlugin
     private IDisposable? _roundResetSubscription;
 
     public override string ModuleName => "RetakeV4";
-    public override string ModuleVersion => "4.1.0";
+    public override string ModuleVersion => "4.2.0";
     public override string ModuleAuthor => "NeuTroNBZh";
     public override string ModuleDescription => "Modular CS2 retake plugin";
 

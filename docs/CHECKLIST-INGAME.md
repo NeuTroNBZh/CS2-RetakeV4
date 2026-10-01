@@ -161,3 +161,11 @@ Remplir aussi `docs/spikes/hud-probe-findings.md` : les réglages `hud.json` →
 - [ ] Choisir dans le chat ne provoque ni kick ni « Long frame » au premier usage.
 - [ ] `"Display": "WorldText"` (ou absent) : retour aux menus devant le joueur, comportement inchangé.
 - [ ] Valeur invalide (`"Display": "Foo"`) : avertissement « invalid JSON » dans les logs, tout `hud.json` repris par défaut (menus `WorldText`).
+
+## Panneau central et échauffement (4.2.0)
+
+- [ ] Sans `hud.json` (créé par défaut) : `!guns` ouvre le panneau au centre de l'écran, le bloc d'infos réapparaît à la fermeture.
+- [ ] Avancer / reculer déplace la ligne surlignée (en boucle en haut et en bas), Utiliser (E) valide, en freeze time comme en round.
+- [ ] Sections Terroristes (orange) et Antiterroristes (bleu), chaque type de round affiche son résumé « Type : principale / pistolet » ; l'arme choisie est cochée.
+- [ ] Échauffement sans fin (hébergeur qui annonce une fin infinie) : il se termine au bout de `WarmupFallbackSeconds`, avec le message de fin forcée.
+- [ ] Premier round après démarrage avec des joueurs : aucun `Slow handler` au-dessus de ~200 ms, aucun kick `NETWORK_DISCONNECT_OVERFLOW`.
