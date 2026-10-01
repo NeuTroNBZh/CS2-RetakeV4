@@ -2,6 +2,8 @@ using RetakeV4.Domain.Common;
 
 namespace RetakeV4.Domain.Loadouts;
 
+public sealed record WeaponSwap(bool Primary, bool Secondary);
+
 public static class LoadoutPlanner
 {
     public static IReadOnlyDictionary<PlayerId, Loadout> Plan(
@@ -23,6 +25,16 @@ public static class LoadoutPlanner
         var secondary = preference?.Secondary is { } s && definition.Secondaries.For(request.Team).Contains(s) ? s : fallback.Secondary;
         return (primary, secondary);
     }
+
+    // A freeze-time weapon change keeps what was already handed out (AWP, armor, kit, Zeus, grenades) and only swaps the guns.
+    public static Loadout WithWeapons(Loadout current, RoundTypeDefinition definition, LoadoutRequest request)
+    {
+        var (primary, secondary) = ResolveWeapons(definition, request);
+        return current with { Primary = current.Primary == WeaponCatalog.Awp ? WeaponCatalog.Awp : primary, Secondary = secondary };
+    }
+
+    public static WeaponSwap SwapBetween(Loadout before, Loadout after) =>
+        new(before.Primary != after.Primary, before.Secondary != after.Secondary);
 
     public static IReadOnlySet<PlayerId> PickAwpRecipients(AwpSettings settings, IReadOnlyList<LoadoutRequest> players, IRandom random)
     {

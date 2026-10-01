@@ -10,6 +10,7 @@ using RetakeV4.Localization;
 using RetakeV4.Modules;
 using RetakeV4.Modules.Allocation;
 using RetakeV4.Modules.Core;
+using RetakeV4.Modules.Hud;
 using RetakeV4.Modules.InstaDefuse;
 using RetakeV4.Modules.Plant;
 using RetakeV4.Modules.RoundTypes;
@@ -65,6 +66,7 @@ public sealed class RetakeV4Plugin : BasePlugin
     private static IReadOnlyList<IRetakeModule> CreateModules() => new IRetakeModule[]
     {
         new CoreModule(),
+        new HudModule(),
         new RoundTypesModule(),
         new TeamsModule(),
         new SpawnsModule(),

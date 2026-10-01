@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Modules.Admin;
@@ -7,6 +8,8 @@ using Microsoft.Extensions.Logging;
 using RetakeV4.Adapters;
 using RetakeV4.Configuration;
 using RetakeV4.Domain.Common;
+using RetakeV4.Domain.Events;
+using RetakeV4.Domain.Hud;
 using RetakeV4.Domain.Loadouts;
 using RetakeV4.Domain.Rounds;
 using RetakeV4.Persistence;
@@ -17,12 +20,23 @@ public sealed class AllocationModule : IRetakeModule
 {
     private const string RootFlag = "@retakev4/root";
 
+    private static readonly string[] GunsAliases =
+    {
+        "guns", "gans", "gun", "g", "gns", "gnus", "weapon", "waepon", "weapons", "waepons", "waffen", "menu", "allocator", "select",
+    };
+
     private readonly IRandom _random = SystemRandom.Shared;
     private readonly HashSet<string> _reportedMissingPools = new(StringComparer.Ordinal);
     private AllocationConfig _config = new();
     private GrenadesConfig _grenades = new();
     private ModuleContext? _context;
     private PreferenceService? _preferences;
+    private readonly HashSet<ulong> _menuSeen = new();
+    private readonly HashSet<int> _autoOpened = new();
+    private ImmutableDictionary<PlayerId, Loadout> _lastPlan = ImmutableDictionary<PlayerId, Loadout>.Empty;
+    private IReadOnlyList<RoundTypeDefinition> _definitions = Array.Empty<RoundTypeDefinition>();
+    private RoundTypeDefinition? _current;
+    private bool _roundTypeChanged;
 
     public string Name => "Allocation";
 
@@ -50,13 +64,26 @@ public sealed class AllocationModule : IRetakeModule
         hooks.OnEvent<EventPlayerConnectFull>("player_connect_full", e => OnConnected(e.Userid));
         hooks.OnEvent<EventPlayerDisconnect>("player_disconnect", e =>
         {
-            if (e.Userid is { IsValid: true, IsBot: false } player)
+            if (e.Userid is not { IsValid: true } player)
+            {
+                return;
+            }
+            _lastPlan = _lastPlan.Remove(new PlayerId(player.Slot));
+            _autoOpened.Remove(player.Slot);
+            if (!player.IsBot)
             {
                 _preferences?.PlayerDisconnected(player.SteamID);
             }
         });
         hooks.Command("css_awp", "Toggles AWP volunteering", OnAwpCommand);
         hooks.Command("css_retake_import_v3", "Imports V3 weapon preferences: css_retake_import_v3 <path to cs2retake.db>", OnImportCommand);
+        hooks.OnBus<RoundTypesLoaded>(e => _definitions = e.Definitions);
+        hooks.OnBus<HudMenuSelected>(OnMenuSelected);
+        hooks.OnBus<RoundPhaseChanged>(OnPhaseChanged);
+        foreach (var alias in GunsAliases)
+        {
+            hooks.Command($"css_{alias}", "Opens the weapon menu", (player, _) => OnGunsCommand(player));
+        }
         foreach (var player in PlayerQueries.Humans())
         {
             OnConnected(player);
@@ -152,6 +179,8 @@ public sealed class AllocationModule : IRetakeModule
         {
             return context;
         }
+        _roundTypeChanged = _current?.Name != definition.Name;
+        _current = definition;
         var players = PlayerQueries.Humans()
             .Select(p => (Controller: p, Side: PlayerQueries.SideOf(p)))
             .Where(p => p.Side is not null)
@@ -163,15 +192,129 @@ public sealed class AllocationModule : IRetakeModule
                 _preferences?.RequestFor(p.Controller.SteamID, p.Side.Value, definition.Name)))
             .ToList();
         var plan = LoadoutPlanner.Plan(definition, requests, GrenadeKits(definition.GrenadePool), _random);
+        _lastPlan = plan.ToImmutableDictionary();
         foreach (var (controller, _) in players)
         {
             LoadoutApplier.Apply(controller, plan[new PlayerId(controller.Slot)]);
+            Context.Bus.Publish(new LoadoutApplied(new PlayerId(controller.Slot)));
+        }
+        foreach (var awp in plan.Where(p => p.Value.Primary == WeaponCatalog.Awp))
+        {
+            Context.Bus.Publish(new HudAlert(awp.Key, HudText.Of("allocation.awp.received")));
         }
         if (_config.Debug)
         {
             Context.Logger.LogInformation("Round {Round}: {Count} loadout(s) applied for {RoundType}", context.RoundNumber, plan.Count, definition.Name);
         }
         return context;
+    }
+
+    private void OnGunsCommand(CCSPlayerController? player)
+    {
+        if (player is { IsValid: true } && player.SteamID != 0)
+        {
+            _menuSeen.Add(player.SteamID);
+            OpenMenu(player, refreshOnly: false);
+        }
+    }
+
+    private void OpenMenu(CCSPlayerController player, bool refreshOnly)
+    {
+        if (_preferences is not { } preferences || player.SteamID == 0)
+        {
+            return;
+        }
+        var steamId = player.SteamID;
+        var state = new WeaponMenuState(
+            _definitions,
+            _current,
+            PlayerQueries.SideOf(player),
+            (team, roundType) => preferences.RequestFor(steamId, team, roundType),
+            preferences.IsAwpVolunteer(steamId));
+        Context.Bus.Publish(new HudMenuOpen(new PlayerId(player.Slot), WeaponMenu.Build(state), refreshOnly));
+    }
+
+    private void OnMenuSelected(HudMenuSelected e)
+    {
+        if (e.MenuId != WeaponMenu.MenuId || _preferences is not { } preferences)
+        {
+            return;
+        }
+        var player = Utilities.GetPlayerFromSlot(e.Player.Slot);
+        if (player is not { IsValid: true } || player.SteamID == 0)
+        {
+            return;
+        }
+        if (e.ItemId == WeaponMenu.AwpItemId)
+        {
+            preferences.ToggleAwp(player.SteamID);
+        }
+        else if (WeaponMenuSelection.Parse(e.ItemId) is { } selection && WeaponMenu.IsAllowed(selection, _definitions))
+        {
+            ApplySelection(player, preferences, selection);
+        }
+        OpenMenu(player, refreshOnly: true);
+    }
+
+    private void ApplySelection(CCSPlayerController player, PreferenceService preferences, WeaponMenuSelection selection)
+    {
+        preferences.SetWeapon(player.SteamID, selection.Team, selection.RoundType, selection.Slot, selection.Weapon);
+        var id = new PlayerId(player.Slot);
+        var phase = Context.Rounds.State.Phase;
+        if (_current is { } definition && _lastPlan.TryGetValue(id, out var loadout)
+            && WeaponMenu.AppliesNow(selection, phase, player.PawnIsAlive, PlayerQueries.SideOf(player), definition.Name))
+        {
+            var request = new LoadoutRequest(id, selection.Team, preferences.RequestFor(player.SteamID, selection.Team, definition.Name));
+            var adjusted = LoadoutPlanner.WithWeapons(loadout, definition, request);
+            _lastPlan = _lastPlan.SetItem(id, adjusted);
+            LoadoutApplier.SwapWeapons(player, loadout, adjusted);
+            Context.Bus.Publish(new HudAlert(id, HudText.Of("allocation.menu.applied_now")));
+            return;
+        }
+        Context.Bus.Publish(new HudAlert(id, HudText.Of("allocation.menu.applied_next_round")));
+    }
+
+    private void OnPhaseChanged(RoundPhaseChanged e)
+    {
+        if (e.To == RoundPhase.FreezeTime)
+        {
+            AutoOpenMenus();
+        }
+        else if (e.To == RoundPhase.Live)
+        {
+            CloseAutoOpenedMenus();
+        }
+    }
+
+    // New players and every player after a round type change get the menu once, if the round offers a choice.
+    private void AutoOpenMenus()
+    {
+        if (!_config.AutoOpenMenu || _current is not { } current)
+        {
+            return;
+        }
+        foreach (var player in PlayerQueries.Humans())
+        {
+            if (player.SteamID == 0 || PlayerQueries.SideOf(player) is not { } side || !WeaponMenu.HasChoice(current, side))
+            {
+                continue;
+            }
+            var firstTime = _menuSeen.Add(player.SteamID);
+            if (firstTime || _roundTypeChanged)
+            {
+                OpenMenu(player, refreshOnly: false);
+                _autoOpened.Add(player.Slot);
+            }
+        }
+    }
+
+    private void CloseAutoOpenedMenus()
+    {
+        foreach (var slot in _autoOpened)
+        {
+            Context.Bus.Publish(new HudMenuClose(new PlayerId(slot), WeaponMenu.MenuId));
+        }
+        _autoOpened.Clear();
     }
 
     private IReadOnlyList<GrenadeKit> GrenadeKits(string pool)

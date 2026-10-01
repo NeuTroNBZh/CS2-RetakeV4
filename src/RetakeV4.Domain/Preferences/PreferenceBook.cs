@@ -45,6 +45,14 @@ public sealed record PreferenceBook(
     public PreferenceBook With(StoredPreference preference) =>
         this with { Entries = Entries.SetItem(preference.Key, preference.Preference) };
 
+    public (PreferenceBook Book, StoredPreference Change) SetWeapon(ulong steamId, TeamSide team, string roundType, WeaponSlot slot, string weapon)
+    {
+        var key = new PreferenceKey(steamId, team, roundType);
+        var current = Entries.GetValueOrDefault(key) ?? Nothing;
+        var change = new StoredPreference(key, slot == WeaponSlot.Primary ? current with { Primary = weapon } : current with { Secondary = weapon });
+        return (With(change), change);
+    }
+
     public LoadoutPreference? RequestFor(ulong steamId, TeamSide team, string roundType)
     {
         var weapons = Entries.GetValueOrDefault(new PreferenceKey(steamId, team, roundType));

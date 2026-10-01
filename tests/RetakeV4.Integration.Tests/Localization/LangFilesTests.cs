@@ -99,4 +99,31 @@ public partial class LangFilesTests
     {
         Assert.Contains(key, Load("en").Keys);
     }
+
+    [Theory]
+    [InlineData("hud.menu.back")]
+    [InlineData("hud.menu.close")]
+    [InlineData("hud.menu.next")]
+    [InlineData("hud.menu.previous")]
+    [InlineData("hud.menu.on")]
+    [InlineData("hud.menu.off")]
+    [InlineData("hud.round.title")]
+    [InlineData("hud.round.teams")]
+    [InlineData("hud.round.streak")]
+    [InlineData("hud.queue.position")]
+    [InlineData("hud.queue.priority")]
+    [InlineData("allocation.menu.title")]
+    [InlineData("allocation.menu.current")]
+    [InlineData("allocation.menu.others")]
+    [InlineData("allocation.menu.config")]
+    [InlineData("allocation.menu.primary")]
+    [InlineData("allocation.menu.secondary")]
+    [InlineData("allocation.menu.awp")]
+    [InlineData("allocation.menu.applied_now")]
+    [InlineData("allocation.menu.applied_next_round")]
+    [InlineData("allocation.awp.received")]
+    public void Phase3bKeys_ArePresent(string key)
+    {
+        Assert.Contains(key, Load("en").Keys);
+    }
 }

@@ -24,7 +24,9 @@ public sealed class RoundTypesModule : IRetakeModule
 
     public void Load(ModuleContext context)
     {
-        context.Hooks.PreparationStep(new RoundTypeStep(_config.ToRules(), _config.ToDefinitions(), SystemRandom.Shared));
+        var definitions = _config.ToDefinitions();
+        context.Hooks.PreparationStep(new RoundTypeStep(_config.ToRules(), definitions, SystemRandom.Shared));
+        context.Hooks.OnBus<ModulesReady>(_ => context.Bus.Publish(new RoundTypesLoaded(definitions.Values.ToList())));
         if (_config.Debug)
         {
             context.Hooks.OnBus<RoundPrepared>(e =>

@@ -41,6 +41,34 @@ internal static class LoadoutApplier
         }
     }
 
+    // Freeze-time change: only the guns that changed are replaced; C4, grenades, armor and kit stay, and no slot command is sent.
+    public static void SwapWeapons(CCSPlayerController player, Loadout before, Loadout after)
+    {
+        var pawn = player.PlayerPawn.Value;
+        if (pawn is null || !pawn.IsValid || pawn.WeaponServices is null)
+        {
+            return;
+        }
+        var swap = LoadoutPlanner.SwapBetween(before, after);
+        var replaced = pawn.WeaponServices.MyWeapons
+            .Select(handle => handle.Value)
+            .Where(weapon => weapon is { IsValid: true }
+                && ((swap.Primary && WeaponCatalog.IsPrimary(weapon.DesignerName)) || (swap.Secondary && WeaponCatalog.IsSecondary(weapon.DesignerName))))
+            .ToList();
+        foreach (var weapon in replaced)
+        {
+            weapon!.Remove();
+        }
+        if (swap.Secondary)
+        {
+            player.GiveNamedItem(after.Secondary);
+        }
+        if (swap.Primary && after.Primary is { } primary)
+        {
+            player.GiveNamedItem(primary);
+        }
+    }
+
     private static void Strip(CCSPlayerPawn pawn)
     {
         var weapons = pawn.WeaponServices!.MyWeapons

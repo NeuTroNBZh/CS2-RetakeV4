@@ -20,7 +20,9 @@ public sealed record DatabaseConfig
 
 public sealed record AllocationConfig : ModuleConfig
 {
-    public AllocationConfig() => Version = 2;
+    public AllocationConfig() => Version = 3;
 
     public DatabaseConfig Database { get; init; } = new();
+
+    public bool AutoOpenMenu { get; init; } = true;
 }

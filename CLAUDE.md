@@ -13,6 +13,7 @@ Plugin CounterStrikeSharp (C# / .NET 10, CSSharp 1.0.370+) de retake CS2, rééc
 - `spikes/` : prototypes jetables, hors solution.
 - `src/RetakeV4/Adapters` : accès CSSharp partagés (gamerules, requêtes joueurs).
 - `src/RetakeV4/Persistence` : dépôts de préférences (SQLite, MySQL, NoOp), migrations, magasin résilient, file d'écriture, lecteur de base V3.
+- `src/RetakeV4/Modules/Hud` : moteur HUD (bloc centré, menus `point_worldtext`, entrées). Logique dans `src/RetakeV4.Domain/Hud`.
 - `tools/RetakeV4.SpawnMigrator` : convertit des spawns V3 (tableau à plat) au format V2 (`dotnet run --project tools/RetakeV4.SpawnMigrator -- <in> <out>`).
 
 ## Commandes
@@ -32,3 +33,4 @@ Plugin CounterStrikeSharp (C# / .NET 10, CSSharp 1.0.370+) de retake CS2, rééc
 - Les définitions de types de round (armes, armure, AWP, kits, Zeus, pool de grenades) vivent dans `roundtypes.json` et arrivent aux modules via `PreparationContext.RoundTypeDefinition`.
 - Tests en jeu : `docs/CHECKLIST-INGAME.md`, une section par phase.
 - Jamais d'accès base de données sur le thread de jeu : `Task.Run` pour lire, `PreferenceWriteQueue` pour écrire, retour au jeu via `Server.NextFrame` + `ModuleGuard`. Requêtes SQL paramétrées uniquement.
+- Menus HUD : un module construit un `Menu` (Domain), publie `HudMenuOpen` / `HudMenuClose` et écoute `HudMenuSelected` ; messages éphémères via `HudAlert`. Aucune entité HUD hors du module Hud.

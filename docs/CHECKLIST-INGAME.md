@@ -62,3 +62,27 @@ Préparation : `pwsh -NoProfile -File scripts/package-dev.ps1`, copier `artifact
 - [ ] Import avec un chemin faux : message « Échec de l'import V3 : … », aucun crash.
 - [ ] `allocation.json` en `MySql` avec une chaîne valide : table `player_loadout` créée, préférences conservées entre deux redémarrages.
 - [ ] Base indisponible (fichier en lecture seule ou MySQL arrêté) : un avertissement « Preference database unavailable… », les joueurs reçoivent l'équipement par défaut, aucune erreur en boucle.
+
+## Phase 3b — HUD et menu d'armes
+Remplir aussi `docs/spikes/hud-probe-findings.md` : les réglages `hud.json` → `Menu.Orientation`, `Menu.FollowMode`, `Menu.Input`, `Menu.DistanceUnits` correspondent aux questions du prototype.
+- [ ] Premier démarrage : `hud.json` est créé, aucun avertissement de config.
+- [ ] Début de round : le bloc centré affiche « <type> - site <A/B> » et « CT n contre n T » pendant ~6 s ; la série de victoires T apparaît quand elle existe.
+- [ ] Joueur en file d'attente : « File d'attente : position/total » visible en continu, « Accès prioritaire » pour un VIP.
+- [ ] `!guns` (et un alias, ex. `!gun`) : le menu s'ouvre face au joueur, lisible (sinon essayer `Menu.Orientation` 1 puis 2).
+- [ ] Le menu suit le joueur sans tremblement gênant (sinon tester `Menu.FollowMode` = `Parent`).
+- [ ] Freeze time : viser une ligne la met en surbrillance ; clic gauche = sélection, sans tirer ; W/S déplacent le curseur, E valide ; touches 1-9 sélectionnent sans changer d'arme. Précision : < 2 erreurs sur 20 essais.
+- [ ] Round live, vivant : seules les touches 1-9 agissent ; viser/cliquer tire normalement, W/S/E bougent/interagissent normalement.
+- [ ] Un second joueur ne voit pas le menu du premier.
+- [ ] Choisir une arme principale pendant le freeze time : l'arme est remplacée immédiatement, alerte « Armes mises à jour. » ; kit, grenades et AWP éventuelle conservés.
+- [ ] Choisir une arme en round live ou pour une autre configuration : alerte « Enregistré, utilisé dès le prochain round. », appliqué au round suivant.
+- [ ] « Autres configurations » liste les couples équipe × type de round qui offrent un choix ; un pistol round ne propose que le pistolet.
+- [ ] AWP : ON/OFF bascule et persiste après reconnexion ; recevoir l'AWP affiche « Tu as l'AWP ce round. ».
+- [ ] Nouveau joueur : le menu s'ouvre seul au freeze time, puis se ferme au début du round live ; il se rouvre quand le type de round change.
+- [ ] Menu ouvert pendant la fin de round / le restart : aucune erreur console, le menu réapparaît au round suivant.
+- [ ] Mort ou spectateur : le menu s'ouvre et se pilote au viseur.
+- [ ] Déconnexion avec le menu ouvert : aucune entité orpheline (`ent_find point_worldtext`).
+- [ ] Perf : 2+ menus ouverts, aucune chute de fps notable.
+- [ ] `hud.json` → `Menu.Input` = `Keys` : la visée ne sélectionne plus, le clavier fonctionne.
+- [ ] `plant.json` en `FastPlant` : le poseur change d'arme pendant le freeze time et garde la C4 (pas de victoire CT forcée).
+- [ ] Début de round avec le menu ouvert automatiquement : aucune ligne n'est sélectionnée toute seule par les commandes `slot1-3` envoyées à la distribution ; l'arme principale est bien en main.
+- [ ] `ent_remove` d'une ligne de menu : le menu se reconstruit, le module Hud n'est pas désactivé.
