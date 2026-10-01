@@ -169,6 +169,6 @@ public sealed class CoreModule : IRetakeModule
         var args = new object[] { plugin.ModuleName, plugin.ModuleVersion, plugin.ModuleAuthor };
         command.ReplyToCommand(player is null
             ? Context.Text.Server("core.info.version", args)
-            : Context.Text.For(player, "core.info.version", args));
+            : $"{Context.Text.For(player, "core.prefix_help")} {Context.Text.For(player, "core.info.version", args)}");
     }
 }

@@ -86,7 +86,7 @@ public sealed class AdminModule : IRetakeModule
         }
         if (!IsAdmin(player))
         {
-            Context.Text.Chat(player, "admin.no_permission");
+            Context.Text.ChatAlert(player, "admin.no_permission");
             return;
         }
         switch (RetakeCommand.Parse(command.ArgCount > 1 ? command.GetArg(1) : null))
@@ -98,7 +98,7 @@ public sealed class AdminModule : IRetakeModule
                 Execute(player, new AdminSelection(AdminAction.SpawnEditor));
                 break;
             default:
-                Context.Text.Chat(player, "admin.usage");
+                Context.Text.ChatHelp(player, "admin.usage");
                 break;
         }
     }
@@ -116,7 +116,7 @@ public sealed class AdminModule : IRetakeModule
         }
         if (!IsAdmin(player))
         {
-            Context.Text.Chat(player, "admin.no_permission");
+            Context.Text.ChatAlert(player, "admin.no_permission");
             return;
         }
         Execute(player, selection);

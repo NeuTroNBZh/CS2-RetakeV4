@@ -31,6 +31,16 @@ public partial class LangFilesTests
         Assert.All(Load(language).Keys, key => Assert.Matches(KeyPattern(), key));
     }
 
+    [Theory]
+    [InlineData("en")]
+    [InlineData("fr")]
+    public void AlertAndHelpPrefixes_DefaultToTheNormalPrefix(string language)
+    {
+        var texts = Load(language);
+        Assert.Equal(texts["core.prefix"], texts["core.prefix_alert"]);
+        Assert.Equal(texts["core.prefix"], texts["core.prefix_help"]);
+    }
+
     [Fact]
     public void Placeholders_MatchAcrossLanguages()
     {
