@@ -86,5 +86,15 @@
   "spawns.forcesite.usage": "Usage : css_retake_forcesite <A|B|off> [once|sticky]",
   "spawns.forcesite.no_spawns": "Aucun spawn sur le site {0} : forçage refusé.",
   "spawns.missing.admin": "Aucun spawn pour {0} : spawns CS2 par défaut utilisés (css_retake_edit).",
-  "spawns.editor.not_editing": "Entre d'abord dans l'éditeur : css_retake_edit."
+  "spawns.editor.not_editing": "Entre d'abord dans l'éditeur : css_retake_edit.",
+  "admin.menu.title": "Admin Retake",
+  "admin.menu.editor": "Éditeur de spawns",
+  "admin.menu.forcesite": "Forcer le site",
+  "admin.menu.force_once": "Site {0} au prochain round",
+  "admin.menu.force_sticky": "Site {0} jusqu'à annulation",
+  "admin.menu.force_off": "Annuler le forçage",
+  "admin.menu.scramble": "Mélanger les équipes en fin de round",
+  "admin.no_permission": "Tu n'as pas la permission d'utiliser le menu admin Retake.",
+  "admin.usage": "Usage : !retake [edit]",
+  "admin.player_only": "Cette commande s'utilise en jeu."
 }

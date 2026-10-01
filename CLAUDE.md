@@ -35,3 +35,4 @@ Plugin CounterStrikeSharp (C# / .NET 10, CSSharp 1.0.370+) de retake CS2, rééc
 - Jamais d'accès base de données sur le thread de jeu : `Task.Run` pour lire, `PreferenceWriteQueue` pour écrire, retour au jeu via `Server.NextFrame` + `ModuleGuard`. Requêtes SQL paramétrées uniquement.
 - Menus HUD : un module construit un `Menu` (Domain), publie `HudMenuOpen` / `HudMenuClose` et écoute `HudMenuSelected` ; messages éphémères via `HudAlert`. Aucune entité HUD hors du module Hud.
 - Spawns : lecture et écriture uniquement via `SpawnCatalog` / `SpawnFileStore` (écriture atomique, `.bak`). Entités d'éditeur uniquement via `SpawnMarkers`, jamais entre `round_prestart` et la frame après `round_start`.
+- Actions d'administration : le module Admin vérifie `@retakev4/admin` puis publie une demande (`SpawnEditorRequested`, `ForceSiteRequested`, `ScrambleRequested`) ; le module propriétaire l'applique. Le menu admin (`AdminMenu`, Domain) sert au HUD et au pont SimpleAdmin.

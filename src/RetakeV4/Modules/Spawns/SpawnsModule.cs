@@ -59,6 +59,8 @@ public sealed class SpawnsModule : IRetakeModule
             LoadMap(e.MapName);
         });
         hooks.Command("css_retake_forcesite", "Forces the bombsite: css_retake_forcesite <A|B|off> [once|sticky]", OnForceSite);
+        hooks.OnBus<ForceSiteRequested>(e =>
+            ApplyForce(e.Requester is { } requester ? Utilities.GetPlayerFromSlot(requester.Slot) : null, e.Request));
         hooks.PreparationStep(new DelegatePreparationStep("site", PreparationOrder.Site, ChooseSite));
         hooks.PreparationStep(new DelegatePreparationStep("placement", PreparationOrder.Placement, PlacePlayers));
         hooks.OnEvent<EventPlayerSpawn>("player_spawn", OnPlayerSpawn);
@@ -172,6 +174,11 @@ public sealed class SpawnsModule : IRetakeModule
             Reply(player, "spawns.forcesite.usage");
             return;
         }
+        ApplyForce(player, request);
+    }
+
+    private void ApplyForce(CCSPlayerController? player, ForceSiteRequest request)
+    {
         if (request.Force is not { } force)
         {
             _force = null;
