@@ -1,3 +1,4 @@
+using System.Reflection;
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Modules.Admin;
@@ -18,6 +19,7 @@ public sealed class AdminModule : IRetakeModule
 
     private AdminConfig _config = new();
     private ModuleContext? _context;
+    private SimpleAdminBridge? _bridge;
 
     public string Name => "Admin";
 
@@ -39,9 +41,18 @@ public sealed class AdminModule : IRetakeModule
         var hooks = context.Hooks;
         hooks.Command("css_retake", "Retake admin menu: css_retake [edit]", OnRetakeCommand);
         hooks.OnBus<HudMenuSelected>(OnMenuSelected);
+        if (_config.SimpleAdminBridge)
+        {
+            hooks.OnBus<AllPluginsLoaded>(_ => RegisterBridge());
+        }
     }
 
-    public void Unload() => _context = null;
+    public void Unload()
+    {
+        _bridge?.Unregister();
+        _bridge = null;
+        _context = null;
+    }
 
     internal static bool IsAdmin(CCSPlayerController player) =>
         player.IsValid && AdminManager.PlayerHasPermissions(player, AdminFlag);
@@ -110,4 +121,36 @@ public sealed class AdminModule : IRetakeModule
         }
         Execute(player, selection);
     }
+
+    private void RegisterBridge()
+    {
+        _bridge?.Unregister();
+        _bridge = SimpleAdminBridge.TryFind(Context.Logger);
+        if (_bridge is null)
+        {
+            Context.Logger.LogInformation("CS2-SimpleAdmin not found: the Retake admin menu is available with !retake");
+            return;
+        }
+        try
+        {
+            _bridge.Register(AdminMenu.Build(), AdminFlag, ServerText, OnBridgeSelection);
+            Context.Logger.LogInformation("Retake admin entries registered in CS2-SimpleAdmin");
+        }
+        catch (Exception ex) when (ex is TargetInvocationException or MissingMethodException or ArgumentException or InvalidOperationException)
+        {
+            Context.Logger.LogWarning(ex, "CS2-SimpleAdmin API is not compatible: Retake entries were not added to its menu");
+            _bridge.Unregister();
+            _bridge = null;
+        }
+    }
+
+    // Called by CS2-SimpleAdmin's menu: guarded like any other handler of this module.
+    private void OnBridgeSelection(CCSPlayerController admin, string itemId) =>
+        _context?.Guard.Run(Name, "simpleadmin", () =>
+        {
+            if (AdminMenu.Parse(itemId) is { } selection && IsAdmin(admin))
+            {
+                Execute(admin, selection);
+            }
+        });
 }
