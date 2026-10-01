@@ -31,7 +31,6 @@
   "hud.menu.previous": "Page précédente",
   "hud.menu.on": "ON",
   "hud.menu.off": "OFF",
-  "hud.menu.hint_live": "Avancer / Reculer : naviguer   Recharger (R) : valider",
   "hud.menu.hint_move": "Avancer / Reculer : naviguer   Utiliser (E) : valider",
   "hud.round.title": "{0} - site {1}",
   "hud.round.teams": "CT {0} contre {1} T",

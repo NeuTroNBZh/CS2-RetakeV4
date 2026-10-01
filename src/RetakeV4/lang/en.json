@@ -31,7 +31,6 @@
   "hud.menu.previous": "Previous page",
   "hud.menu.on": "ON",
   "hud.menu.off": "OFF",
-  "hud.menu.hint_live": "Forward / Back: move   Reload (R): choose",
   "hud.menu.hint_move": "Forward / Back: move   Use (E): choose",
   "hud.round.title": "{0} - site {1}",
   "hud.round.teams": "CT {0} vs {1} T",

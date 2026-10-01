@@ -38,7 +38,7 @@ public sealed class HudModule : IRetakeModule
                 LoadChatMenus(context);
                 break;
             case MenuDisplay.CenterHtml:
-                var centerMenus = new CenterMenuHud(_config, context.Text, context.Bus, context.Logger, () => context.Rounds.State.Phase, () => DateTimeOffset.UtcNow);
+                var centerMenus = new CenterMenuHud(_config, context.Text, context.Bus, context.Logger, () => DateTimeOffset.UtcNow);
                 _centerMenus = centerMenus;
                 LoadCenter(context, centerMenus.Html);
                 LoadCenterMenus(context, centerMenus);
