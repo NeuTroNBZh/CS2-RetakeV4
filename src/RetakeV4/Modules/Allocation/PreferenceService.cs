@@ -44,6 +44,15 @@ public sealed class PreferenceService : IAsyncDisposable
     public LoadoutPreference? RequestFor(ulong steamId, TeamSide team, string roundType) =>
         _book.RequestFor(steamId, team, roundType);
 
+    public bool IsAwpVolunteer(ulong steamId) => _book.IsAwpVolunteer(steamId);
+
+    public void SetWeapon(ulong steamId, TeamSide team, string roundType, WeaponSlot slot, string weapon)
+    {
+        var (book, change) = _book.SetWeapon(steamId, team, roundType, slot, weapon);
+        _book = book;
+        _writes.Enqueue(change);
+    }
+
     public bool ToggleAwp(ulong steamId)
     {
         var (book, changes, optIn) = _book.ToggleAwp(steamId);
