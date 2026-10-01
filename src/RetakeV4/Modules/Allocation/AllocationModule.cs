@@ -181,7 +181,7 @@ public sealed class AllocationModule : IRetakeModule
     {
         if (player is not null && !AdminManager.PlayerHasPermissions(player, RootFlag))
         {
-            Context.Text.Chat(player, "allocation.no_permission");
+            Context.Text.ChatAlert(player, "allocation.no_permission");
             return;
         }
         var file = command.GetArg(1);

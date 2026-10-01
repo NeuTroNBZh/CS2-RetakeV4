@@ -124,7 +124,7 @@ public sealed class TeamsModule : IRetakeModule
                 }
                 break;
             case JoinOutcome.AlreadyPlaying when result.Side != requested:
-                Context.Text.Chat(player, "teams.switch.refused");
+                Context.Text.ChatAlert(player, "teams.switch.refused");
                 break;
             case JoinOutcome.Queued:
             case JoinOutcome.AlreadyQueued:
@@ -284,7 +284,7 @@ public sealed class TeamsModule : IRetakeModule
     {
         if (player is not null && !AdminManager.PlayerHasPermissions(player, AdminFlag))
         {
-            Context.Text.Chat(player, "teams.no_permission");
+            Context.Text.ChatAlert(player, "teams.no_permission");
             return;
         }
         RequestScramble();

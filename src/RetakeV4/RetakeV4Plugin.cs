@@ -25,7 +25,7 @@ public sealed class RetakeV4Plugin : BasePlugin
     private IDisposable? _roundResetSubscription;
 
     public override string ModuleName => "RetakeV4";
-    public override string ModuleVersion => "4.2.1";
+    public override string ModuleVersion => "4.3.0";
     public override string ModuleAuthor => "NeuTroNBZh";
     public override string ModuleDescription => "Modular CS2 retake plugin";
 
@@ -40,7 +40,7 @@ public sealed class RetakeV4Plugin : BasePlugin
             new SlowRunReporter(SlowHandlerThreshold, () => Stopwatch.GetElapsedTime(0), OnSlowRun));
         var pipeline = new PreparationPipeline(guard);
         var rounds = new RoundTracker(bus, pipeline, RoundState.Initial, GameRulesAccessor.TotalRoundsPlayed);
-        var text = new TextService(Localizer);
+        var text = new TextService(Localizer, LangOverrideLoader.Load(ConfigDirectory(), Path.Combine(ModuleDirectory, "lang"), Logger));
         _roundResetSubscription = bus.Subscribe<RoundPhaseChanged>("bootstrap", e =>
         {
             if (e.To == RoundPhase.PostRound)

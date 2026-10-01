@@ -135,7 +135,8 @@ Chaque module a son fichier dans `addons/counterstrikesharp/configs/plugins/Reta
 | `instadefuse.json` | conditions de l'InstaDefuse | activé, bloqué par HE, molotov et feu |
 | `hud.json` | thème (couleurs, couleurs d'équipe), widgets, affichage des menus | panneau au centre de l'écran |
 | `admin.json` | pont CS2-SimpleAdmin | activé |
-| `links.json` | commandes communautaires (`!discord` → message) | — |
+| `links.json` | commandes communautaires (`!discord` → message, `!regles` → plusieurs lignes) | — |
+| `announcements.json` | messages réguliers (par map possible) et message d'accueil | désactivé (listes vides) |
 | `api.json` | API publique | activée |
 
 ### Menus : HUD ou chat
@@ -150,7 +151,55 @@ Ce réglage est pris en compte au redémarrage du serveur ou au rechargement du 
 
 ### Textes
 
-Tous les messages sont dans `plugins/RetakeV4/lang/en.json` et `fr.json`. Les codes couleur CounterStrikeSharp (`{green}`, `{red}`…) sont acceptés.
+Tous les messages sont dans `plugins/RetakeV4/lang/en.json` et `fr.json`. Les codes couleur CounterStrikeSharp (`{green}`, `{red}`…) sont acceptés. Ne modifiez pas ces fichiers : ils sont remplacés à chaque mise à jour. Pour changer un texte, voir [Personnaliser son serveur](#personnaliser-son-serveur).
+
+### Personnaliser son serveur
+
+Tout ce qui suit vit dans `addons/counterstrikesharp/configs/plugins/RetakeV4/` et n'est jamais écrasé par une mise à jour.
+
+**Changer des textes.** Créez `lang/fr.json` (et `lang/en.json` pour les joueurs en anglais) avec seulement les clés à changer. La liste des clés est dans `plugins/RetakeV4/lang/fr.json`.
+
+```json
+{
+  "core.prefix": "{default}[{gold}MonServeur{default}]",
+  "core.prefix_alert": "{default}[{red}!{default} {gold}MonServeur{default}]",
+  "core.prefix_help": "{default}[{lightblue}?{default} {gold}MonServeur{default}]"
+}
+```
+
+`core.prefix` précède les messages normaux, `core.prefix_alert` les refus et erreurs, `core.prefix_help` les réponses aux commandes. Un texte remplacé peut reprendre ou omettre les `{0}`, `{1}`… du texte d'origine, pas en ajouter. Une clé inconnue ou invalide est ignorée, avec un avertissement dans la console au démarrage.
+
+**Annonces** (`announcements.json`) : un message tiré au hasard toutes les `IntervalSeconds` secondes (30 minimum), jamais deux fois le même de suite ; sur une map qui a sa liste dans `MapMessages`, c'est cette liste qui sert. `Welcome` est envoyé une fois par connexion, quand le joueur rejoint une équipe.
+
+```json
+{
+  "Version": 1,
+  "IntervalSeconds": 420,
+  "Messages": ["Rejoignez notre Discord : !discord", "Tapez !guns pour choisir vos armes"],
+  "MapMessages": { "de_mirage": ["Bienvenue sur Mirage !"] },
+  "Welcome": "Bienvenue ! Tapez !commandes pour l'aide."
+}
+```
+
+**Commandes communautaires** (`links.json`) : `Message` pour une ligne, `Lines` pour plusieurs (affichées avec le préfixe d'aide).
+
+```json
+{
+  "Version": 1,
+  "Links": [
+    { "Commands": ["discord", "dis"], "Message": "Discord : {lightblue}https://discord.gg/xxxx{default}" },
+    { "Commands": ["regles", "rules"], "Lines": ["1. Respect de tous", "2. Pas de triche"] }
+  ]
+}
+```
+
+**Vérifier sa configuration** avant de redémarrer : chaque release fournit `RetakeV4-<version>-configcheck.zip`. Avec .NET 10 :
+
+```bash
+dotnet RetakeV4.ConfigCheck.dll <configs/plugins/RetakeV4> [<plugins/RetakeV4/spawns>]
+```
+
+Il affiche chaque problème (valeur invalide, clé de texte inconnue, spawn illisible) ou `Configuration OK`.
 
 ---
 

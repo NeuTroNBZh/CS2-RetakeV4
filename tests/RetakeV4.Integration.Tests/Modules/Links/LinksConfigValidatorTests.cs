@@ -64,4 +64,32 @@ public class LinksConfigValidatorTests
         Assert.Empty(result.Config.Links);
         Assert.Single(result.Issues);
     }
+
+    [Fact]
+    public void LinkWithLines_IsKept_AndBlankLinesDropped()
+    {
+        var link = new LinkConfig { Commands = new[] { "regles" }, Lines = new[] { "1. Respect", " ", "2. Pas de triche" } };
+        var result = _validator.Validate(Defaults with { Links = new[] { link } }, Defaults, "links.json");
+        Assert.Empty(result.Issues);
+        Assert.Equal(new[] { "1. Respect", "2. Pas de triche" }, Assert.Single(result.Config.Links).Lines);
+    }
+
+    [Fact]
+    public void LinkWithBothMessageAndLines_OrNeither_IsSkipped()
+    {
+        var both = new LinkConfig { Commands = new[] { "a" }, Message = "m", Lines = new[] { "l" } };
+        var neither = new LinkConfig { Commands = new[] { "b" }, Lines = new[] { " " } };
+        var result = _validator.Validate(Defaults with { Links = new[] { both, neither } }, Defaults, "links.json");
+        Assert.Empty(result.Config.Links);
+        Assert.Equal(2, result.Issues.Count);
+    }
+
+    [Fact]
+    public void TooManyOrTooLongLines_AreRefused()
+    {
+        var many = new LinkConfig { Commands = new[] { "a" }, Lines = Enumerable.Repeat("x", 17).ToList() };
+        var longLine = new LinkConfig { Commands = new[] { "b" }, Lines = new[] { new string('x', 513) } };
+        var result = _validator.Validate(Defaults with { Links = new[] { many, longLine } }, Defaults, "links.json");
+        Assert.Empty(result.Config.Links);
+    }
 }

@@ -3,10 +3,11 @@ using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Core.Translations;
 using Microsoft.Extensions.Logging;
 using RetakeV4.Configuration;
+using RetakeV4.Localization;
 
 namespace RetakeV4.Modules.Links;
 
-// Community commands (!discord, !site...) from links.json; the message is server content, shown as written.
+// Community commands (!discord, !regles...) from links.json: a single message, or lines shown with the help prefix.
 public sealed class LinksModule : IRetakeModule
 {
     private LinksConfig _config = new();
@@ -30,7 +31,15 @@ public sealed class LinksModule : IRetakeModule
             var message = StringExtensions.ReplaceColorTags(link.Message);
             foreach (var command in link.Commands)
             {
-                context.Hooks.Command($"css_{command}", "Community link", (player, _) => Show(player, message));
+                context.Hooks.Command($"css_{command}", "Community link", (player, _) =>
+                {
+                    if (link.Lines.Count > 0)
+                    {
+                        ShowLines(context.Text, player, link.Lines);
+                        return;
+                    }
+                    Show(player, message);
+                });
             }
         }
     }
@@ -47,5 +56,18 @@ public sealed class LinksModule : IRetakeModule
             return;
         }
         Server.PrintToConsole(message);
+    }
+
+    private static void ShowLines(ITextService text, CCSPlayerController? player, IReadOnlyList<string> lines)
+    {
+        foreach (var line in lines)
+        {
+            if (player is { IsValid: true })
+            {
+                text.ChatContent(player, line, ChatPrefix.Help);
+                continue;
+            }
+            Server.PrintToConsole(StringExtensions.ReplaceColorTags(line));
+        }
     }
 }
