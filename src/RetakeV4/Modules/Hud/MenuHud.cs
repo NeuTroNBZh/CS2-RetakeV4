@@ -28,6 +28,7 @@ internal sealed class MenuHud
     private readonly Color _muted;
     private readonly Dictionary<int, MenuSession> _sessions = new();
     private bool _entitiesAllowed = true;
+    private readonly Dictionary<int, ulong> _held = new();
     private KeyMute _keyMute = KeyMute.Empty;
 
     public MenuHud(HudConfig config, ITextService text, IEventBus bus, ILogger logger, Func<RoundPhase> phase, Func<DateTimeOffset> clock)
@@ -67,6 +68,7 @@ internal sealed class MenuHud
     public void Forget(int slot)
     {
         Close(slot);
+        _held.Remove(slot);
         _keyMute = _keyMute.Forget(slot);
     }
 
@@ -134,6 +136,25 @@ internal sealed class MenuHud
             else
             {
                 Follow(player, session);
+            }
+        }
+    }
+
+    // Every tick: OnPlayerButtonsChanged does not fire on all servers, so the held buttons are read directly.
+    public void PollButtons()
+    {
+        foreach (var (slot, session) in _sessions.ToList())
+        {
+            if (Utilities.GetPlayerFromSlot(slot) is not { IsValid: true } player || session.View is null)
+            {
+                continue;
+            }
+            var held = (ulong)player.Buttons;
+            var pressed = (PlayerButtons)ButtonEdges.Pressed(_held.GetValueOrDefault(slot), held);
+            _held[slot] = held;
+            if (pressed != 0)
+            {
+                OnButtons(slot, pressed, session.Navigator);
             }
         }
     }

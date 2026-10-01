@@ -77,13 +77,13 @@ public class HudConfigValidatorTests
     }
 
     [Fact]
-    public void MenuDisplay_DefaultsToWorldText() => Assert.Equal(MenuDisplay.WorldText, Defaults.Menu.Display);
+    public void MenuDisplay_DefaultsToTheCenterPanel() => Assert.Equal(MenuDisplay.CenterHtml, Defaults.Menu.Display);
 
     [Fact]
-    public void UndefinedMenuDisplay_FallsBackToWorldText()
+    public void UndefinedMenuDisplay_FallsBackToTheCenterPanel()
     {
         var result = Validate(Defaults with { Menu = Defaults.Menu with { Display = (MenuDisplay)5 } });
-        Assert.Equal(MenuDisplay.WorldText, result.Config.Menu.Display);
+        Assert.Equal(MenuDisplay.CenterHtml, result.Config.Menu.Display);
         Assert.Equal(new[] { "Menu.Display" }, result.Keys);
     }
 
@@ -93,5 +93,14 @@ public class HudConfigValidatorTests
         var result = Validate(Defaults with { Menu = Defaults.Menu with { Display = MenuDisplay.CenterHtml } });
         Assert.Equal(MenuDisplay.CenterHtml, result.Config.Menu.Display);
         Assert.Empty(result.Keys);
+    }
+
+    [Fact]
+    public void TeamColors_HaveDefaults_AndInvalidOnesFallBack()
+    {
+        Assert.Equal(("#EAB54F", "#5D9CEC"), (Defaults.Theme.TeamT, Defaults.Theme.TeamCt));
+        var result = Validate(Defaults with { Theme = Defaults.Theme with { TeamT = "orange", TeamCt = "#5D9CEC" } });
+        Assert.Equal("#EAB54F", result.Config.Theme.TeamT);
+        Assert.Equal(new[] { "Theme.TeamT" }, result.Keys);
     }
 }

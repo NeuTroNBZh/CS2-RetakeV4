@@ -10,7 +10,7 @@ public class CenterMenuHtmlTests
 
     [Fact]
     public void Title_IsBoldInTheAccentColor() =>
-        Assert.StartsWith("<font class='fontSize-l' color='#4FC3F7'><b>Weapons</b></font>", Format(new CenterMenuRow("AK-47", false)));
+        Assert.StartsWith("<font class='fontSize-xl' color='#4FC3F7'><b>Weapons</b></font>", Format(new CenterMenuRow("AK-47", false)));
 
     [Fact]
     public void Rows_AreNumbered_ForTheNumberKeys()
@@ -40,5 +40,14 @@ public class CenterMenuHtmlTests
         Assert.DoesNotContain("<script>", html, StringComparison.Ordinal);
         Assert.Contains("&lt;b&gt;x&lt;/b&gt;", html, StringComparison.Ordinal);
         Assert.Contains("a&amp;b", html, StringComparison.Ordinal);
+    }
+
+    // Team entries keep their team color unless they are the highlighted line.
+    [Fact]
+    public void TintedRow_UsesItsColor_UnlessSelected()
+    {
+        var html = Format(new CenterMenuRow("Terrorists", false, "#EAB54F"), new CenterMenuRow("Counter-Terrorists", true, "#5D9CEC"));
+        Assert.Contains("<font class='fontSize-m' color='#EAB54F'>1. Terrorists</font>", html, StringComparison.Ordinal);
+        Assert.Contains("color='#4FC3F7'>&#9654; 2. Counter-Terrorists", html, StringComparison.Ordinal);
     }
 }

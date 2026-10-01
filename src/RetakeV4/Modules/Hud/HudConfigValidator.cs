@@ -27,6 +27,8 @@ public sealed partial class HudConfigValidator : IConfigValidator<HudConfig>
         Accent = Color(theme.Accent, defaults.Accent, "Theme.Accent", file, issues),
         Text = Color(theme.Text, defaults.Text, "Theme.Text", file, issues),
         Muted = Color(theme.Muted, defaults.Muted, "Theme.Muted", file, issues),
+        TeamT = Color(theme.TeamT, defaults.TeamT, "Theme.TeamT", file, issues),
+        TeamCt = Color(theme.TeamCt, defaults.TeamCt, "Theme.TeamCt", file, issues),
         FontSize = InRange(theme.FontSize, 8f, 128f, defaults.FontSize, "Theme.FontSize", file, issues),
     };
 

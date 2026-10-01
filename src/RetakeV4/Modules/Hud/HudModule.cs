@@ -126,18 +126,7 @@ public sealed class HudModule : IRetakeModule
         hooks.OnBus<MapStarted>(_ => menus.Reset());
         hooks.OnTick("menu_tick", menus.Tick);
         hooks.OnCheckTransmit("menu_transmit", menus.OnCheckTransmit);
-        hooks.OnPlayerButtons("menu_buttons", (player, pressed, _) =>
-        {
-            var slot = player.Slot;
-            if (menus.OpenNavigator(slot) is { } claimed)
-            {
-                if (_config.Debug)
-                {
-                    context.Logger.LogInformation("Menu input: buttons {Pressed} pressed by slot {Slot}", pressed, slot);
-                }
-                NextFrame("menu_buttons", () => _menus?.OnButtons(slot, pressed, claimed));
-            }
-        });
+        hooks.OnTick("menu_buttons", menus.PollButtons);
         hooks.OnEvent<EventRoundPrestart>("round_prestart", _ => menus.SuspendEntities());
         hooks.OnEvent<EventRoundStart>("round_start", _ =>
             NextFrame("menu_resume", () => _menus?.ResumeEntities()));

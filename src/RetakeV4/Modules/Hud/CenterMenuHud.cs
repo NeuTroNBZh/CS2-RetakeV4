@@ -11,6 +11,8 @@ namespace RetakeV4.Modules.Hud;
 // Game thread only. Menus drawn in the center HTML panel (it replaces the info block while open): forward/back move, use chooses.
 internal sealed class CenterMenuHud
 {
+    private const string ChosenMark = "✔ ";
+
     private readonly HudConfig _config;
     private readonly ITextService _text;
     private readonly IEventBus _bus;
@@ -91,11 +93,11 @@ internal sealed class CenterMenuHud
         }
         if (Pressed(pressed, PlayerButtons.Forward))
         {
-            _open[slot] = navigator.Move(-1);
+            _open[slot] = navigator.MoveWrapping(-1);
         }
         else if (Pressed(pressed, PlayerButtons.Back))
         {
-            _open[slot] = navigator.Move(1);
+            _open[slot] = navigator.MoveWrapping(1);
         }
         else if (Pressed(pressed, PlayerButtons.Use))
         {
@@ -111,7 +113,7 @@ internal sealed class CenterMenuHud
             return null;
         }
         var rows = navigator.Lines()
-            .Select((line, index) => new CenterMenuRow(MenuLineLabel.Format(_text, player, line), index == navigator.Cursor))
+            .Select((line, index) => new CenterMenuRow(MenuLineLabel.Format(_text, player, line, ChosenMark), index == navigator.Cursor, TeamColor(line.Team)))
             .ToList();
         var hint = _text.For(player, "hud.menu.hint_move");
         return CenterMenuHtml.Format(HudTextFormatter.Format(_text, player, navigator.Current.Title), rows, hint, _config.Theme.ToTheme());
@@ -131,6 +133,13 @@ internal sealed class CenterMenuHud
         }
         _open[slot] = result.Next;
     }
+
+    private string? TeamColor(TeamSide? team) => team switch
+    {
+        TeamSide.T => _config.Theme.TeamT,
+        TeamSide.CT => _config.Theme.TeamCt,
+        _ => null,
+    };
 
     private static bool Pressed(PlayerButtons pressed, PlayerButtons button) => (pressed & button) != 0;
 }

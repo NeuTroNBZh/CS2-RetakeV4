@@ -26,6 +26,11 @@ public sealed record HudThemeConfig
 
     public float FontSize { get; init; } = 24f;
 
+    // Team entries in the center panel (CenterHtml).
+    public string TeamT { get; init; } = "#EAB54F";
+
+    public string TeamCt { get; init; } = "#5D9CEC";
+
     public HudTheme ToTheme() => new(Accent, Text, Muted);
 }
 
@@ -50,7 +55,7 @@ public sealed record HudMenuConfig
 {
     // WorldText: menus in front of the player (point_worldtext). Chat: numbered chat menus chosen with !1, !2... (V3 style).
     // CenterHtml: an HTML panel in the center of the screen, W/S to move, E to choose, number keys too.
-    public MenuDisplay Display { get; init; } = MenuDisplay.WorldText;
+    public MenuDisplay Display { get; init; } = MenuDisplay.CenterHtml;
 
     public MenuInputSetting Input { get; init; } = MenuInputSetting.AimAndKeys;
 

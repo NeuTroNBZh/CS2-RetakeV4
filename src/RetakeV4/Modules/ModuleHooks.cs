@@ -63,13 +63,6 @@ public sealed class ModuleHooks
         _registrations.Track(() => _plugin.RemoveListener(wrapper));
     }
 
-    public void OnPlayerButtons(string stage, Action<CCSPlayerController, PlayerButtons, PlayerButtons> handler)
-    {
-        Listeners.OnPlayerButtonsChanged wrapper = (player, pressed, released) => _guard.Run(_module, stage, () => handler(player, pressed, released));
-        _plugin.RegisterListener(wrapper);
-        _registrations.Track(() => _plugin.RemoveListener(wrapper));
-    }
-
     public void RepeatTimer(string stage, float intervalSeconds, Action handler)
     {
         var timer = _plugin.AddTimer(intervalSeconds, () => _guard.Run(_module, stage, handler), TimerFlags.REPEAT);
