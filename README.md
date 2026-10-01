@@ -144,7 +144,7 @@ Dans `hud.json`, `Menu.Display` choisit comment les menus (armes, admin, éditeu
 
 - `WorldText` (par défaut) : le menu flotte devant le joueur. On choisit avec les touches `1`-`9` ou en visant une ligne et en tirant.
 - `Chat` : liste numérotée dans le chat, comme en V3. On choisit avec `!1`, `!2`…
-- `CenterHtml` : grand panneau au centre de l'écran (titre, ligne sélectionnée en surbrillance, aide des touches). On navigue avec avancer / reculer, on valide avec Utiliser (E), et les touches `1`-`9` choisissent directement une ligne. En round, vivant, seules les touches `1`-`9` pilotent le menu pour ne pas gêner les déplacements.
+- `CenterHtml` : grand panneau au centre de l'écran (titre, ligne sélectionnée en surbrillance, aide des touches). On navigue avec avancer / reculer et on valide avec Utiliser (E), à tout moment du round.
 
 Ce réglage est pris en compte au redémarrage du serveur ou au rechargement du plugin.
 

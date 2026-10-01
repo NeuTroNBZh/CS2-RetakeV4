@@ -38,7 +38,7 @@ public sealed class HudModule : IRetakeModule
                 LoadChatMenus(context);
                 break;
             case MenuDisplay.CenterHtml:
-                var centerMenus = new CenterMenuHud(_config, context.Text, context.Bus, () => context.Rounds.State.Phase, () => DateTimeOffset.UtcNow);
+                var centerMenus = new CenterMenuHud(_config, context.Text, context.Bus, context.Logger);
                 _centerMenus = centerMenus;
                 LoadCenter(context, centerMenus.Html);
                 LoadCenterMenus(context, centerMenus);
@@ -75,18 +75,17 @@ public sealed class HudModule : IRetakeModule
     private void LoadCenterMenus(ModuleContext context, CenterMenuHud menus)
     {
         var hooks = context.Hooks;
-        hooks.OnBus<HudMenuOpen>(e => NextFrame("menu_open", () => _centerMenus?.OnOpen(e)));
-        hooks.OnBus<HudMenuClose>(e => NextFrame("menu_close", () => _centerMenus?.OnClose(e)));
-        hooks.OnBus<LoadoutApplied>(menus.OnLoadoutApplied);
-        hooks.OnBus<MapStarted>(_ => menus.CloseAll());
-        hooks.OnPlayerButtons("menu_buttons", (player, pressed, _) =>
+        hooks.OnBus<HudMenuOpen>(e =>
         {
-            var slot = player.Slot;
-            if (menus.OpenNavigator(slot) is { } claimed)
+            if (_config.Debug)
             {
-                NextFrame("menu_buttons", () => _centerMenus?.OnButtons(slot, pressed, claimed));
+                context.Logger.LogInformation("Menu input: menu {Menu} opened for slot {Slot} (refresh: {Refresh})", e.Menu.Id, e.Player.Slot, e.RefreshOnly);
             }
+            NextFrame("menu_open", () => _centerMenus?.OnOpen(e));
         });
+        hooks.OnBus<HudMenuClose>(e => NextFrame("menu_close", () => _centerMenus?.OnClose(e)));
+        hooks.OnBus<MapStarted>(_ => menus.CloseAll());
+        hooks.OnTick("menu_input", menus.PollButtons);
         hooks.OnEvent<EventPlayerDisconnect>("player_disconnect", e =>
         {
             if (e.Userid is { } player)
@@ -94,25 +93,6 @@ public sealed class HudModule : IRetakeModule
                 menus.Forget(player.Slot);
             }
         });
-        for (var key = 1; key <= MenuNavigator.MaxLines; key++)
-        {
-            var slotKey = key;
-            hooks.CommandListener($"slot{slotKey}", (player, _) =>
-            {
-                if (_config.Debug)
-                {
-                    context.Logger.LogInformation("Menu input: slot{Key} from slot {Slot}: {Result}", slotKey, player?.Slot,
-                        menus.KeyRefusal(player, slotKey) ?? "claimed");
-                }
-                if (menus.ClaimKey(player, slotKey) is not { } claimed)
-                {
-                    return HookResult.Continue;
-                }
-                var slot = player!.Slot;
-                NextFrame("menu_key", () => _centerMenus?.PressKey(slot, slotKey, claimed));
-                return HookResult.Handled;
-            }, HookMode.Pre);
-        }
     }
 
     // Chat menus need none of the world-text machinery: no entities, no aim, no slot-key interception.

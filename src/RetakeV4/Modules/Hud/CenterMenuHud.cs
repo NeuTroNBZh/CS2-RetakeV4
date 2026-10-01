@@ -1,33 +1,29 @@
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
+using Microsoft.Extensions.Logging;
 using RetakeV4.Domain.Common;
 using RetakeV4.Domain.Events;
 using RetakeV4.Domain.Hud;
-using RetakeV4.Domain.Rounds;
 using RetakeV4.Localization;
 
 namespace RetakeV4.Modules.Hud;
 
-// Game thread only. Menus drawn in the center HTML panel (it replaces the info block while open): W/S move, E chooses, 1-9 too.
+// Game thread only. Menus drawn in the center HTML panel (it replaces the info block while open): forward/back move, use chooses.
 internal sealed class CenterMenuHud
 {
-    private static readonly TimeSpan SlotKeyMute = TimeSpan.FromSeconds(1);
-
     private readonly HudConfig _config;
     private readonly ITextService _text;
     private readonly IEventBus _bus;
-    private readonly Func<RoundPhase> _phase;
-    private readonly Func<DateTimeOffset> _clock;
+    private readonly ILogger _logger;
     private readonly Dictionary<int, MenuNavigator> _open = new();
-    private KeyMute _keyMute = KeyMute.Empty;
+    private readonly Dictionary<int, ulong> _held = new();
 
-    public CenterMenuHud(HudConfig config, ITextService text, IEventBus bus, Func<RoundPhase> phase, Func<DateTimeOffset> clock)
+    public CenterMenuHud(HudConfig config, ITextService text, IEventBus bus, ILogger logger)
     {
         _config = config;
         _text = text;
         _bus = bus;
-        _phase = phase;
-        _clock = clock;
+        _logger = logger;
     }
 
     public void OnOpen(HudMenuOpen e)
@@ -51,51 +47,45 @@ internal sealed class CenterMenuHud
         }
     }
 
-    // Right after a loadout the game may echo the number key used to pick a weapon: it must not choose a menu line.
-    public void OnLoadoutApplied(LoadoutApplied e) => _keyMute = _keyMute.Mute(e.Player.Slot, _clock(), SlotKeyMute);
-
     public void Forget(int slot)
     {
         _open.Remove(slot);
-        _keyMute = _keyMute.Forget(slot);
+        _held.Remove(slot);
     }
 
-    public void CloseAll() => _open.Clear();
+    public void CloseAll()
+    {
+        _open.Clear();
+        _held.Clear();
+    }
 
     public MenuNavigator? OpenNavigator(int slot) => _open.GetValueOrDefault(slot);
 
-    public string? KeyRefusal(CCSPlayerController? player, int key)
+    // Every tick: CS2 sends no slot commands for the number keys and OnPlayerButtonsChanged does not fire on all servers,
+    // so the held buttons are read directly. Forward/back move the cursor, use chooses, in every phase.
+    public void PollButtons()
     {
-        if (player is not { IsValid: true })
+        foreach (var slot in _open.Keys.ToList())
         {
-            return "invalid player";
-        }
-        if (OpenNavigator(player.Slot) is not { } navigator)
-        {
-            return "no open menu";
-        }
-        if (key > navigator.Lines().Count)
-        {
-            return $"key beyond the {navigator.Lines().Count} lines";
-        }
-        return _keyMute.IsMuted(player.Slot, _clock()) ? "muted right after a loadout" : null;
-    }
-
-    public MenuNavigator? ClaimKey(CCSPlayerController? player, int key) =>
-        KeyRefusal(player, key) is null ? OpenNavigator(player!.Slot) : null;
-
-    public void PressKey(int slot, int key, MenuNavigator claimed)
-    {
-        if (Current(slot, claimed) is { } navigator)
-        {
-            Apply(slot, navigator.Activate(key - 1));
+            if (Utilities.GetPlayerFromSlot(slot) is not { IsValid: true } player)
+            {
+                Forget(slot);
+                continue;
+            }
+            var held = (ulong)player.Buttons;
+            var pressed = (PlayerButtons)ButtonEdges.Pressed(_held.GetValueOrDefault(slot), held);
+            _held[slot] = held;
+            if (pressed != 0 && _config.Debug)
+            {
+                _logger.LogInformation("Menu input: buttons {Pressed} pressed by slot {Slot}", pressed, slot);
+            }
+            Handle(slot, pressed);
         }
     }
 
-    public void OnButtons(int slot, PlayerButtons pressed, MenuNavigator claimed)
+    private void Handle(int slot, PlayerButtons pressed)
     {
-        if (Current(slot, claimed) is not { } navigator
-            || Utilities.GetPlayerFromSlot(slot) is not { IsValid: true } player || !Controls(player).Movement)
+        if (!_open.TryGetValue(slot, out var navigator))
         {
             return;
         }
@@ -120,11 +110,10 @@ internal sealed class CenterMenuHud
         {
             return null;
         }
-        var movement = Controls(player).Movement;
         var rows = navigator.Lines()
-            .Select((line, index) => new CenterMenuRow(MenuLineLabel.Format(_text, player, line), movement && index == navigator.Cursor))
+            .Select((line, index) => new CenterMenuRow(MenuLineLabel.Format(_text, player, line), index == navigator.Cursor))
             .ToList();
-        var hint = _text.For(player, movement ? "hud.menu.hint_move" : "hud.menu.hint_keys");
+        var hint = _text.For(player, "hud.menu.hint_move");
         return CenterMenuHtml.Format(HudTextFormatter.Format(_text, player, navigator.Current.Title), rows, hint, _config.Theme.ToTheme());
     }
 
@@ -142,12 +131,6 @@ internal sealed class CenterMenuHud
         }
         _open[slot] = result.Next;
     }
-
-    // A menu opened, closed or moved since the input was claimed wins: the input is dropped.
-    private MenuNavigator? Current(int slot, MenuNavigator claimed) =>
-        _open.TryGetValue(slot, out var navigator) && ReferenceEquals(navigator, claimed) ? navigator : null;
-
-    private MenuControls Controls(CCSPlayerController player) => MenuInput.For(_phase(), player.PawnIsAlive, _config.Menu.Input);
 
     private static bool Pressed(PlayerButtons pressed, PlayerButtons button) => (pressed & button) != 0;
 }
