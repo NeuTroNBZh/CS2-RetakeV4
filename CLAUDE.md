@@ -17,6 +17,7 @@ Plugin CounterStrikeSharp (C# / .NET 10, CSSharp 1.0.370+) de retake CS2, rééc
 - `tools/RetakeV4.SpawnMigrator` : convertit des spawns V3 (tableau à plat) au format V2 (`dotnet run --project tools/RetakeV4.SpawnMigrator -- <in> <out>`).
 - `src/RetakeV4.Contracts` : API publique (`IRetakeApi`, capacité `retakev4:api`), installée dans `shared/`. Toute modification incompatible incrémente `RetakeApi.Version`.
 - `tools/RetakeV4.ConfigExporter` : écrit les configs par défaut (`dotnet run --project tools/RetakeV4.ConfigExporter -- <dossier>`).
+- `tools/RetakeV4.ConfigCheck` : vérifie une config serveur (`dotnet run --project tools/RetakeV4.ConfigCheck -- <configs> [<spawns>]`), publié avec chaque release.
 
 ## Commandes
 - Build : `dotnet build RetakeV4.sln -c Release` (0 warning exigé, TreatWarningsAsErrors)
@@ -41,3 +42,4 @@ Plugin CounterStrikeSharp (C# / .NET 10, CSSharp 1.0.370+) de retake CS2, rééc
 - Actions d'administration : le module Admin vérifie `@retakev4/admin` puis publie une demande (`SpawnEditorRequested`, `ForceSiteRequested`, `ScrambleRequested`) ; le module propriétaire l'applique. Le menu admin (`AdminMenu`, Domain) sert au HUD et au pont SimpleAdmin.
 - Achat natif : un achat n'équipe jamais rien. La résolution (`NativeBuyResolver`) et la décision (`NativeBuy.Decide`) sont dans le Domain ; `NativeBuySelector` applique via le même chemin que le menu d'armes. Timers de module uniquement via `hooks.RepeatTimer`.
 - Panel web : le format partagé (`player_loadout`, `retake_catalog`) est figé par `contract/` et ses tests ; toute modification se fait aussi dans `CS2-RetakeV4-Panel`. Le catalogue vient de `CatalogExport` (même règle que `WeaponMenu.Options`), la recharge des préférences de `PreferenceSync` (tampons comparés par égalité, jamais par horloge).
+- Textes remplaçables : `configs/plugins/RetakeV4/lang/<langue>.json`, fusion dans `TextOverrides` (Domain) ; contenu serveur (annonces, liens) via `ITextService.ChatContent*`, jamais via `lang/`.

@@ -173,3 +173,13 @@ Remplir aussi `docs/spikes/hud-probe-findings.md` : les réglages `hud.json` →
 - [ ] Sections Terroristes (orange) et Antiterroristes (bleu), chaque type de round affiche son résumé « Type : principale / pistolet » ; l'arme choisie est cochée.
 - [ ] Échauffement sans fin (hébergeur qui annonce une fin infinie) : il se termine au bout de `WarmupFallbackSeconds`, avec le message de fin forcée.
 - [ ] Premier round après démarrage avec des joueurs : aucun `Slow handler` au-dessus de ~200 ms, aucun kick `NETWORK_DISCONNECT_OVERFLOW`.
+
+## 4.3.0 — personnalisation
+
+- [ ] Sans `lang/` ni annonces : préfixes et messages identiques à 4.2.1, aucune annonce.
+- [ ] `lang/fr.json` avec `core.prefix` changé : le nouveau préfixe apparaît, un joueur en anglais garde l'ancien.
+- [ ] Clé inconnue dans `lang/fr.json` : avertissement au démarrage, le reste fonctionne.
+- [ ] `announcements.json` avec 2 messages et `IntervalSeconds` 30 : un message toutes les 30 s, jamais deux fois le même de suite ; liste de la map courante utilisée.
+- [ ] Accueil : reçu une fois en rejoignant une équipe, pas après un changement d'équipe ni un changement de map, de nouveau après reconnexion.
+- [ ] `!regles` avec `Lines` : chaque ligne avec le préfixe d'aide.
+- [ ] Refus de permission (`!scramble` sans droit) : préfixe d'alerte.
