@@ -80,7 +80,10 @@ RetakeV4 est une réécriture complète de CS2RetakeV3. Il est modulaire (chaque
 | `!guns` (alias : `!gun`, `!g`, `!weapons`, `!menu`…) | Ouvre le menu d'armes |
 | `!awp` | Se porter volontaire (ou non) pour l'AWP, pour ton équipe actuelle |
 | Avancer / reculer, puis Utiliser (E) | Naviguer et choisir dans le menu |
-| `!1`, `!2`… | Choisir dans un menu de chat (si le serveur utilise ce mode) |
+| `!1`, `!2`… | Choisir dans un menu de chat (vote de map, ou tous les menus si le serveur utilise ce mode) |
+| `!rtv` | Demander un changement de map (vote immédiat quand 60 % des joueurs l'ont demandé) |
+| `!vote` | Rouvrir le menu du vote de map en cours |
+| `!nextmap` | Afficher la prochaine map |
 
 - **Choix des armes** : pour chaque équipe et chaque type de round, vous choisissez votre arme principale et votre pistolet. Le choix est enregistré et réutilisé à chaque round du même type. Un choix fait pendant le freeze time s'applique tout de suite.
 - **AWP** : le volontariat se règle par équipe, dans le menu de chaque type de round qui distribue des AWP (FullBuy par défaut). À chaque round concerné, une AWP par équipe est tirée au sort parmi les volontaires de cette équipe.
@@ -115,6 +118,14 @@ Les commandes admin demandent la permission `@retakev4/admin` (et `@retakev4/roo
 
 Un spawn T marqué *plant* peut porter la bombe ; il en faut au moins un par site pour l'AutoPlant.
 
+### Vote de map
+
+Le module MapVote fait tourner les maps. Les maps proposées sont celles qui ont des spawns Retake (`plugins/RetakeV4/spawns/<map>.json`), connues du serveur, moins la map en cours et `ExcludedMaps`. Une map ajoutée avec l'éditeur de spawns entre donc toute seule dans le vote.
+
+- **Fin de partie** : quand il reste `TriggerRoundsBeforeEnd` rounds avant `mp_maxrounds` (3 par défaut), un vote s'ouvre dans le chat pour tous les joueurs, spectateurs compris, pendant `VoteSeconds`. `!vote` rouvre le menu pour changer de vote. La map la plus votée gagne (égalité ou aucune voix : tirage au sort) ; à la fin de la partie, la map change après `ChangeDelaySeconds`.
+- **`!rtv`** : quand `RtvPercentage` % des joueurs l'ont tapé (au moins `RtvMinPlayers` joueurs, après `RtvMinRounds` rounds), un vote s'ouvre tout de suite et la map change à la fin du round.
+- Le vote est toujours dans le chat (`!1`, `!2`…), même si les autres menus sont au centre de l'écran : le menu central se pilote avec les touches de déplacement.
+
 ### Nettoyage de map
 
 À chaque round, après la pose de la bombe, le module MapCleanup ouvre les portes et casse les vitres et les aérations ; à la fin du freeze time il renvoie la même action aux cibles encore présentes. Rien d'autre n'est touché : seules les classes `func_door`, `func_door_rotating`, `prop_door_rotating`, `func_breakable`, `func_shatterglass` et `prop_dynamic` sont lues, et seules les entrées `Open` (portes) et `Break` (vitres, aérations) sont envoyées. Un `prop_dynamic` n'est pris que s'il a des points de vie (objet cassable, comme les vitres et l'aération de Nuke). Un `func_breakable` ou `prop_dynamic` cassable n'est une vitre que si son modèle contient `glass` ou `window`, une aération que s'il contient `vent` ou `grate` ; sinon il est laissé tel quel. Rien n'est fait pendant l'échauffement ni pendant l'éditeur de spawns.
@@ -145,6 +156,7 @@ Chaque module a son fichier dans `addons/counterstrikesharp/configs/plugins/Reta
 | `admin.json` | pont CS2-SimpleAdmin | activé |
 | `links.json` | commandes communautaires (`!discord` → message, `!regles` → plusieurs lignes) | — |
 | `announcements.json` | messages réguliers (par map possible) et message d'accueil | désactivé (listes vides) |
+| `mapvote.json` | vote de map : `TriggerRoundsBeforeEnd` (1–10), `VoteSeconds` (10–120), `ChangeDelaySeconds` (3–30), `RtvEnabled`, `RtvPercentage` (1–100), `RtvMinPlayers`, `RtvMinRounds`, `ExcludedMaps` | vote 3 rounds avant la fin, `!rtv` à 60 % |
 | `mapcleanup.json` | nettoyage de map : `OpenDoors`, `DoorOpenChancePercent` (0–100), `BreakWindows`, `BreakVents`, `MaxEntitiesPerRound` (1–4096), `FreezeEndCheck` | tout activé, portes ouvertes à 100 % |
 | `api.json` | API publique | activée |
 

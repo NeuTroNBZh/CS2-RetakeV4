@@ -206,3 +206,13 @@ Préparation : `pwsh -NoProfile -File scripts/package-dev.ps1`, copier `artifact
 - [ ] Un second admin qui ouvre l'éditeur reçoit « déjà en cours ».
 - [ ] Changement de map avec l'éditeur ouvert : il se ferme, aucune erreur dans les logs.
 - [ ] Éditeur ouvert puis `!guns` (ou 3 minutes sans action) : l'éditeur se ferme et le nettoyage reprend au round suivant.
+
+## 4.5.0 — vote de map
+
+- [ ] Partie à `mp_maxrounds 30` : au début du round 28, le vote s'ouvre dans le chat pour tous (spectateurs compris) avec les 10 autres maps ; les joueurs ne sont pas gelés et peuvent bouger pendant le vote.
+- [ ] `!vote` rouvre le menu et permet de changer de vote ; le résultat est annoncé après 30 s ; `!nextmap` le rappelle.
+- [ ] Fin de partie : la map change vers la gagnante après 8 s.
+- [ ] À 2 joueurs après 3 rounds : `!rtv` par les deux → vote immédiat, la map change à la fin du round.
+- [ ] `!rtv` pendant que le vote de fin de partie est ouvert : pas de second vote, la map change à la fin du round qui suit le résultat.
+- [ ] Un joueur qui vote puis se déconnecte : sa voix ne compte plus.
+- [ ] Menus `!guns` et admin : inchangés (menu central, gel du joueur).
