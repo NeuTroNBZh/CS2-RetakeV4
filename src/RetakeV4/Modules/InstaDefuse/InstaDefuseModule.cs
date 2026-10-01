@@ -7,6 +7,7 @@ using RetakeV4.Adapters;
 using RetakeV4.Configuration;
 using RetakeV4.Domain.Events;
 using RetakeV4.Domain.Geometry;
+using RetakeV4.Domain.Hud;
 using RetakeV4.Domain.InstaDefuse;
 using RetakeV4.Domain.Rounds;
 
@@ -128,6 +129,7 @@ public sealed class InstaDefuseModule : IRetakeModule
         if (_config.ChatNotification)
         {
             Context.Text.ChatAll(key, args);
+            Context.Bus.Publish(new HudAlert(null, HudText.Of(key, args)));
         }
     }
 

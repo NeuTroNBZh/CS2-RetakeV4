@@ -15,7 +15,6 @@ namespace RetakeV4.Modules.Hud;
 // round_start (CS2 cleans the map in between): sessions survive and are rendered again when the window reopens.
 internal sealed class MenuHud
 {
-    private static readonly TimeSpan SlotKeyMute = TimeSpan.FromSeconds(1);
 
     private readonly HudConfig _config;
     private readonly ITextService _text;
@@ -29,7 +28,6 @@ internal sealed class MenuHud
     private readonly Dictionary<int, MenuSession> _sessions = new();
     private bool _entitiesAllowed = true;
     private readonly Dictionary<int, ulong> _held = new();
-    private KeyMute _keyMute = KeyMute.Empty;
 
     public MenuHud(HudConfig config, ITextService text, IEventBus bus, ILogger logger, Func<RoundPhase> phase, Func<DateTimeOffset> clock)
     {
@@ -67,13 +65,11 @@ internal sealed class MenuHud
         Render(slot);
     }
 
-    public void OnLoadoutApplied(LoadoutApplied e) => _keyMute = _keyMute.Mute(e.Player.Slot, _clock(), SlotKeyMute);
 
     public void Forget(int slot)
     {
         Close(slot);
         _held.Remove(slot);
-        _keyMute = _keyMute.Forget(slot);
     }
 
     public void OnClose(HudMenuClose e)
@@ -200,41 +196,6 @@ internal sealed class MenuHud
     // time identifies the menu, so an input never lands on a menu opened, closed or moved in between.
     public MenuNavigator? OpenNavigator(int slot) =>
         _sessions.TryGetValue(slot, out var session) && session.View is not null ? session.Navigator : null;
-
-    public MenuNavigator? ClaimKey(CCSPlayerController? player, int key) =>
-        KeyRefusal(player, key) is null ? OpenNavigator(player!.Slot) : null;
-
-    // Diagnostic (hud.json Debug): why a number key is left to the game instead of driving the menu.
-    public string? KeyRefusal(CCSPlayerController? player, int key)
-    {
-        if (player is not { IsValid: true })
-        {
-            return "invalid player";
-        }
-        if (OpenNavigator(player.Slot) is not { } navigator)
-        {
-            return "no open menu";
-        }
-        if (!Controls(player).Keys)
-        {
-            return "keys disabled in this phase";
-        }
-        if (key > navigator.Lines().Count)
-        {
-            return $"key beyond the {navigator.Lines().Count} lines";
-        }
-        return _keyMute.IsMuted(player.Slot, _clock()) ? "muted right after a loadout" : null;
-    }
-
-    public void PressKey(int slot, int key, MenuNavigator claimed)
-    {
-        if (Current(slot, claimed) is not var (player, session) || !Controls(player).Keys)
-        {
-            Trace("key {Key} of slot {Slot} dropped: the menu changed or closed since the press", key, slot);
-            return;
-        }
-        Activate(player, session, key - 1);
-    }
 
     private (CCSPlayerController Player, MenuSession Session)? Current(int slot, MenuNavigator claimed)
     {

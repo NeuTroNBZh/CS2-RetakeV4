@@ -4,13 +4,11 @@ Plugin CounterStrikeSharp (C# / .NET 10, CSSharp 1.0.370+) de retake CS2, rééc
 
 - Spec : `docs/superpowers/specs/2026-09-30-retake-v4-design.md` (source de vérité fonctionnelle)
 - Plans : `docs/superpowers/plans/`
-- Résultats du prototype HUD : `docs/spikes/hud-probe-findings.md`
 
 ## Structure
 - `src/RetakeV4.Domain` : logique pure, **aucune référence à CounterStrikeSharp**, couverte à ≥ 80 %.
 - `src/RetakeV4` : plugin CSSharp, adaptateurs fins uniquement. Un dossier par module sous `Modules/`, un JSON par module.
 - `tests/RetakeV4.Domain.Tests` : tests unitaires du Domain. `tests/RetakeV4.Integration.Tests` : config, lang, hôte de modules.
-- `spikes/` : prototypes jetables, hors solution.
 - `src/RetakeV4/Adapters` : accès CSSharp partagés (gamerules, requêtes joueurs).
 - `src/RetakeV4/Persistence` : dépôts de préférences (SQLite, MySQL, NoOp), migrations, magasin résilient, file d'écriture, lecteur de base V3.
 - `src/RetakeV4/Modules/Hud` : moteur HUD (bloc centré, menus `point_worldtext`, entrées). Logique dans `src/RetakeV4.Domain/Hud`.
