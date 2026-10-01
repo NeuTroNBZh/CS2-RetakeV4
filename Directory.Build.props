@@ -7,4 +7,10 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <Deterministic>true</Deterministic>
   </PropertyGroup>
+  <ItemGroup>
+    <!-- SQLitePCLRaw.lib.e_sqlite3 2.1.11 embeds SQLite 3.49.1 (no patched 2.1.x exists). The flaw needs attacker-controlled SQL:
+         the plugin only runs its own parameterized queries; the one external database (css_retake_import_v3) is read by a root admin.
+         Accepted to keep SQLite working on game hosts whose glibc is older than 2.34. -->
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-2m69-gcr7-jv3q" />
+  </ItemGroup>
 </Project>

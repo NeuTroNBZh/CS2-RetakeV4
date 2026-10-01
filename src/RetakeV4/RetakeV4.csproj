@@ -2,7 +2,7 @@
   <PropertyGroup>
     <RootNamespace>RetakeV4</RootNamespace>
     <AssemblyName>RetakeV4</AssemblyName>
-    <Version>4.0.0</Version>
+    <Version>4.0.1</Version>
     <GenerateRuntimeConfigurationFiles>true</GenerateRuntimeConfigurationFiles>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
   </PropertyGroup>
@@ -11,7 +11,8 @@
       <ExcludeAssets>runtime</ExcludeAssets>
     </PackageReference>
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.9" />
-    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.3" />
+    <!-- 2.1.x: its linux-x64 native needs glibc 2.28 (3.x needs 2.34, missing on hosts such as Dathost). See Directory.Build.props for the audit note. -->
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="2.1.11" />
     <PackageReference Include="MySqlConnector" Version="2.3.6" />
   </ItemGroup>
   <ItemGroup>
