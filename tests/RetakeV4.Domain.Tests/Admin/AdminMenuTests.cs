@@ -12,7 +12,7 @@ public class AdminMenuTests
     {
         var menu = AdminMenu.Build();
         Assert.Equal(AdminMenu.MenuId, menu.Id);
-        Assert.Equal(new[] { AdminMenu.EditorId, "forcesite", AdminMenu.ScrambleId }, menu.Items.Select(i => i.Id));
+        Assert.Equal(new[] { AdminMenu.EditorId, "forcesite", AdminMenu.ScrambleId, AdminMenu.CleanupId }, menu.Items.Select(i => i.Id));
         Assert.Equal(MenuItemKind.Submenu, menu.Items[1].Kind);
     }
 
@@ -48,7 +48,14 @@ public class AdminMenuTests
     [InlineData("edit", RetakeCommandKind.Editor)]
     [InlineData(" EDIT ", RetakeCommandKind.Editor)]
     [InlineData("editor", RetakeCommandKind.Editor)]
+    [InlineData("cleanup", RetakeCommandKind.Cleanup)]
+    [InlineData("CLEANUP", RetakeCommandKind.Cleanup)]
+    [InlineData("nettoyage", RetakeCommandKind.Cleanup)]
     [InlineData("scramble", RetakeCommandKind.Unknown)]
     public void RetakeCommand_ParsesTheSubcommand(string? argument, RetakeCommandKind expected) =>
         Assert.Equal(expected, RetakeCommand.Parse(argument));
+
+    [Fact]
+    public void CleanupEntry_OpensTheMapCleanupEditor() =>
+        Assert.Equal(new AdminSelection(AdminAction.MapCleanupEditor), AdminMenu.Parse(AdminMenu.CleanupId));
 }

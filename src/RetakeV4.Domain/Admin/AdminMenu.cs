@@ -9,6 +9,7 @@ public enum AdminAction
     SpawnEditor,
     Scramble,
     ForceSite,
+    MapCleanupEditor,
 }
 
 public sealed record AdminSelection(AdminAction Action, ForceSiteRequest? Force = null);
@@ -19,6 +20,7 @@ public static class AdminMenu
     public const string EditorId = "editor";
     public const string ScrambleId = "scramble";
     public const string ForceOffId = "force:off";
+    public const string CleanupId = "cleanup";
 
     private const string ForcePrefix = "force";
 
@@ -27,12 +29,14 @@ public static class AdminMenu
         new MenuItem(EditorId, HudText.Of("admin.menu.editor"), MenuItemKind.Action),
         new MenuItem("forcesite", HudText.Of("admin.menu.forcesite"), MenuItemKind.Submenu, Submenu: ForceMenu()),
         new MenuItem(ScrambleId, HudText.Of("admin.menu.scramble"), MenuItemKind.Action),
+        new MenuItem(CleanupId, HudText.Of("admin.menu.cleanup"), MenuItemKind.Action),
     });
 
     public static AdminSelection? Parse(string itemId) => itemId switch
     {
         EditorId => new AdminSelection(AdminAction.SpawnEditor),
         ScrambleId => new AdminSelection(AdminAction.Scramble),
+        CleanupId => new AdminSelection(AdminAction.MapCleanupEditor),
         ForceOffId => new AdminSelection(AdminAction.ForceSite, new ForceSiteRequest(null)),
         _ => ParseForce(itemId),
     };
@@ -67,6 +71,7 @@ public enum RetakeCommandKind
 {
     Menu,
     Editor,
+    Cleanup,
     Unknown,
 }
 
@@ -76,6 +81,7 @@ public static class RetakeCommand
     {
         null or "" => RetakeCommandKind.Menu,
         "edit" or "editor" => RetakeCommandKind.Editor,
+        "cleanup" or "nettoyage" => RetakeCommandKind.Cleanup,
         _ => RetakeCommandKind.Unknown,
     };
 }
