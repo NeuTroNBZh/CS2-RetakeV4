@@ -56,7 +56,7 @@ public sealed class PreferenceService : IAsyncDisposable
     public LoadoutPreference? RequestFor(ulong steamId, TeamSide team, string roundType) =>
         _book.RequestFor(steamId, team, roundType);
 
-    public bool IsAwpVolunteer(ulong steamId) => _book.IsAwpVolunteer(steamId);
+    public bool IsAwpVolunteer(ulong steamId, TeamSide side) => _book.IsAwpVolunteer(steamId, side);
 
     public void SetWeapon(ulong steamId, TeamSide team, string roundType, WeaponSlot slot, string weapon)
     {
@@ -65,9 +65,10 @@ public sealed class PreferenceService : IAsyncDisposable
         Save(change);
     }
 
-    public bool ToggleAwp(ulong steamId)
+    // side: the team to toggle; null toggles both (a player without a team).
+    public bool ToggleAwp(ulong steamId, TeamSide? side)
     {
-        var (book, changes, optIn) = _book.ToggleAwp(steamId);
+        var (book, changes, optIn) = side is { } team ? _book.ToggleAwp(steamId, team) : _book.ToggleAwp(steamId);
         _book = book;
         foreach (var change in changes)
         {

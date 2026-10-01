@@ -103,4 +103,16 @@ public class HudConfigValidatorTests
         Assert.Equal("#EAB54F", result.Config.Theme.TeamT);
         Assert.Equal(new[] { "Theme.TeamT" }, result.Keys);
     }
+
+    [Theory]
+    [InlineData(2, 6, 1)]
+    [InlineData(13, 6, 1)]
+    [InlineData(9, 9, 0)]
+    public void CenterVisibleLines_StaysWithinRange(int value, int expected, int issues)
+    {
+        Assert.Equal(6, Defaults.Menu.CenterVisibleLines);
+        var result = Validate(Defaults with { Menu = Defaults.Menu with { CenterVisibleLines = value } });
+        Assert.Equal(expected, result.Config.Menu.CenterVisibleLines);
+        Assert.Equal(issues, result.Keys.Count);
+    }
 }

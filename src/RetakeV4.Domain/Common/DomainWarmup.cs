@@ -75,7 +75,7 @@ public static class DomainWarmup
 
     private static void WarmMenus(RoundTypeDefinition definition, IReadOnlyList<SpawnPoint> spawns)
     {
-        var weapons = WeaponMenu.Build(new WeaponMenuState(new[] { definition }, definition, TeamSide.T, (_, _) => null, false));
+        var weapons = WeaponMenu.Build(new WeaponMenuState(new[] { definition }, definition, TeamSide.T, (_, _) => null, _ => false));
         var editor = SpawnEditorMenu.Build(new SpawnEditorView(new SpawnSet(spawns, false), spawns[0], false));
         foreach (var menu in new[] { weapons, AdminMenu.Build(), editor })
         {

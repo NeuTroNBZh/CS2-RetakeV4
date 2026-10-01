@@ -90,6 +90,18 @@ public sealed record PreferenceBook(
     public bool IsAwpVolunteer(ulong steamId) =>
         BothSides.Any(side => Entries.GetValueOrDefault(new PreferenceKey(steamId, side, PreferenceKey.AnyRoundType))?.AwpOptIn == true);
 
+    public bool IsAwpVolunteer(ulong steamId, TeamSide side) =>
+        Entries.GetValueOrDefault(new PreferenceKey(steamId, side, PreferenceKey.AnyRoundType))?.AwpOptIn == true;
+
+    public (PreferenceBook Book, IReadOnlyList<StoredPreference> Changes, bool OptIn) ToggleAwp(ulong steamId, TeamSide side)
+    {
+        var key = new PreferenceKey(steamId, side, PreferenceKey.AnyRoundType);
+        var optIn = !IsAwpVolunteer(steamId, side);
+        var change = new StoredPreference(key, (Entries.GetValueOrDefault(key) ?? Nothing) with { AwpOptIn = optIn });
+        return (With(change), new[] { change }, optIn);
+    }
+
+    // Both sides at once: the !awp command used by a player without a team.
     public (PreferenceBook Book, IReadOnlyList<StoredPreference> Changes, bool OptIn) ToggleAwp(ulong steamId)
     {
         var optIn = !IsAwpVolunteer(steamId);

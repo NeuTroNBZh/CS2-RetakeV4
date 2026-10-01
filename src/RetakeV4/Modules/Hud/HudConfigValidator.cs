@@ -55,6 +55,7 @@ public sealed partial class HudConfigValidator : IConfigValidator<HudConfig>
         HalfWidthUnits = InRange(menu.HalfWidthUnits, 2f, 100f, defaults.HalfWidthUnits, "Menu.HalfWidthUnits", file, issues),
         WorldUnitsPerPx = InRange(menu.WorldUnitsPerPx, 0.01f, 1f, defaults.WorldUnitsPerPx, "Menu.WorldUnitsPerPx", file, issues),
         Orientation = InRange(menu.Orientation, 0, 2, defaults.Orientation, "Menu.Orientation", file, issues),
+        CenterVisibleLines = InRange(menu.CenterVisibleLines, 3, 12, defaults.CenterVisibleLines, "Menu.CenterVisibleLines", file, issues),
     };
 
     private static T Missing<T>(T defaults, string key, string file, List<ConfigIssue> issues)

@@ -38,12 +38,12 @@ public sealed record WeaponMenuState(
     RoundTypeDefinition? Current,
     TeamSide? Team,
     Func<TeamSide, string, LoadoutPreference?> PreferenceFor,
-    bool AwpOptIn);
+    Func<TeamSide, bool> AwpOptIn);
 
 public static class WeaponMenu
 {
     public const string MenuId = "allocation.weapons";
-    public const string AwpItemId = "awp";
+    private const string AwpPrefix = "awp:";
     public const string CurrentItemId = "current";
 
     private static readonly TeamSide[] Sides = { TeamSide.T, TeamSide.CT };
@@ -87,7 +87,7 @@ public static class WeaponMenu
         foreach (var side in Sides)
         {
             var configs = state.Definitions
-                .Where(d => HasChoice(d, side))
+                .Where(d => HasChoice(d, side) || d.Awp.Enabled)
                 .Select(d => new MenuItem(ConfigId(side, d.Name), Summary(state, d, side), MenuItemKind.Submenu, Submenu: ConfigMenu(state, d, side), Team: side))
                 .ToList();
             if (configs.Count > 0)
@@ -96,7 +96,6 @@ public static class WeaponMenu
                 items.Add(new MenuItem(TeamItemId(side), title, MenuItemKind.Submenu, Submenu: new Menu(TeamItemId(side), title, configs), Team: side));
             }
         }
-        items.Add(new MenuItem(AwpItemId, HudText.Of("allocation.menu.awp"), MenuItemKind.Toggle, IsOn: state.AwpOptIn));
         return new Menu(MenuId, HudText.Of("allocation.menu.title"), items);
     }
 
@@ -112,6 +111,15 @@ public static class WeaponMenu
 
     private static string TeamItemId(TeamSide team) => $"team:{team}";
 
+    // The AWP is volunteered per team: the toggle sits in each round type that hands it out.
+    public static string AwpItemId(TeamSide team) => $"{AwpPrefix}{team}";
+
+    public static TeamSide? ParseAwp(string itemId) =>
+        itemId.StartsWith(AwpPrefix, StringComparison.Ordinal)
+        && Enum.TryParse<TeamSide>(itemId[AwpPrefix.Length..], out var team) && Enum.IsDefined(team)
+            ? team
+            : null;
+
     private static Menu ConfigMenu(WeaponMenuState state, RoundTypeDefinition definition, TeamSide team)
     {
         var (primary, secondary) = Effective(state, definition, team);
@@ -122,6 +130,10 @@ public static class WeaponMenu
             }
             .OfType<MenuItem>()
             .ToList();
+        if (definition.Awp.Enabled)
+        {
+            items.Add(new MenuItem(AwpItemId(team), HudText.Of("allocation.menu.awp"), MenuItemKind.Toggle, IsOn: state.AwpOptIn(team), Team: team));
+        }
         return new Menu(ConfigId(team, definition.Name), HudText.Of("allocation.menu.config", definition.Name, team.ToString()), items);
     }
 

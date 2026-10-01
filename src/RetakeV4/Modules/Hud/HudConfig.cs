@@ -54,8 +54,11 @@ public sealed record HudWidgetsConfig
 public sealed record HudMenuConfig
 {
     // WorldText: menus in front of the player (point_worldtext). Chat: numbered chat menus chosen with !1, !2... (V3 style).
-    // CenterHtml: an HTML panel in the center of the screen, forward/back to move, E (R in a live round) to choose.
+    // CenterHtml: an HTML panel in the center of the screen, forward/back to move, E to choose.
     public MenuDisplay Display { get; init; } = MenuDisplay.CenterHtml;
+
+    // CenterHtml: lines shown at once; longer lists scroll with the cursor.
+    public int CenterVisibleLines { get; init; } = 6;
 
     public MenuInputSetting Input { get; init; } = MenuInputSetting.AimAndKeys;
 

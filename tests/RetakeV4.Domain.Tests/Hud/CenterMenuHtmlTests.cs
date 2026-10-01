@@ -58,4 +58,45 @@ public class CenterMenuHtmlTests
         var html = CenterMenuHtml.Format("Weapons", new[] { new CenterMenuRow("AK-47", false) }, "hint", Theme, "Saved <now>");
         Assert.EndsWith("<font class='fontSize-m' color='#4FC3F7'>Saved &lt;now&gt;</font><br><font class='fontSize-s' color='#9E9E9E'>hint</font>", html);
     }
+
+    private static CenterMenuRow[] Rows(int count, int selected) =>
+        Enumerable.Range(1, count).Select(i => new CenterMenuRow($"w{i}", i - 1 == selected)).ToArray();
+
+    // A long list (pistols) shows a window that follows the cursor, with arrows when more lines are hidden.
+    [Fact]
+    public void LongList_ShowsAWindowAroundTheCursor_WithScrollArrows()
+    {
+        var html = CenterMenuHtml.Format("Pistols", Rows(10, 5), "hint", Theme, maxVisible: 4);
+        Assert.Contains("&#9650;", html, StringComparison.Ordinal);
+        Assert.Contains("&#9660;", html, StringComparison.Ordinal);
+        Assert.Contains("6. w6", html, StringComparison.Ordinal);
+        Assert.DoesNotContain("1. w1", html, StringComparison.Ordinal);
+        Assert.DoesNotContain("10. w10", html, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Window_AtTheTop_HasNoUpArrow()
+    {
+        var html = CenterMenuHtml.Format("Pistols", Rows(10, 0), "hint", Theme, maxVisible: 4);
+        Assert.DoesNotContain("&#9650;", html, StringComparison.Ordinal);
+        Assert.Contains("4. w4", html, StringComparison.Ordinal);
+        Assert.DoesNotContain("5. w5", html, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Window_AtTheBottom_HasNoDownArrow()
+    {
+        var html = CenterMenuHtml.Format("Pistols", Rows(10, 9), "hint", Theme, maxVisible: 4);
+        Assert.DoesNotContain("&#9660;", html, StringComparison.Ordinal);
+        Assert.Contains("7. w7", html, StringComparison.Ordinal);
+        Assert.Contains("10. w10", html, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ShortList_ShowsEverything_WithoutArrows()
+    {
+        var html = CenterMenuHtml.Format("Weapons", Rows(3, 1), "hint", Theme, maxVisible: 4);
+        Assert.DoesNotContain("&#9650;", html, StringComparison.Ordinal);
+        Assert.DoesNotContain("&#9660;", html, StringComparison.Ordinal);
+    }
 }
