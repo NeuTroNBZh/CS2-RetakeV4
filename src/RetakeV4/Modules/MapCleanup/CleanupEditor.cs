@@ -11,6 +11,7 @@ namespace RetakeV4.Modules.MapCleanup;
 
 // The module side the editor works against: current corrections, saving them, replaying the pass with a working set.
 internal sealed record CleanupEditorHost(
+    bool Debug,
     Func<IReadOnlyList<CleanupOverride>> Current,
     Func<IReadOnlyList<CleanupOverride>, bool> Save,
     Func<IReadOnlyDictionary<string, CleanupKind>, int> Replay);
@@ -157,9 +158,15 @@ internal sealed class CleanupEditor
             _aimed = null;
             return;
         }
+        var forward = ViewGeometry.Forward(view.Angles);
         var candidates = CleanupEntities.Candidates();
-        var handle = AimPicker.Pick(view.Eye, ViewGeometry.Forward(view.Angles), candidates.Select(c => (c.Handle, c.Facts.Origin)).ToList());
+        var handle = AimPicker.Pick(view.Eye, forward, candidates.Select(c => (c.Handle, c.Facts.Origin)).ToList());
         _aimed = candidates.FirstOrDefault(c => c.Handle == handle);
+        if (_host.Debug)
+        {
+            _context.Logger.LogInformation("Map cleanup pick from {Eye} towards {Forward}: {Picked}; around: {Around}",
+                view.Eye, forward, _aimed?.Key ?? "nothing", string.Join(" | ", CleanupEntities.DescribeAround(view.Eye, forward)));
+        }
     }
 
     private void Show(CCSPlayerController player, bool refreshOnly)

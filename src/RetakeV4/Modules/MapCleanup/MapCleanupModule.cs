@@ -43,7 +43,7 @@ public sealed class MapCleanupModule : IRetakeModule
         _context = context;
         _store = new CleanupOverrideStore(Path.GetFullPath(
             Path.Combine(context.Plugin.ModuleDirectory, "..", "..", "configs", "plugins", "RetakeV4", "mapcleanup")));
-        _editor = new CleanupEditor(context, new CleanupEditorHost(() => _current, SaveOverrides, RunPass));
+        _editor = new CleanupEditor(context, new CleanupEditorHost(_config.Debug, () => _current, SaveOverrides, RunPass));
         var hooks = context.Hooks;
         hooks.OnBus<MapStarted>(e => StartMap(e.MapName));
         hooks.OnBus<SpawnEditorStateChanged>(e => _spawnEditing = e.Active);
@@ -174,6 +174,7 @@ public sealed class MapCleanupModule : IRetakeModule
         context.Logger.LogInformation("Map cleanup on {Map}: {Doors} door(s), {Windows} window(s), {Vents} vent(s) out of {Candidates} candidate(s) ({Classes})",
             _map, plan.Count(t => t.Kind == CleanupKind.Door), plan.Count(t => t.Kind == CleanupKind.Window), plan.Count(t => t.Kind == CleanupKind.Vent),
             candidates.Count, string.Join(", ", candidates.GroupBy(c => c.Facts.ClassName).Select(g => $"{g.Key}={g.Count()}")));
+        context.Logger.LogInformation("Map cleanup on {Map}: related entity classes {Classes}", _map, CleanupEntities.RelatedClasses());
         var ignored = candidates
             .Where(c => CleanupClassifier.Classify(c.Facts, c.Key, overrides) == CleanupKind.Ignore)
             .Select(c => $"{c.Key} [{c.Facts.ModelName ?? "no model"}]")
