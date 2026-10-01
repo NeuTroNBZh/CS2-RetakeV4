@@ -87,7 +87,7 @@ public sealed class AllocationModule : IRetakeModule
         }
         if (AllocationModes.UsesNativeBuy(_config.Mode))
         {
-            var nativeBuy = new NativeBuySelector(context, () => _current, OnNativeBuy, RestoreGuns);
+            var nativeBuy = new NativeBuySelector(context, () => _current, OnNativeBuy, RestoreGuns, () => context.Rounds.State.Phase);
             _nativeBuy = nativeBuy;
             hooks.CommandListener("buy", nativeBuy.OnBuy, HookMode.Pre);
             hooks.OnEvent<EventItemPickup>("item_pickup", nativeBuy.OnItemPickup);

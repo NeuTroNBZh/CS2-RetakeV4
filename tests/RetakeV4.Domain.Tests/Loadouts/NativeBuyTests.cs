@@ -1,5 +1,6 @@
 using RetakeV4.Domain.Common;
 using RetakeV4.Domain.Loadouts;
+using RetakeV4.Domain.Rounds;
 
 namespace RetakeV4.Domain.Tests.Loadouts;
 
@@ -103,4 +104,22 @@ public class NativeBuyTests
         Assert.False(AllocationModes.UsesNativeBuy(AllocationMode.Menu));
         Assert.Equal("allocation.howto.native", AllocationModes.HowToKey(AllocationMode.NativeBuy));
     }
+
+    [Fact]
+    public void InventoryDiff_FindsTheBoughtItemAndTheDroppedOne()
+    {
+        var before = new Dictionary<uint, string> { [10] = "weapon_knife", [11] = "weapon_ak47", [12] = "weapon_flashbang" };
+        var after = new Dictionary<uint, string> { [10] = "weapon_knife", [12] = "weapon_flashbang", [20] = "weapon_galilar", [21] = "weapon_flashbang" };
+        var diff = InventorySnapshot.Diff(before, after);
+        Assert.Equal(new uint[] { 20, 21 }, diff.Added);
+        Assert.Equal(new uint[] { 11 }, diff.Dropped);
+    }
+
+    [Theory]
+    [InlineData(RoundPhase.FreezeTime, true, true)]
+    [InlineData(RoundPhase.Live, true, false)]
+    [InlineData(RoundPhase.FreezeTime, false, false)]
+    [InlineData(RoundPhase.PostRound, true, false)]
+    public void Capture_IsOnlyAllowedDuringFreezeTime(RoundPhase phase, bool alive, bool expected) =>
+        Assert.Equal(expected, NativeBuy.CanCapture(phase, alive));
 }

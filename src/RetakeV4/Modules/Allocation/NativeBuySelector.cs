@@ -1,3 +1,4 @@
+using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Modules.Commands;
 using RetakeV4.Adapters;
@@ -5,6 +6,7 @@ using RetakeV4.Domain.Common;
 using RetakeV4.Domain.Events;
 using RetakeV4.Domain.Hud;
 using RetakeV4.Domain.Loadouts;
+using RetakeV4.Domain.Rounds;
 
 namespace RetakeV4.Modules.Allocation;
 
@@ -18,11 +20,14 @@ internal sealed class NativeBuySelector
     private readonly Func<RoundTypeDefinition?> _current;
     private readonly Action<CCSPlayerController, BuyDecision> _decided;
     private readonly Action<CCSPlayerController> _restoreGuns;
-    private readonly Dictionary<int, DateTimeOffset> _pending = new();
+    private readonly Func<RoundPhase> _phase;
+    private readonly Dictionary<int, (DateTimeOffset Until, IReadOnlyDictionary<uint, string> Inventory)> _pending = new();
 
     public NativeBuySelector(
-        ModuleContext context, Func<RoundTypeDefinition?> current, Action<CCSPlayerController, BuyDecision> decided, Action<CCSPlayerController> restoreGuns)
+        ModuleContext context, Func<RoundTypeDefinition?> current, Action<CCSPlayerController, BuyDecision> decided, Action<CCSPlayerController> restoreGuns,
+        Func<RoundPhase> phase)
     {
+        _phase = phase;
         _context = context;
         _current = current;
         _decided = decided;
@@ -46,14 +51,19 @@ internal sealed class NativeBuySelector
                 _decided(player, NativeBuy.Decide(weapon, side, _current()));
                 return HookResult.Handled;
             default:
-                _pending[player.Slot] = DateTimeOffset.UtcNow + CaptureWindow;
+                if (!NativeBuy.CanCapture(_phase(), player.PawnIsAlive))
+                {
+                    Alert(player, "allocation.buy.freeze_only");
+                    return HookResult.Handled;
+                }
+                _pending[player.Slot] = (DateTimeOffset.UtcNow + CaptureWindow, Inventory(player));
                 return HookResult.Continue;
         }
     }
 
     public void OnItemPickup(EventItemPickup e)
     {
-        if (e.Userid is not { IsValid: true } player || !_pending.Remove(player.Slot, out var until) || DateTimeOffset.UtcNow > until)
+        if (e.Userid is not { IsValid: true } player || !_pending.Remove(player.Slot, out var pending) || DateTimeOffset.UtcNow > pending.Until)
         {
             return;
         }
@@ -61,35 +71,48 @@ internal sealed class NativeBuySelector
         {
             return;
         }
-        RemoveItem(player, e.Item);
+        // Only what the purchase changed is undone: the bought entity, and the gun it made the player drop.
+        var diff = InventorySnapshot.Diff(pending.Inventory, Inventory(player));
+        RemoveEntities(diff.Added, null);
+        RemoveEntities(diff.Dropped, pending.Inventory);
         LoadoutApplier.ResetCash(player);
         if (NativeBuyResolver.FromPickup(e.Defindex, e.Item) is { } weapon)
         {
             _decided(player, NativeBuy.Decide(weapon, side, _current()));
+            _restoreGuns(player);
         }
         else if (NativeBuyResolver.IsAutoManaged(e.Item))
         {
             Alert(player, "allocation.buy.auto_managed");
         }
-        _restoreGuns(player);
     }
 
     public void ClearPending() => _pending.Clear();
 
-    private static void RemoveItem(CCSPlayerController player, string? item)
+    private static IReadOnlyDictionary<uint, string> Inventory(CCSPlayerController player)
     {
-        if (item is null || player.PlayerPawn.Value is not { IsValid: true, WeaponServices: { } services })
+        if (player.PlayerPawn.Value is not { IsValid: true, WeaponServices: { } services })
         {
-            return;
+            return new Dictionary<uint, string>();
         }
-        var bought = NativeBuyResolver.Normalize(item);
-        var matching = services.MyWeapons
+        return services.MyWeapons
             .Select(handle => handle.Value)
-            .Where(weapon => weapon is { IsValid: true } && NativeBuyResolver.Normalize(weapon.DesignerName) == bought)
-            .ToList();
-        foreach (var weapon in matching)
+            .OfType<CBasePlayerWeapon>()
+            .Where(weapon => weapon.IsValid)
+            .GroupBy(weapon => weapon.Index)
+            .ToDictionary(group => group.Key, group => group.First().DesignerName);
+    }
+
+    // Dropped entities are checked against the snapshot's designer name: the index may have been reused meanwhile.
+    private static void RemoveEntities(IEnumerable<uint> indexes, IReadOnlyDictionary<uint, string>? expected)
+    {
+        foreach (var index in indexes)
         {
-            weapon!.Remove();
+            var entity = Utilities.GetEntityFromIndex<CBasePlayerWeapon>((int)index);
+            if (entity is { IsValid: true } && (expected is null || expected.GetValueOrDefault(index) == entity.DesignerName))
+            {
+                entity.Remove();
+            }
         }
     }
 

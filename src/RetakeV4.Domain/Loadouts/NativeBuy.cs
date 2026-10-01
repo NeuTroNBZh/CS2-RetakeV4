@@ -1,4 +1,5 @@
 using RetakeV4.Domain.Common;
+using RetakeV4.Domain.Rounds;
 
 namespace RetakeV4.Domain.Loadouts;
 
@@ -96,6 +97,17 @@ public static class NativeBuyResolver
     public static bool IsAutoManaged(string? item) => item is not null && AutoManaged.Contains(Normalize(item));
 }
 
+// Weapon entities (index -> designer name) before and after a captured buy: what the purchase added, and what it made the
+// player drop (CS2 drops the gun held in the same slot).
+public sealed record InventoryDiff(IReadOnlyList<uint> Added, IReadOnlyList<uint> Dropped);
+
+public static class InventorySnapshot
+{
+    public static InventoryDiff Diff(IReadOnlyDictionary<uint, string> before, IReadOnlyDictionary<uint, string> after) => new(
+        after.Keys.Where(index => !before.ContainsKey(index)).Order().ToList(),
+        before.Keys.Where(index => !after.ContainsKey(index)).Order().ToList());
+}
+
 public enum BuyOutcome
 {
     SetWeapon,
@@ -110,6 +122,10 @@ public static class NativeBuy
     public const int Cash = 16000;
 
     private static readonly BuyDecision NotAvailable = new(BuyOutcome.NotAvailable);
+
+    // A captured buy really hands an item over and makes the player drop his gun: only acceptable before the round starts,
+    // where giving the round's guns back cannot be used to refill ammo.
+    public static bool CanCapture(RoundPhase phase, bool alive) => phase == RoundPhase.FreezeTime && alive;
 
     public static BuyDecision Decide(string weapon, TeamSide team, RoundTypeDefinition? current)
     {

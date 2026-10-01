@@ -124,11 +124,12 @@ Remplir aussi `docs/spikes/hud-probe-findings.md` : les réglages `hud.json` →
 - [ ] `Mode: NativeBuy` : `!guns` répond par le rappel ; pas d'ouverture automatique du menu ; 16000 $ affichés à chaque round.
 - [ ] Freeze time, vivant : acheter une arme du pool dans le menu d'achat (B) → l'arme est remplacée immédiatement, alerte « Armes mises à jour. », argent revenu à 16000 $, aucune arme en double au sol.
 - [ ] « Acheter » l'arme qu'on tient déjà → on la garde.
-- [ ] Round live : acheter une arme → « Enregistré, utilisé dès le prochain round. », l'arme achetée est retirée, on garde ses armes du round.
+- [ ] Round live : un achat depuis le menu d'achat (B) est refusé (« … que pendant le freeze time … »), rien n'est donné ni lâché ; `buy galilar` en console → « Enregistré, utilisé dès le prochain round. ».
+- [ ] Acheter une flash par le menu d'achat avec déjà une flash allouée : la flash allouée reste, seule l'achetée disparaît.
 - [ ] Acheter une arme hors du pool du round (ex. M4A4 en T) → « Cette arme n'est pas disponible pour ce round. », préférence inchangée.
 - [ ] Acheter l'AWP → « Tu es maintenant volontaire pour l'AWP. », visible dans `!guns` (mode Both).
 - [ ] Acheter une grenade, l'armure ou le kit → « … donnés automatiquement. », rien n'est ajouté.
-- [ ] `css_buy ak47` dans la console (commande nommée) : traité sans passer par la capture.
+- [ ] `buy ak47` dans la console (achat nommé) : traité sans passer par la capture, aussi en round live.
 - [ ] `Mode: Both` : `!guns` et le menu d'achat modifient la même préférence.
 - [ ] `HowToIntervalMinutes: 0` : aucun rappel ; changement de map puis `css_plugins reload RetakeV4` : un seul rappel par intervalle (pas de timer en double).
 - [ ] Mode FastPlant + achat pendant le freeze time : le poseur garde la C4.

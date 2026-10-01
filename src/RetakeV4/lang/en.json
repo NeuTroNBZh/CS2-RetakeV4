@@ -102,5 +102,6 @@
   "allocation.buy.awp_volunteer": "You now volunteer for the AWP.",
   "allocation.howto.menu": "Type !guns to choose your weapons.",
   "allocation.howto.native": "Use the buy menu (B) to choose your weapons: nothing is bought, your choice is saved.",
-  "allocation.howto.both": "Type !guns or use the buy menu (B) to choose your weapons."
+  "allocation.howto.both": "Type !guns or use the buy menu (B) to choose your weapons.",
+  "allocation.buy.freeze_only": "The buy menu only records a choice during freeze time; otherwise use !guns or a named buy (buy ak47)."
 }
