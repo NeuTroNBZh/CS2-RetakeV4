@@ -138,9 +138,9 @@ internal sealed class MenuHud
         }
     }
 
-    public void OnButtons(CCSPlayerController player, PlayerButtons pressed, PlayerButtons released)
+    public void OnButtons(int slot, PlayerButtons pressed, MenuNavigator claimed)
     {
-        if (!_sessions.TryGetValue(player.Slot, out var session) || session.View is null)
+        if (Current(slot, claimed) is not var (player, session))
         {
             return;
         }
@@ -163,15 +163,33 @@ internal sealed class MenuHud
         }
     }
 
-    public HookResult OnSlotKey(CCSPlayerController? player, int key)
+    // Input is claimed while the client's messages are processed and applied on the next frame: the navigator seen at claim
+    // time identifies the menu, so an input never lands on a menu opened, closed or moved in between.
+    public MenuNavigator? OpenNavigator(int slot) =>
+        _sessions.TryGetValue(slot, out var session) && session.View is not null ? session.Navigator : null;
+
+    public MenuNavigator? ClaimKey(CCSPlayerController? player, int key) =>
+        player is { IsValid: true } && OpenNavigator(player.Slot) is { } navigator
+        && Controls(player).Keys && key <= navigator.Lines().Count && !_keyMute.IsMuted(player.Slot, _clock())
+            ? navigator
+            : null;
+
+    public void PressKey(int slot, int key, MenuNavigator claimed)
     {
-        if (player is not { IsValid: true } || !_sessions.TryGetValue(player.Slot, out var session) || session.View is null
-            || !Controls(player).Keys || key > session.Navigator.Lines().Count || _keyMute.IsMuted(player.Slot, _clock()))
+        if (Current(slot, claimed) is not var (player, session) || !Controls(player).Keys)
         {
-            return HookResult.Continue;
+            return;
         }
         Activate(player, session, key - 1);
-        return HookResult.Handled;
+    }
+
+    private (CCSPlayerController Player, MenuSession Session)? Current(int slot, MenuNavigator claimed)
+    {
+        var player = Utilities.GetPlayerFromSlot(slot);
+        return player is { IsValid: true } && _sessions.TryGetValue(slot, out var session) && session.View is not null
+            && ReferenceEquals(session.Navigator, claimed)
+                ? (player, session)
+                : null;
     }
 
     public void OnCheckTransmit(CCheckTransmitInfoList infoList)

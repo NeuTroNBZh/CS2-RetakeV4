@@ -82,4 +82,39 @@ public class ModuleGuardTests
         Assert.True(guard.IsDisabled("Allocation"));
         Assert.False(guard.IsDisabled("Core"));
     }
+
+    [Fact]
+    public void SlowRun_IsReported_WithItsModuleStageAndDuration()
+    {
+        var now = TimeSpan.Zero;
+        var slow = new List<SlowRun>();
+        var guard = new ModuleGuard(3, _failures.Add, new SlowRunReporter(TimeSpan.FromMilliseconds(50), () => now, slow.Add));
+        guard.Run("Teams", "round_end", () => now += TimeSpan.FromMilliseconds(80));
+        Assert.Equal(new[] { new SlowRun("Teams", "round_end", TimeSpan.FromMilliseconds(80)) }, slow);
+    }
+
+    [Fact]
+    public void FastRun_IsNotReported()
+    {
+        var now = TimeSpan.Zero;
+        var slow = new List<SlowRun>();
+        var guard = new ModuleGuard(3, _failures.Add, new SlowRunReporter(TimeSpan.FromMilliseconds(50), () => now, slow.Add));
+        guard.Run("Teams", "round_end", () => now += TimeSpan.FromMilliseconds(10));
+        Assert.Empty(slow);
+    }
+
+    [Fact]
+    public void SlowFailingRun_IsReportedToo()
+    {
+        var now = TimeSpan.Zero;
+        var slow = new List<SlowRun>();
+        var guard = new ModuleGuard(3, _failures.Add, new SlowRunReporter(TimeSpan.FromMilliseconds(50), () => now, slow.Add));
+        guard.Run("Teams", "round_end", () =>
+        {
+            now += TimeSpan.FromMilliseconds(60);
+            throw new InvalidOperationException();
+        });
+        Assert.Single(slow);
+        Assert.Single(_failures);
+    }
 }

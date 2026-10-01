@@ -87,7 +87,7 @@ public sealed class AllocationModule : IRetakeModule
         }
         if (AllocationModes.UsesNativeBuy(_config.Mode))
         {
-            var nativeBuy = new NativeBuySelector(context, () => _current, OnNativeBuy, RestoreGuns, () => context.Rounds.State.Phase);
+            var nativeBuy = new NativeBuySelector(context, () => _current, OnNativeBuyLater, RestoreGuns, () => context.Rounds.State.Phase);
             _nativeBuy = nativeBuy;
             hooks.CommandListener("buy", nativeBuy.OnBuy, HookMode.Pre);
             hooks.OnEvent<EventItemPickup>("item_pickup", nativeBuy.OnItemPickup);
@@ -131,7 +131,7 @@ public sealed class AllocationModule : IRetakeModule
         {
             SqliteConnection.ClearAllPools();
         }
-        catch (TypeInitializationException ex)
+        catch (Exception ex) when (ex is TypeInitializationException or DllNotFoundException)
         {
             _context?.Logger.LogWarning(ex, "SQLite is not available on this server: nothing to release");
         }
@@ -370,6 +370,20 @@ public sealed class AllocationModule : IRetakeModule
             Context.Bus.Publish(new HudMenuClose(new PlayerId(slot), WeaponMenu.MenuId));
         }
         _autoOpened.Clear();
+    }
+
+    // The buy command is processed with the client's messages: applying the choice there could stall past the engine's kick limit.
+    private void OnNativeBuyLater(CCSPlayerController player, BuyDecision decision)
+    {
+        var slot = player.Slot;
+        var steamId = player.SteamID;
+        Server.NextFrame(() => _context?.Guard.Run(Name, "native_buy", () =>
+        {
+            if (Utilities.GetPlayerFromSlot(slot) is { IsValid: true } current && current.SteamID == steamId)
+            {
+                OnNativeBuy(current, decision);
+            }
+        }));
     }
 
     private void OnNativeBuy(CCSPlayerController player, BuyDecision decision)
