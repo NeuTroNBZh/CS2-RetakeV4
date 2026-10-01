@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using RetakeV4.Domain.Preferences;
 using RetakeV4.Persistence;
 
@@ -54,6 +55,34 @@ public sealed class FakePreferenceRepository : IPreferenceRepository
     {
         ThrowIfFailing();
         Stored.AddRange(preferences);
+        return Task.CompletedTask;
+    }
+
+    public Dictionary<ulong, string> StampValues { get; } = new();
+
+    public int SnapshotCalls { get; private set; }
+
+    public ConcurrentQueue<PublishedCatalog> Published { get; } = new();
+
+    public Task<PlayerSnapshot?> SnapshotAsync(ulong steamId, CancellationToken ct)
+    {
+        SnapshotCalls++;
+        ThrowIfFailing();
+        var rows = Stored.Where(s => s.Key.SteamId == steamId).ToList();
+        return Task.FromResult<PlayerSnapshot?>(new PlayerSnapshot(rows, StampValues.GetValueOrDefault(steamId, PreferenceSync.NoRows)));
+    }
+
+    public Task<IReadOnlyDictionary<ulong, string>?> StampsAsync(IReadOnlyCollection<ulong> steamIds, CancellationToken ct)
+    {
+        ThrowIfFailing();
+        IReadOnlyDictionary<ulong, string> stamps = StampValues.Where(s => steamIds.Contains(s.Key)).ToDictionary(s => s.Key, s => s.Value);
+        return Task.FromResult<IReadOnlyDictionary<ulong, string>?>(stamps);
+    }
+
+    public Task PublishCatalogAsync(PublishedCatalog catalog, CancellationToken ct)
+    {
+        ThrowIfFailing();
+        Published.Enqueue(catalog);
         return Task.CompletedTask;
     }
 

@@ -72,6 +72,39 @@ public sealed class ResilientPreferenceStore : IPreferenceRepository
         }
     }
 
+    public Task<PlayerSnapshot?> SnapshotAsync(ulong steamId, CancellationToken ct) =>
+        GuardedAsync("load", () => _inner.SnapshotAsync(steamId, ct), ct);
+
+    public Task<IReadOnlyDictionary<ulong, string>?> StampsAsync(IReadOnlyCollection<ulong> steamIds, CancellationToken ct) =>
+        GuardedAsync("check", () => _inner.StampsAsync(steamIds, ct), ct);
+
+    public async Task PublishCatalogAsync(PublishedCatalog catalog, CancellationToken ct) =>
+        await GuardedAsync<object>("publish catalog", async () =>
+        {
+            await _inner.PublishCatalogAsync(catalog, ct).ConfigureAwait(false);
+            return new object();
+        }, ct).ConfigureAwait(false);
+
+    private async Task<T?> GuardedAsync<T>(string operation, Func<Task<T?>> action, CancellationToken ct) where T : class
+    {
+        if (!IsAvailable)
+        {
+            return null;
+        }
+        try
+        {
+            await EnsureInitializedAsync(ct).ConfigureAwait(false);
+            var result = await action().ConfigureAwait(false);
+            MarkHealthy();
+            return result;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            MarkFailed(ex, operation);
+            return null;
+        }
+    }
+
     public async Task UpsertAsync(StoredPreference preference, CancellationToken ct)
     {
         if (!IsAvailable)

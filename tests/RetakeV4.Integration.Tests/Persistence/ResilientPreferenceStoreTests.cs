@@ -124,4 +124,27 @@ public class ResilientPreferenceStoreTests
         _inner.FailInitialize = true;
         await Assert.ThrowsAsync<InvalidOperationException>(() => Store().ImportAsync(new[] { Preference(1) }, CancellationToken.None));
     }
+
+    [Fact]
+    public async Task Snapshot_AndStamps_AreNull_WhenTheDatabaseIsDown()
+    {
+        _inner.Fail = true;
+        var store = Store();
+        Assert.Null(await store.SnapshotAsync(1, CancellationToken.None));
+        Assert.Null(await store.StampsAsync(new ulong[] { 1 }, CancellationToken.None));
+        await store.PublishCatalogAsync(new PublishedCatalog("default", 1, "{}"), CancellationToken.None);
+        Assert.Single(_logger.Entries);
+    }
+
+    [Fact]
+    public async Task Snapshot_AndStamps_PassThrough_WhenHealthy()
+    {
+        _inner.Stored.Add(Preference(1));
+        _inner.StampValues[1] = "s1";
+        var store = Store();
+        Assert.Equal("s1", (await store.SnapshotAsync(1, CancellationToken.None))!.Stamp);
+        Assert.Equal("s1", (await store.StampsAsync(new ulong[] { 1 }, CancellationToken.None))![1]);
+        await store.PublishCatalogAsync(new PublishedCatalog("default", 1, "{}"), CancellationToken.None);
+        Assert.Single(_inner.Published);
+    }
 }
