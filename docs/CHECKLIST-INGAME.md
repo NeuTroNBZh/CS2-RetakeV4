@@ -86,3 +86,20 @@ Remplir aussi `docs/spikes/hud-probe-findings.md` : les réglages `hud.json` →
 - [ ] `plant.json` en `FastPlant` : le poseur change d'arme pendant le freeze time et garde la C4 (pas de victoire CT forcée).
 - [ ] Début de round avec le menu ouvert automatiquement : aucune ligne n'est sélectionnée toute seule par les commandes `slot1-3` envoyées à la distribution ; l'arme principale est bien en main.
 - [ ] `ent_remove` d'une ligne de menu : le menu se reconstruit, le module Hud n'est pas désactivé.
+
+## Phase 4a — Éditeur de spawns et forçage de site
+- [ ] `css_retake_edit` sans la permission `@retakev4/admin` : refusé.
+- [ ] `css_retake_edit` (admin) : le jeu passe en warmup en pause, le menu « Éditeur de spawns (N) » s'ouvre, piliers rouges (T) et bleus (CT), site B translucide, étiquettes `[CT][A] #07` lisibles de tous les côtés.
+- [ ] Un joueur qui n'édite pas ne voit aucun marqueur ; deux éditeurs voient chacun seulement leur propre anneau jaune.
+- [ ] L'anneau jaune suit le spawn le plus proche (< 150 unités) ; l'entrée « Le plus proche » du menu se met à jour.
+- [ ] Ajouter un spawn T A (C4) ici, modifier équipe / site / C4 du plus proche, le supprimer : marqueurs et titre (`*`) à jour.
+- [ ] « Aller à un spawn » (liste paginée) et `css_retake_tpspawn 3` téléportent ; `css_retake_teleport 0 0 0` aussi.
+- [ ] Noclip via le menu et via la touche `noclip` (sans `sv_cheats`) ; il revient après le restart du warmup.
+- [ ] « Quitter » avec des modifications : sous-menu « Sauvegarder et quitter / Quitter sans sauvegarder ». Sans sauvegarde, le fichier est rechargé.
+- [ ] Sauvegarde : `spawns/<map>.json` réécrit en format V2, `<map>.json.bak` créé ; sur un fichier V3, `<map>.json.v3.bak` aussi.
+- [ ] Le dernier éditeur qui sort relance le jeu (fin du warmup si le jeu n'était pas en warmup avant) ; le watchdog de warmup ne coupe jamais l'édition.
+- [ ] Commandes console V3 : `css_retake_addspawn 2 0`, `css_retake_addspawn CT B`, `css_retake_delspawn`, `css_retake_savespawns`, `css_retake_reloadspawns` depuis la console serveur (save/reload) et en jeu.
+- [ ] Déconnexion du dernier éditeur avec des modifications non sauvegardées : le jeu reprend avec le fichier sauvegardé, aucun marqueur orphelin (`ent_find beam`).
+- [ ] `css_retake_forcesite B` : le round suivant est sur B, puis tirage normal ; `css_retake_forcesite A sticky` : tous les rounds sur A jusqu'à `css_retake_forcesite off`.
+- [ ] `css_retake_forcesite B` sur une map sans spawn B : refusé.
+- [ ] Map sans fichier de spawns : chaque admin reçoit l'alerte HUD « Aucun spawn pour <map> » à chaque round.
