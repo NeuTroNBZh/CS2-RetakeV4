@@ -3,6 +3,7 @@ using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Modules.Admin;
 using CounterStrikeSharp.API.Modules.Commands;
+using CounterStrikeSharp.API.Modules.Timers;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
 using RetakeV4.Adapters;
@@ -18,6 +19,9 @@ namespace RetakeV4.Modules.Allocation;
 
 public sealed class AllocationModule : IRetakeModule
 {
+    // After a skin plugin has swapped the spawn knife (it kills the old one 10 ms after giving the new one).
+    private const float KnifeCheckDelaySeconds = 0.3f;
+
     private const string RootFlag = "@retakev4/root";
 
     private static readonly string[] GunsAliases =
@@ -241,11 +245,13 @@ public sealed class AllocationModule : IRetakeModule
         var plan = LoadoutPlanner.Plan(definition, requests, GrenadeKits(definition.GrenadePool), _random);
         _lastPlan = plan.ToImmutableDictionary();
         Context.Bus.Publish(new LoadoutsAssigned(context.RoundNumber, plan));
-        foreach (var (controller, _) in players)
+        foreach (var (controller, side) in players)
         {
             LoadoutApplier.Apply(controller, plan[new PlayerId(controller.Slot)]);
+            LoadoutApplier.EnsureKnife(controller, side!.Value);
             Context.Bus.Publish(new LoadoutApplied(new PlayerId(controller.Slot)));
         }
+        CheckKnivesLater(players.Select(p => (p.Controller.Slot, p.Side!.Value)).ToList());
         if (_nativeBuy is not null)
         {
             _nativeBuy.ClearPending();
@@ -444,4 +450,16 @@ public sealed class AllocationModule : IRetakeModule
         }
         return kits;
     }
+
+    private void CheckKnivesLater(IReadOnlyList<(int Slot, TeamSide Side)> players) =>
+        Context.Plugin.AddTimer(KnifeCheckDelaySeconds, () => _context?.Guard.Run(Name, "knife_check", () =>
+        {
+            foreach (var (slot, side) in players)
+            {
+                if (Utilities.GetPlayerFromSlot(slot) is { IsValid: true } player)
+                {
+                    LoadoutApplier.EnsureKnife(player, side);
+                }
+            }
+        }), TimerFlags.STOP_ON_MAPCHANGE);
 }

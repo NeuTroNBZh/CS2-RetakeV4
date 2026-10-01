@@ -60,6 +60,9 @@ public sealed record HudMenuConfig
     // CenterHtml: lines shown at once; longer lists scroll with the cursor.
     public int CenterVisibleLines { get; init; } = 6;
 
+    // CenterHtml: the player cannot move while a menu is open (forward / back drive the cursor), like MenuManager menus.
+    public bool FreezeWhileOpen { get; init; } = true;
+
     public MenuInputSetting Input { get; init; } = MenuInputSetting.AimAndKeys;
 
     public float DistanceUnits { get; init; } = 60f;

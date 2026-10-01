@@ -1,6 +1,7 @@
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Modules.Entities.Constants;
+using RetakeV4.Domain.Common;
 using RetakeV4.Domain.Loadouts;
 
 namespace RetakeV4.Modules.Allocation;
@@ -107,7 +108,7 @@ internal static class LoadoutApplier
     {
         var weapons = pawn.WeaponServices!.MyWeapons
             .Select(handle => handle.Value)
-            .Where(weapon => weapon is { IsValid: true } && !IsKnife(weapon.DesignerName))
+            .Where(weapon => weapon is { IsValid: true } && !Knives.IsKnife(weapon.DesignerName))
             .ToList();
         foreach (var weapon in weapons)
         {
@@ -119,8 +120,24 @@ internal static class LoadoutApplier
         items.HasDefuser = false;
     }
 
-    private static bool IsKnife(string designerName) =>
-        designerName.Contains("knife", StringComparison.Ordinal) || designerName.Contains("bayonet", StringComparison.Ordinal);
+    // A skin plugin (WeaponPaints) swaps the spawn knife by killing it a few ms after giving the new one: when that races with
+    // the loadout, the player ends up without any knife. Called after the loadout and again once the swap is over.
+    public static void EnsureKnife(CCSPlayerController player, TeamSide team)
+    {
+        var pawn = player.PlayerPawn.Value;
+        if (pawn is null || !pawn.IsValid || !player.PawnIsAlive || pawn.WeaponServices is null)
+        {
+            return;
+        }
+        var names = pawn.WeaponServices.MyWeapons
+            .Select(handle => handle.Value)
+            .Where(weapon => weapon is { IsValid: true })
+            .Select(weapon => weapon!.DesignerName);
+        if (!Knives.HasKnife(names))
+        {
+            player.GiveNamedItem(Knives.DefaultFor(team));
+        }
+    }
 
     private static void GiveArmor(CCSPlayerController player, CCSPlayer_ItemServices items, ArmorKind armor)
     {

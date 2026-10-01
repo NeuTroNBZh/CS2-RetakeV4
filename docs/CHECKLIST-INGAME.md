@@ -188,3 +188,9 @@ Préparation : `pwsh -NoProfile -File scripts/package-dev.ps1`, copier `artifact
 - [ ] Joueur déplacé (rotation après victoire CT, scramble, rééquilibrage) : l'alerte « tu es maintenant T/CT » apparaît dans son bloc centré.
 - [ ] Scramble demandé par un admin : alerte visible par tous.
 - [ ] Menus (CenterHtml, WorldText, Chat) : navigation inchangée ; les touches 1 à 9 n'ont plus aucun effet sur les menus (comportement déjà observé, les commandes n'arrivent pas au serveur).
+
+## 4.3.2 — couteau et gel du menu
+
+- [ ] Avec WeaponPaints et un couteau personnalisé : chaque spawn (pistol, mid, full buy) donne le couteau choisi ; sans skin choisi, le couteau par défaut de l'équipe.
+- [ ] `!guns` ouvert pendant le round : le joueur ne bouge plus tant que le menu est ouvert, retrouve sa vitesse normale dès la fermeture (choix, Retour/Fermer, début du round).
+- [ ] `Menu.FreezeWhileOpen = false` dans `hud.json` : le joueur bouge à nouveau avec le menu ouvert.
