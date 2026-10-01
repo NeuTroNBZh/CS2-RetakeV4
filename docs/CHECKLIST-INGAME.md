@@ -106,3 +106,15 @@ Remplir aussi `docs/spikes/hud-probe-findings.md` : les réglages `hud.json` →
 - [ ] `css_retake_addspawn` / `css_retake_delspawn` hors de l'éditeur : refusés (« Entre d'abord dans l'éditeur »).
 - [ ] En noclip, ouvrir « Le plus proche » puis s'éloigner vers un autre spawn avant de cliquer « Supprimer » : c'est bien le spawn affiché qui est supprimé.
 - [ ] Fichier `spawns/<map>.json` volontairement cassé (virgule en trop) puis deux sauvegardes : `<map>.json.<date>.invalid.bak` contient toujours l'original.
+
+## Phase 4b — Menu admin, SimpleAdmin et Links
+- [ ] `!retake` sans la permission `@retakev4/admin` : refusé ; `!retake` depuis la console serveur : message « s'utilise en jeu ».
+- [ ] `!retake` (admin) : menu « Admin Retake » avec Éditeur de spawns, Forcer le site, Mélanger les équipes.
+- [ ] Menu → Éditeur de spawns : l'éditeur s'ouvre (comme `css_retake_edit`) ; `!retake edit` fait de même ; `!retake foo` affiche l'usage.
+- [ ] Menu → Forcer le site → « Site B au prochain round » : round suivant sur B ; « jusqu'à annulation » puis « Annuler le forçage » ; un site sans spawn est refusé avec le même message que la console.
+- [ ] Menu → Mélanger les équipes : annonce dans le chat, équipes mélangées à la fin du round.
+- [ ] Sans CS2-SimpleAdmin : log « CS2-SimpleAdmin not found », aucune erreur.
+- [ ] Avec CS2-SimpleAdmin : catégorie « Admin Retake » dans son menu admin, les trois entrées fonctionnent (le forçage ouvre un sous-menu) ; `css_plugins reload RetakeV4` ne duplique pas les entrées.
+- [ ] `admin.json` → `SimpleAdminBridge: false` : rien n'est ajouté au menu SimpleAdmin.
+- [ ] `links.json` avec `{ "Commands": ["discord", "dc"], "Message": "{green}Discord :{default} https://discord.gg/xxx" }` : `!discord` et `!dc` affichent le message en couleur au joueur.
+- [ ] `links.json` avec une commande `guns` ou `retake_test` : entrée ignorée, avertissement dans les logs, les autres liens marchent.
