@@ -86,17 +86,30 @@ public sealed class TeamsModule : IRetakeModule
         {
             return HookResult.Handled;
         }
-        var id = new PlayerId(player.Slot);
+        // The join can end the round (round_end and every module's reaction): run it on the next frame, outside the
+        // processing of the client's messages, which the engine aborts with a kick past ~500 ms.
+        var slot = player.Slot;
+        Server.NextFrame(() => _context?.Guard.Run(Name, "jointeam", () => Join(slot, requestedArg)));
+        return requestedArg == SpectatorArg ? HookResult.Continue : HookResult.Handled;
+    }
+
+    private void Join(int slot, int requestedArg)
+    {
+        var player = Utilities.GetPlayerFromSlot(slot);
+        if (player is not { IsValid: true })
+        {
+            return;
+        }
+        var id = new PlayerId(slot);
         if (requestedArg == SpectatorArg)
         {
             SetState(TeamPlanner.Leave(_state, id));
-            return HookResult.Continue;
+            return;
         }
         var requested = requestedArg == TerroristArg ? TeamSide.T : TeamSide.CT;
         var result = TeamPlanner.RequestJoin(_state, id, PriorityOf(player), GameRulesAccessor.IsWarmup(), requested, _config.ToRules());
         SetState(result.State);
         ApplyJoin(player, result, requested);
-        return HookResult.Handled;
     }
 
     private void ApplyJoin(CCSPlayerController player, JoinResult result, TeamSide requested)
