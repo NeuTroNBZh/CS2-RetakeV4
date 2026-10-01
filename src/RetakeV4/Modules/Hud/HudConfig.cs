@@ -13,6 +13,7 @@ public enum MenuDisplay
 {
     WorldText,
     Chat,
+    CenterHtml,
 }
 
 public sealed record HudThemeConfig
@@ -48,6 +49,7 @@ public sealed record HudWidgetsConfig
 public sealed record HudMenuConfig
 {
     // WorldText: menus in front of the player (point_worldtext). Chat: numbered chat menus chosen with !1, !2... (V3 style).
+    // CenterHtml: an HTML panel in the center of the screen, W/S to move, E to choose, number keys too.
     public MenuDisplay Display { get; init; } = MenuDisplay.WorldText;
 
     public MenuInputSetting Input { get; init; } = MenuInputSetting.AimAndKeys;

@@ -31,6 +31,8 @@
   "hud.menu.previous": "Page précédente",
   "hud.menu.on": "ON",
   "hud.menu.off": "OFF",
+  "hud.menu.hint_move": "Avancer / Reculer : naviguer   Utiliser (E) : valider   1-9 : choisir",
+  "hud.menu.hint_keys": "1-9 : choisir une ligne",
   "hud.round.title": "{0} - site {1}",
   "hud.round.teams": "CT {0} contre {1} T",
   "hud.round.streak": "Série de victoires T : {0}",

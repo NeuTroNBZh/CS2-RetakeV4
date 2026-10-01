@@ -86,4 +86,12 @@ public class HudConfigValidatorTests
         Assert.Equal(MenuDisplay.WorldText, result.Config.Menu.Display);
         Assert.Equal(new[] { "Menu.Display" }, result.Keys);
     }
+
+    [Fact]
+    public void CenterHtmlDisplay_IsValid()
+    {
+        var result = Validate(Defaults with { Menu = Defaults.Menu with { Display = MenuDisplay.CenterHtml } });
+        Assert.Equal(MenuDisplay.CenterHtml, result.Config.Menu.Display);
+        Assert.Empty(result.Keys);
+    }
 }

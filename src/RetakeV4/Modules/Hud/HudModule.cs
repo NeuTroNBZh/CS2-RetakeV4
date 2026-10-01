@@ -14,6 +14,7 @@ public sealed class HudModule : IRetakeModule
     private ModuleContext? _context;
     private MenuHud? _menus;
     private ChatMenuHud? _chatMenus;
+    private CenterMenuHud? _centerMenus;
 
     public string Name => "Hud";
 
@@ -30,14 +31,22 @@ public sealed class HudModule : IRetakeModule
     public void Load(ModuleContext context)
     {
         _context = context;
-        LoadCenter(context);
-        if (_config.Menu.Display == MenuDisplay.Chat)
+        switch (_config.Menu.Display)
         {
-            LoadChatMenus(context);
-        }
-        else
-        {
-            LoadMenus(context);
+            case MenuDisplay.Chat:
+                LoadCenter(context, null);
+                LoadChatMenus(context);
+                break;
+            case MenuDisplay.CenterHtml:
+                var centerMenus = new CenterMenuHud(_config, context.Text, context.Bus, () => context.Rounds.State.Phase, () => DateTimeOffset.UtcNow);
+                _centerMenus = centerMenus;
+                LoadCenter(context, centerMenus.Html);
+                LoadCenterMenus(context, centerMenus);
+                break;
+            default:
+                LoadCenter(context, null);
+                LoadMenus(context);
+                break;
         }
     }
 
@@ -47,17 +56,63 @@ public sealed class HudModule : IRetakeModule
         _menus = null;
         _chatMenus?.CloseAll();
         _chatMenus = null;
+        _centerMenus?.CloseAll();
+        _centerMenus = null;
         _context = null;
     }
 
-    private void LoadCenter(ModuleContext context)
+    private void LoadCenter(ModuleContext context, Func<CCSPlayerController, string?>? menu)
     {
-        var center = new CenterHud(_config, context.Text, () => DateTimeOffset.UtcNow);
+        var center = new CenterHud(_config, context.Text, () => DateTimeOffset.UtcNow, menu);
         var hooks = context.Hooks;
         hooks.OnBus<RoundPrepared>(center.OnRoundPrepared);
         hooks.OnBus<TeamStateChanged>(center.OnTeams);
         hooks.OnBus<HudAlert>(center.OnAlert);
         hooks.OnTick("center_tick", center.Tick);
+    }
+
+    // Drawn by the center HUD every tick; input goes through the same deferral as the world-text menus.
+    private void LoadCenterMenus(ModuleContext context, CenterMenuHud menus)
+    {
+        var hooks = context.Hooks;
+        hooks.OnBus<HudMenuOpen>(e => NextFrame("menu_open", () => _centerMenus?.OnOpen(e)));
+        hooks.OnBus<HudMenuClose>(e => NextFrame("menu_close", () => _centerMenus?.OnClose(e)));
+        hooks.OnBus<LoadoutApplied>(menus.OnLoadoutApplied);
+        hooks.OnBus<MapStarted>(_ => menus.CloseAll());
+        hooks.OnPlayerButtons("menu_buttons", (player, pressed, _) =>
+        {
+            var slot = player.Slot;
+            if (menus.OpenNavigator(slot) is { } claimed)
+            {
+                NextFrame("menu_buttons", () => _centerMenus?.OnButtons(slot, pressed, claimed));
+            }
+        });
+        hooks.OnEvent<EventPlayerDisconnect>("player_disconnect", e =>
+        {
+            if (e.Userid is { } player)
+            {
+                menus.Forget(player.Slot);
+            }
+        });
+        for (var key = 1; key <= MenuNavigator.MaxLines; key++)
+        {
+            var slotKey = key;
+            hooks.CommandListener($"slot{slotKey}", (player, _) =>
+            {
+                if (_config.Debug)
+                {
+                    context.Logger.LogInformation("Menu input: slot{Key} from slot {Slot}: {Result}", slotKey, player?.Slot,
+                        menus.KeyRefusal(player, slotKey) ?? "claimed");
+                }
+                if (menus.ClaimKey(player, slotKey) is not { } claimed)
+                {
+                    return HookResult.Continue;
+                }
+                var slot = player!.Slot;
+                NextFrame("menu_key", () => _centerMenus?.PressKey(slot, slotKey, claimed));
+                return HookResult.Handled;
+            }, HookMode.Pre);
+        }
     }
 
     // Chat menus need none of the world-text machinery: no entities, no aim, no slot-key interception.
@@ -96,6 +151,10 @@ public sealed class HudModule : IRetakeModule
             var slot = player.Slot;
             if (menus.OpenNavigator(slot) is { } claimed)
             {
+                if (_config.Debug)
+                {
+                    context.Logger.LogInformation("Menu input: buttons {Pressed} pressed by slot {Slot}", pressed, slot);
+                }
                 NextFrame("menu_buttons", () => _menus?.OnButtons(slot, pressed, claimed));
             }
         });
@@ -114,6 +173,11 @@ public sealed class HudModule : IRetakeModule
             var slotKey = key;
             hooks.CommandListener($"slot{slotKey}", (player, _) =>
             {
+                if (_config.Debug)
+                {
+                    context.Logger.LogInformation("Menu input: slot{Key} from slot {Slot}: {Result}", slotKey, player?.Slot,
+                        menus.KeyRefusal(player, slotKey) ?? "claimed");
+                }
                 if (menus.ClaimKey(player, slotKey) is not { } claimed)
                 {
                     return HookResult.Continue;
