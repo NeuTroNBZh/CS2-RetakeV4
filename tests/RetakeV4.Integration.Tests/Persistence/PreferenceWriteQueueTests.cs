@@ -24,12 +24,11 @@ public class PreferenceWriteQueueTests
     [Fact]
     public async Task FailingWrite_IsLogged_AndDoesNotStopTheQueue()
     {
-        var repository = new FakePreferenceRepository { Fail = true };
+        // The failure is tied to the first write, not to timing: the queue may run both writes at any moment.
+        var repository = new FakePreferenceRepository { FailUpsertFor = p => p.Key.SteamId == 1 };
         var logger = new ListLogger();
         var queue = new PreferenceWriteQueue(repository, logger);
         queue.Enqueue(Preference(1, "weapon_mac10"));
-        await Task.Delay(200);
-        repository.Fail = false;
         queue.Enqueue(Preference(2, "weapon_galilar"));
         await queue.DisposeAsync();
         Assert.Equal("weapon_galilar", Assert.Single(repository.Upserts).Preference.Primary);

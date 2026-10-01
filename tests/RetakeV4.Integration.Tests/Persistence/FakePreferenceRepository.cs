@@ -7,6 +7,8 @@ public sealed class FakePreferenceRepository : IPreferenceRepository
 {
     public bool Fail { get; set; }
 
+    public Func<StoredPreference, bool>? FailUpsertFor { get; set; }
+
     public bool FailInitialize { get; set; }
 
     public int InitializeCalls { get; private set; }
@@ -40,6 +42,10 @@ public sealed class FakePreferenceRepository : IPreferenceRepository
     public Task UpsertAsync(StoredPreference preference, CancellationToken ct)
     {
         ThrowIfFailing();
+        if (FailUpsertFor?.Invoke(preference) == true)
+        {
+            throw new InvalidOperationException("write refused");
+        }
         Upserts.Add(preference);
         return Task.CompletedTask;
     }
