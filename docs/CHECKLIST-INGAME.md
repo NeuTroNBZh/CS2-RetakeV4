@@ -4,13 +4,13 @@ Chaque phase ajoute sa section. Cocher sur un serveur de test avant de passer à
 Préparation : retirer `plugins/CS2Retake/` (V3), lancer `pwsh -NoProfile -File scripts/package-dev.ps1`, copier `artifacts/dev/*` à la racine `csgo/` du serveur.
 
 ## Phase 1 — Fondations
-- [ ] Au démarrage : log `RetakeV4 4.0.0-alpha.1 loaded with modules: Core`, aucune erreur.
+- [ ] Au démarrage : log `RetakeV4 <version> loaded with modules: …` (liste complète des modules), aucune erreur.
 - [ ] `configs/plugins/RetakeV4/core.json` est créé avec les valeurs par défaut.
 - [ ] Log `RetakeV4 cvars loaded` à chaque changement de map.
 - [ ] Mode compétitif : le warmup se termine seul (~16 s) avec le message « Fin du warmup, le retake commence ! » (client en `css_lang fr`).
 - [ ] Avec `"Debug": true` dans `core.json` (puis restart map) : chaque round logue `PostRound -> Preparing`, `Preparing -> FreezeTime`, `FreezeTime -> Live`, `Live -> PostRound`, avec un numéro de round croissant.
 - [ ] `mp_restartgame 1` en plein round : pas d'erreur, le numéro de round continue de croître.
-- [ ] `css_retake_info` (console serveur et joueur) : `RetakeV4 v4.0.0-alpha.1 par NeuTroNBZh` (fr) / `by` (en).
+- [ ] `css_retake_info` (console serveur et joueur) : `RetakeV4 v<version> par NeuTroNBZh` (fr) / `by` (en).
 - [ ] `css_plugins reload RetakeV4` en plein round : `mp_restartgame 1` est exécuté, le plugin repart sans erreur.
 - [ ] `core.json` volontairement cassé (`{ "Debug": `) : warning `invalid JSON`, plugin chargé avec les valeurs par défaut, fichier non modifié.
 - [ ] `core.json` avec `"ExecConfig": "../../server.cfg"` : warning `ExecConfig`, `RetakeV4/retake.cfg` exécuté à la place.
@@ -64,7 +64,6 @@ Préparation : `pwsh -NoProfile -File scripts/package-dev.ps1`, copier `artifact
 - [ ] Base indisponible (fichier en lecture seule ou MySQL arrêté) : un avertissement « Preference database unavailable… », les joueurs reçoivent l'équipement par défaut, aucune erreur en boucle.
 
 ## Phase 3b — HUD et menu d'armes
-Remplir aussi `docs/spikes/hud-probe-findings.md` : les réglages `hud.json` → `Menu.Orientation`, `Menu.FollowMode`, `Menu.Input`, `Menu.DistanceUnits` correspondent aux questions du prototype.
 - [ ] Premier démarrage : `hud.json` est créé, aucun avertissement de config.
 - [ ] Début de round : le bloc centré affiche « <type> - site <A/B> » et « CT n contre n T » pendant ~6 s ; la série de victoires T apparaît quand elle existe.
 - [ ] Joueur en file d'attente : « File d'attente : position/total » visible en continu, « Accès prioritaire » pour un VIP.
@@ -84,7 +83,6 @@ Remplir aussi `docs/spikes/hud-probe-findings.md` : les réglages `hud.json` →
 - [ ] Perf : 2+ menus ouverts, aucune chute de fps notable.
 - [ ] `hud.json` → `Menu.Input` = `Keys` : la visée ne sélectionne plus, le clavier fonctionne.
 - [ ] `plant.json` en `FastPlant` : le poseur change d'arme pendant le freeze time et garde la C4 (pas de victoire CT forcée).
-- [ ] Début de round avec le menu ouvert automatiquement : aucune ligne n'est sélectionnée toute seule par les commandes `slot1-3` envoyées à la distribution ; l'arme principale est bien en main.
 - [ ] `ent_remove` d'une ligne de menu : le menu se reconstruit, le module Hud n'est pas désactivé.
 
 ## Phase 4a — Éditeur de spawns et forçage de site
@@ -183,3 +181,10 @@ Remplir aussi `docs/spikes/hud-probe-findings.md` : les réglages `hud.json` →
 - [ ] Accueil : reçu une fois en rejoignant une équipe, pas après un changement d'équipe ni un changement de map, de nouveau après reconnexion.
 - [ ] `!regles` avec `Lines` : chaque ligne avec le préfixe d'aide.
 - [ ] Refus de permission (`!scramble` sans droit) : préfixe d'alerte.
+
+## 4.3.1 — nettoyage et alertes HUD
+
+- [ ] Instadefuse réussi ou refusé : le message apparaît dans le chat et en alerte dans le bloc centré, pour tous les joueurs.
+- [ ] Joueur déplacé (rotation après victoire CT, scramble, rééquilibrage) : l'alerte « tu es maintenant T/CT » apparaît dans son bloc centré.
+- [ ] Scramble demandé par un admin : alerte visible par tous.
+- [ ] Menus (CenterHtml, WorldText, Chat) : navigation inchangée ; les touches 1 à 9 n'ont plus aucun effet sur les menus (comportement déjà observé, les commandes n'arrivent pas au serveur).

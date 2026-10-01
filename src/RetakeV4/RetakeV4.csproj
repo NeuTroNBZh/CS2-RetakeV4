@@ -2,7 +2,7 @@
   <PropertyGroup>
     <RootNamespace>RetakeV4</RootNamespace>
     <AssemblyName>RetakeV4</AssemblyName>
-    <Version>4.3.0</Version>
+    <Version>4.3.1</Version>
     <GenerateRuntimeConfigurationFiles>true</GenerateRuntimeConfigurationFiles>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
   </PropertyGroup>

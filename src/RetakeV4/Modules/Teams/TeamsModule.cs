@@ -9,6 +9,7 @@ using RetakeV4.Adapters;
 using RetakeV4.Configuration;
 using RetakeV4.Domain.Common;
 using RetakeV4.Domain.Events;
+using RetakeV4.Domain.Hud;
 using RetakeV4.Domain.Rounds;
 using RetakeV4.Domain.Teams;
 
@@ -228,6 +229,7 @@ public sealed class TeamsModule : IRetakeModule
                 player.SwitchTeam(PlayerQueries.ToCsTeam(move.To));
             }
             Context.Text.Chat(player, ReasonKey(move.Reason), move.To.ToString());
+            Context.Bus.Publish(new HudAlert(new PlayerId(player.Slot), HudText.Of(ReasonKey(move.Reason), move.To.ToString())));
         }
         NotifyQueue();
     }
@@ -294,5 +296,6 @@ public sealed class TeamsModule : IRetakeModule
     {
         _scrambleRequested = true;
         Context.Text.ChatAll("teams.scramble.requested");
+        Context.Bus.Publish(new HudAlert(null, HudText.Of("teams.scramble.requested")));
     }
 }

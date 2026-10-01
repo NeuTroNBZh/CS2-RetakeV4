@@ -123,7 +123,6 @@ public sealed class HudModule : IRetakeModule
         // outside the processing of the client's messages, which the engine aborts with a kick past ~500 ms.
         hooks.OnBus<HudMenuOpen>(e => NextFrame("menu_open", () => _menus?.OnOpen(e)));
         hooks.OnBus<HudMenuClose>(e => NextFrame("menu_close", () => _menus?.OnClose(e)));
-        hooks.OnBus<LoadoutApplied>(menus.OnLoadoutApplied);
         hooks.OnBus<MapStarted>(_ => menus.Reset());
         hooks.OnTick("menu_tick", menus.Tick);
         hooks.OnCheckTransmit("menu_transmit", menus.OnCheckTransmit);
@@ -138,25 +137,6 @@ public sealed class HudModule : IRetakeModule
                 menus.Forget(player.Slot);
             }
         });
-        for (var key = 1; key <= MenuNavigator.MaxLines; key++)
-        {
-            var slotKey = key;
-            hooks.CommandListener($"slot{slotKey}", (player, _) =>
-            {
-                if (_config.Debug)
-                {
-                    context.Logger.LogInformation("Menu input: slot{Key} from slot {Slot}: {Result}", slotKey, player?.Slot,
-                        menus.KeyRefusal(player, slotKey) ?? "claimed");
-                }
-                if (menus.ClaimKey(player, slotKey) is not { } claimed)
-                {
-                    return HookResult.Continue;
-                }
-                var slot = player!.Slot;
-                NextFrame("menu_key", () => _menus?.PressKey(slot, slotKey, claimed));
-                return HookResult.Handled;
-            }, HookMode.Pre);
-        }
     }
 
     private void NextFrame(string stage, Action action) =>
