@@ -27,6 +27,17 @@ public class CleanupClassifierTests
         Assert.Equal(expected, CleanupClassifier.Detect(Facts(cls, model)));
     }
 
+    // Nuke (CS2): windows and the vent slats are breakable prop_dynamic (1 hp); decoration props have no health.
+    [Theory]
+    [InlineData("models/props/de_nuke/windows/nuke_window_93x76.vmdl", 1, CleanupKind.Window)]
+    [InlineData("models/props/de_nuke/hr_nuke/nuke_vent_slats/nuke_vent_slats.vmdl", 1, CleanupKind.Vent)]
+    [InlineData("models/props/de_nuke/windows/nuke_window_93x76.vmdl", 0, CleanupKind.Ignore)]
+    [InlineData("models/props/de_nuke/hr_nuke/nuke_office_desk/desk.vmdl", 1, CleanupKind.Ignore)]
+    public void BreakablePropDynamic_IsClassifiedByModel(string model, int health, CleanupKind expected)
+    {
+        Assert.Equal(expected, CleanupClassifier.Detect(new EntityFacts("prop_dynamic", model, null, new Vec3(0, 0, 0), health)));
+    }
+
     [Fact]
     public void Override_AlwaysWins()
     {
@@ -37,9 +48,9 @@ public class CleanupClassifierTests
     }
 
     [Fact]
-    public void CandidateClasses_AreTheFiveKnownClasses()
+    public void CandidateClasses_AreTheKnownClasses()
     {
-        Assert.Equal(new[] { "func_breakable", "func_door", "func_door_rotating", "func_shatterglass", "prop_door_rotating" },
+        Assert.Equal(new[] { "func_breakable", "func_door", "func_door_rotating", "func_shatterglass", "prop_door_rotating", "prop_dynamic" },
             CleanupClassifier.CandidateClasses.Order());
     }
 }

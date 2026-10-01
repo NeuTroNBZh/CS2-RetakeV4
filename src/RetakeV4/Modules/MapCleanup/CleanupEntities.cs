@@ -63,6 +63,6 @@ internal static class CleanupEntities
         var model = skeleton is not null && skeleton.Handle != IntPtr.Zero ? skeleton.ModelState.ModelName : null;
         var name = entity.Entity?.Name;
         return new EntityFacts(entity.DesignerName, string.IsNullOrEmpty(model) ? null : model, string.IsNullOrEmpty(name) ? null : name,
-            origin is null ? new Vec3(0, 0, 0) : new Vec3(origin.X, origin.Y, origin.Z));
+            origin is null ? new Vec3(0, 0, 0) : new Vec3(origin.X, origin.Y, origin.Z), entity.Health);
     }
 }

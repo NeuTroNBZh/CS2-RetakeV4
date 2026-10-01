@@ -6,7 +6,7 @@ public static class CleanupClassifier
 {
     public static IReadOnlyList<string> CandidateClasses { get; } = new[]
     {
-        "func_door", "func_door_rotating", "prop_door_rotating", "func_breakable", "func_shatterglass",
+        "func_door", "func_door_rotating", "prop_door_rotating", "func_breakable", "func_shatterglass", "prop_dynamic",
     };
 
     private static readonly string[] DoorClasses = { "func_door", "func_door_rotating", "prop_door_rotating" };
@@ -27,7 +27,9 @@ public static class CleanupClassifier
         {
             return CleanupKind.Window;
         }
-        if (cls != "func_breakable" || string.IsNullOrEmpty(facts.ModelName))
+        // A prop_dynamic is only breakable when it has health (CS2 windows and vent slats); decoration props have none.
+        var breakable = cls == "func_breakable" || (cls == "prop_dynamic" && facts.Health > 0);
+        if (!breakable || string.IsNullOrEmpty(facts.ModelName))
         {
             return CleanupKind.Ignore;
         }

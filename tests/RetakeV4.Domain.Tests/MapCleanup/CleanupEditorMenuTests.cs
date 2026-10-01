@@ -44,4 +44,13 @@ public class CleanupEditorMenuTests
     {
         Assert.Null(CleanupEditorMenu.Parse(id));
     }
+
+    [Theory]
+    [InlineData("models/props/de_nuke/windows/nuke_window_93x76.vmdl", "nuke_window_93x76")]
+    [InlineData("maps/de_nuke/entities/unnamed_2_61814_21692.vmdl", "unnamed_2_61814_21692")]
+    [InlineData(null, "-")]
+    public void ShortModel_KeepsOnlyTheFileName(string? model, string expected)
+    {
+        Assert.Equal(expected, CleanupEditorMenu.ShortModel(model));
+    }
 }

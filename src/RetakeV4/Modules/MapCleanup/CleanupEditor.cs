@@ -53,6 +53,7 @@ internal sealed class CleanupEditor
         }
         Pick(player);
         Show(player, refreshOnly: false);
+        AnnouncePick(player);
     }
 
     public void OnSelected(HudMenuSelected e)
@@ -105,6 +106,7 @@ internal sealed class CleanupEditor
         {
             case CleanupEditorCommandKind.Pick:
                 Pick(player);
+                AnnouncePick(player);
                 break;
             case CleanupEditorCommandKind.Set when command.Value is { } kind:
                 Change(_aimed, a => _working[a.Key] = new CleanupOverride(a.Key, kind, $"{a.Facts.ClassName} {a.Facts.ModelName ?? "-"}"));
@@ -170,6 +172,16 @@ internal sealed class CleanupEditor
             _context.Logger.LogInformation("Map cleanup pick from {Eye} towards {Forward}: {Picked}; around: {Around}",
                 view.Eye, forward, _aimed?.Key ?? "nothing", string.Join(" | ", CleanupEntities.DescribeAround(view.Eye)));
         }
+    }
+
+    private void AnnouncePick(CCSPlayerController player)
+    {
+        if (_aimed is { } a)
+        {
+            _context.Text.Chat(player, "mapcleanup.editor.picked", CleanupEditorMenu.ShortModel(a.Facts.ModelName), a.Facts.ClassName);
+            return;
+        }
+        _context.Text.ChatAlert(player, "mapcleanup.editor.none_aimed");
     }
 
     private void Show(CCSPlayerController player, bool refreshOnly)

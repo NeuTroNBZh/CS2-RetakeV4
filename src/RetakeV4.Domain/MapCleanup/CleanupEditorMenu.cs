@@ -39,6 +39,9 @@ public static class CleanupEditorMenu
         return new Menu(MenuId, HudText.Of("mapcleanup.editor.title"), items);
     }
 
+    public static string ShortModel(string? model) =>
+        string.IsNullOrWhiteSpace(model) ? "-" : Path.GetFileNameWithoutExtension(model.Replace('\\', '/'));
+
     public static CleanupEditorCommand? Parse(string itemId)
     {
         if (itemId.StartsWith(SetPrefix, StringComparison.Ordinal))
@@ -60,7 +63,7 @@ public static class CleanupEditorMenu
 
     private static MenuItem PickItem(CleanupEditorView view) => new("pick", view.ClassName is null
         ? HudText.Of("mapcleanup.editor.none_aimed")
-        : HudText.Of("mapcleanup.editor.aimed", view.ClassName, view.ModelName ?? "-", view.TargetName ?? "-"), MenuItemKind.Action);
+        : HudText.Of("mapcleanup.editor.aimed", ShortModel(view.ModelName), view.ClassName), MenuItemKind.Action);
 
     // Leaving with unsaved corrections asks first; otherwise it closes directly.
     private static MenuItem ExitItem(bool dirty) => dirty
