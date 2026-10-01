@@ -3,21 +3,12 @@ using CounterStrikeSharp.API.Core.Attributes;
 using Microsoft.Extensions.Logging;
 using RetakeV4.Adapters;
 using RetakeV4.Configuration;
+using RetakeV4.Contracts;
 using RetakeV4.Domain.Events;
 using RetakeV4.Domain.Modules;
 using RetakeV4.Domain.Rounds;
 using RetakeV4.Localization;
 using RetakeV4.Modules;
-using RetakeV4.Modules.Admin;
-using RetakeV4.Modules.Allocation;
-using RetakeV4.Modules.Core;
-using RetakeV4.Modules.Hud;
-using RetakeV4.Modules.InstaDefuse;
-using RetakeV4.Modules.Links;
-using RetakeV4.Modules.Plant;
-using RetakeV4.Modules.RoundTypes;
-using RetakeV4.Modules.Spawns;
-using RetakeV4.Modules.Teams;
 
 namespace RetakeV4;
 
@@ -31,12 +22,14 @@ public sealed class RetakeV4Plugin : BasePlugin
     private IDisposable? _roundResetSubscription;
 
     public override string ModuleName => "RetakeV4";
-    public override string ModuleVersion => "4.0.0-alpha.1";
+    public override string ModuleVersion => "4.0.0";
     public override string ModuleAuthor => "NeuTroNBZh";
     public override string ModuleDescription => "Modular CS2 retake plugin";
 
     public override void Load(bool hotReload)
     {
+        // Registers the API capability even if the Api module is disabled: consumers then get null instead of an exception.
+        RetakeApiHost.Publish(null);
         var bus = new EventBus(OnBusError);
         _bus = bus;
         var guard = new ModuleGuard(MaxErrorsPerRound, OnGuardFailure);
@@ -51,7 +44,7 @@ public sealed class RetakeV4Plugin : BasePlugin
             }
         });
 
-        _host = new ModuleHost(CreateModules(), Logger);
+        _host = new ModuleHost(ModuleCatalog.CreateAll(), Logger);
         _host.Start(new JsonConfigStore(ConfigDirectory()), (module, registrations) =>
             new ModuleContext(this, bus, guard, text, Logger, rounds,
                 new ModuleHooks(this, bus, pipeline, guard, module.Name, registrations)));
@@ -69,20 +62,6 @@ public sealed class RetakeV4Plugin : BasePlugin
     }
 
     public override void OnAllPluginsLoaded(bool hotReload) => _bus?.Publish(new AllPluginsLoaded(hotReload));
-
-    private static IReadOnlyList<IRetakeModule> CreateModules() => new IRetakeModule[]
-    {
-        new CoreModule(),
-        new HudModule(),
-        new RoundTypesModule(),
-        new TeamsModule(),
-        new SpawnsModule(),
-        new AllocationModule(),
-        new PlantModule(),
-        new InstaDefuseModule(),
-        new AdminModule(),
-        new LinksModule(),
-    };
 
     private string ConfigDirectory() =>
         Path.GetFullPath(Path.Combine(ModuleDirectory, "..", "..", "configs", "plugins", "RetakeV4"));

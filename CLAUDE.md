@@ -15,12 +15,15 @@ Plugin CounterStrikeSharp (C# / .NET 10, CSSharp 1.0.370+) de retake CS2, rééc
 - `src/RetakeV4/Persistence` : dépôts de préférences (SQLite, MySQL, NoOp), migrations, magasin résilient, file d'écriture, lecteur de base V3.
 - `src/RetakeV4/Modules/Hud` : moteur HUD (bloc centré, menus `point_worldtext`, entrées). Logique dans `src/RetakeV4.Domain/Hud`.
 - `tools/RetakeV4.SpawnMigrator` : convertit des spawns V3 (tableau à plat) au format V2 (`dotnet run --project tools/RetakeV4.SpawnMigrator -- <in> <out>`).
+- `src/RetakeV4.Contracts` : API publique (`IRetakeApi`, capacité `retakev4:api`), installée dans `shared/`. Toute modification incompatible incrémente `RetakeApi.Version`.
+- `tools/RetakeV4.ConfigExporter` : écrit les configs par défaut (`dotnet run --project tools/RetakeV4.ConfigExporter -- <dossier>`).
 
 ## Commandes
 - Build : `dotnet build RetakeV4.sln -c Release` (0 warning exigé, TreatWarningsAsErrors)
 - Tests : `dotnet test RetakeV4.sln`
 - Couverture Domain : `dotnet test tests/RetakeV4.Domain.Tests -p:CollectCoverage=true -p:Include="[RetakeV4.Domain]*" -p:Threshold=80 -p:ThresholdType=line` (utiliser `-p:` et non `/p:` : Git Bash réécrit `/p:` en chemin)
 - Package serveur de test : `pwsh -NoProfile -File scripts/package-dev.ps1` → `artifacts/dev/`
+- Release : `pwsh -NoProfile -File scripts/package-release.ps1 -Version x.y.z` → `artifacts/release/` (fait par GitHub Actions sur un tag `vx.y.z`)
 
 ## Règles
 - Toute décision métier va dans le Domain avec ses tests (TDD) ; les modules ne font que traduire événements CS2 ↔ Domain.

@@ -20,3 +20,5 @@ public sealed record BombPlanted(BombSite? Site, PlayerId? Planter);
 public sealed record RoundTypesLoaded(IReadOnlyList<RoundTypeDefinition> Definitions);
 
 public sealed record TeamStateChanged(TeamState State);
+
+public sealed record LoadoutsAssigned(int RoundNumber, IReadOnlyDictionary<PlayerId, Loadout> Loadouts);

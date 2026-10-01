@@ -25,6 +25,11 @@ foreach ($dependency in @("Microsoft.Data.Sqlite.dll", "SQLitePCLRaw.core.dll", 
 }
 Copy-Item (Join-Path $bin "runtimes") $pluginDir -Recurse
 
+$sharedDir = Join-Path $out "addons/counterstrikesharp/shared/RetakeV4.Contracts"
+New-Item -ItemType Directory -Force $sharedDir | Out-Null
+$contracts = Join-Path $root "src/RetakeV4.Contracts/bin/$Configuration/net10.0/RetakeV4.Contracts.dll"
+if (-not (Test-Path $contracts)) { throw "Missing build output: RetakeV4.Contracts.dll" }
+Copy-Item $contracts $sharedDir
 $cfgDir = Join-Path $out "cfg/RetakeV4"
 New-Item -ItemType Directory -Force $cfgDir | Out-Null
 Copy-Item (Join-Path $root "src/RetakeV4/cfg/RetakeV4/retake.cfg") $cfgDir

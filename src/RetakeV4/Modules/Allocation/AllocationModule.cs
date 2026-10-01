@@ -207,6 +207,7 @@ public sealed class AllocationModule : IRetakeModule
             .ToList();
         var plan = LoadoutPlanner.Plan(definition, requests, GrenadeKits(definition.GrenadePool), _random);
         _lastPlan = plan.ToImmutableDictionary();
+        Context.Bus.Publish(new LoadoutsAssigned(context.RoundNumber, plan));
         foreach (var (controller, _) in players)
         {
             LoadoutApplier.Apply(controller, plan[new PlayerId(controller.Slot)]);
