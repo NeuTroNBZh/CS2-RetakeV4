@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Globalization;
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Modules.Admin;
@@ -9,6 +10,7 @@ using RetakeV4.Adapters;
 using RetakeV4.Configuration;
 using RetakeV4.Domain.Common;
 using RetakeV4.Domain.Events;
+using RetakeV4.Domain.Geometry;
 using RetakeV4.Domain.Hud;
 using RetakeV4.Domain.Rounds;
 using RetakeV4.Domain.Spawns;
@@ -27,6 +29,7 @@ public sealed class SpawnsModule : IRetakeModule
     private ImmutableDictionary<int, SpawnPoint> _assignments = ImmutableDictionary<int, SpawnPoint>.Empty;
     private SpawnCatalog? _catalog;
     private SiteForce? _force;
+    private SpawnEditor? _editor;
 
     public string Name => "Spawns";
 
@@ -48,8 +51,13 @@ public sealed class SpawnsModule : IRetakeModule
     {
         _context = context;
         _catalog = new SpawnCatalog(new SpawnFileStore(Path.Combine(context.Plugin.ModuleDirectory, "spawns")), context.Logger);
+        _editor = new SpawnEditor(context, _catalog);
         var hooks = context.Hooks;
-        hooks.OnBus<MapStarted>(e => LoadMap(e.MapName));
+        hooks.OnBus<MapStarted>(e =>
+        {
+            _editor?.Reset();
+            LoadMap(e.MapName);
+        });
         hooks.Command("css_retake_forcesite", "Forces the bombsite: css_retake_forcesite <A|B|off> [once|sticky]", OnForceSite);
         hooks.PreparationStep(new DelegatePreparationStep("site", PreparationOrder.Site, ChooseSite));
         hooks.PreparationStep(new DelegatePreparationStep("placement", PreparationOrder.Placement, PlacePlayers));
@@ -66,10 +74,13 @@ public sealed class SpawnsModule : IRetakeModule
             Announce(e);
             WarnAdminsIfNoSpawns();
         });
+        RegisterEditor(hooks);
     }
 
     public void Unload()
     {
+        _editor?.Shutdown();
+        _editor = null;
         _catalog = null;
         _context = null;
     }
@@ -201,5 +212,95 @@ public sealed class SpawnsModule : IRetakeModule
             return;
         }
         Server.PrintToConsole(Context.Text.Server(key, args));
+    }
+
+    private SpawnEditor Editor => _editor ?? throw new InvalidOperationException("Spawns module is not loaded");
+
+    private void RegisterEditor(ModuleHooks hooks)
+    {
+        hooks.Command("css_retake_edit", "Spawn editor: css_retake_edit [save|discard|exit]", (p, c) => WithAdminPlayer(p, player => Editor.HandleEditCommand(player, c.ArgCount > 1 ? c.GetArg(1) : null)));
+        hooks.Command("css_retake_addspawn", "Adds a spawn here: css_retake_addspawn <T|CT> <A|B> [plant]", OnAddSpawn);
+        hooks.Command("css_retake_delspawn", "Deletes the nearest spawn", (p, _) => WithAdminPlayer(p, Editor.DeleteNearest));
+        hooks.Command("css_retake_tpspawn", "Teleports to spawn <number>", OnTeleportToSpawn);
+        hooks.Command("css_retake_teleport", "Teleports to <x> <y> <z>", OnTeleportToPosition);
+        hooks.Command("css_retake_savespawns", "Saves the spawns of the current map", (p, _) => WithAdmin(p, () => Editor.Save(p)));
+        hooks.Command("css_retake_reloadspawns", "Reloads the spawns of the current map", (p, _) => WithAdmin(p, () => Editor.Reload(p)));
+        hooks.CommandListener("noclip", (p, _) => Editor.OnNoclipCommand(p), HookMode.Pre);
+        hooks.OnBus<SpawnEditorRequested>(e =>
+        {
+            if (Utilities.GetPlayerFromSlot(e.Player.Slot) is { IsValid: true } player)
+            {
+                WithAdminPlayer(player, Editor.Enter);
+            }
+        });
+        hooks.OnBus<HudMenuSelected>(e => Editor.OnSelected(e));
+        hooks.OnTick("editor_tick", () => Editor.Tick());
+        hooks.OnCheckTransmit("editor_transmit", infoList => Editor.OnCheckTransmit(infoList));
+        hooks.OnEvent<EventRoundPrestart>("editor_prestart", _ => Editor.SuspendEntities());
+        hooks.OnEvent<EventRoundStart>("editor_round_start", _ =>
+            Server.NextFrame(() => _context?.Guard.Run(Name, "editor_resume", () => _editor?.ResumeEntities())));
+        hooks.OnEvent<EventPlayerDisconnect>("editor_disconnect", e =>
+        {
+            if (e.Userid is { } player)
+            {
+                Editor.OnDisconnect(player.Slot);
+            }
+        });
+    }
+
+    private void OnAddSpawn(CCSPlayerController? player, CommandInfo command)
+    {
+        var team = SpawnArgs.Team(command.GetArg(1));
+        var site = SpawnArgs.Site(command.GetArg(2));
+        if (team is null || site is null)
+        {
+            Reply(player, "spawns.editor.usage_add");
+            return;
+        }
+        var canPlant = command.ArgCount > 3 && SpawnArgs.IsPlantFlag(command.GetArg(3));
+        WithAdminPlayer(player, p => Editor.AddHere(p, new SpawnToAdd(team.Value, site.Value, canPlant)));
+    }
+
+    private void OnTeleportToSpawn(CCSPlayerController? player, CommandInfo command)
+    {
+        if (!int.TryParse(command.GetArg(1), NumberStyles.Integer, CultureInfo.InvariantCulture, out var number))
+        {
+            Reply(player, "spawns.editor.usage_tp");
+            return;
+        }
+        WithAdminPlayer(player, p => Editor.TeleportToNumber(p, number));
+    }
+
+    private void OnTeleportToPosition(CCSPlayerController? player, CommandInfo command)
+    {
+        var coordinates = Enumerable.Range(1, 3)
+            .Select(i => float.TryParse(command.GetArg(i), NumberStyles.Float, CultureInfo.InvariantCulture, out var value) && float.IsFinite(value) ? value : (float?)null)
+            .ToList();
+        if (command.ArgCount < 4 || coordinates.Any(c => c is null))
+        {
+            Reply(player, "spawns.editor.usage_teleport");
+            return;
+        }
+        WithAdminPlayer(player, p => Editor.TeleportToPosition(p, new Vec3(coordinates[0]!.Value, coordinates[1]!.Value, coordinates[2]!.Value)));
+    }
+
+    private void WithAdmin(CCSPlayerController? player, Action action)
+    {
+        if (!IsAdmin(player))
+        {
+            Reply(player, "spawns.editor.no_permission");
+            return;
+        }
+        action();
+    }
+
+    private void WithAdminPlayer(CCSPlayerController? player, Action<CCSPlayerController> action)
+    {
+        if (player is not { IsValid: true })
+        {
+            Reply(player, "spawns.editor.player_only");
+            return;
+        }
+        WithAdmin(player, () => action(player));
     }
 }
