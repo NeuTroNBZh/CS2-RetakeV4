@@ -90,6 +90,32 @@ public partial class LangFilesTests
         Assert.Contains(key, Load("en").Keys);
     }
 
+    [Theory]
+    [InlineData("admin.menu.cleanup")]
+    [InlineData("mapcleanup.editor.title")]
+    [InlineData("mapcleanup.editor.aimed")]
+    [InlineData("mapcleanup.editor.none_aimed")]
+    [InlineData("mapcleanup.kind.door")]
+    [InlineData("mapcleanup.kind.window")]
+    [InlineData("mapcleanup.kind.vent")]
+    [InlineData("mapcleanup.kind.ignore")]
+    [InlineData("mapcleanup.editor.auto")]
+    [InlineData("mapcleanup.editor.test")]
+    [InlineData("mapcleanup.editor.save")]
+    [InlineData("mapcleanup.editor.exit")]
+    [InlineData("mapcleanup.editor.exit_save")]
+    [InlineData("mapcleanup.editor.exit_discard")]
+    [InlineData("mapcleanup.editor.entered")]
+    [InlineData("mapcleanup.editor.saved")]
+    [InlineData("mapcleanup.editor.save_failed")]
+    [InlineData("mapcleanup.editor.tested")]
+    [InlineData("mapcleanup.editor.busy")]
+    [InlineData("mapcleanup.editor.left")]
+    public void MapCleanupKeys_ArePresent(string key)
+    {
+        Assert.Contains(key, Load("en").Keys);
+    }
+
     [Fact]
     public void Phase1Keys_ArePresent()
     {

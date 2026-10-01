@@ -109,6 +109,7 @@ public sealed class SimpleAdminBridgeTests : IDisposable
                 "menu:editor:admin.menu.editor",
                 "menu:forcesite:admin.menu.forcesite",
                 "menu:scramble:admin.menu.scramble",
+                "menu:cleanup:admin.menu.cleanup",
             },
             _api.Calls);
     }
@@ -144,7 +145,7 @@ public sealed class SimpleAdminBridgeTests : IDisposable
     public void Unregister_RemovesEveryEntry()
     {
         Registered().Unregister();
-        Assert.Equal(new[] { "unregister:editor", "unregister:forcesite", "unregister:scramble" }, _api.Calls.Where(c => c.StartsWith("unregister:")));
+        Assert.Equal(new[] { "unregister:editor", "unregister:forcesite", "unregister:scramble", "unregister:cleanup" }, _api.Calls.Where(c => c.StartsWith("unregister:")));
     }
 
     [Fact]
