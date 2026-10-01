@@ -194,3 +194,15 @@ Préparation : `pwsh -NoProfile -File scripts/package-dev.ps1`, copier `artifact
 - [ ] Avec WeaponPaints et un couteau personnalisé : chaque spawn (pistol, mid, full buy) donne le couteau choisi ; sans skin choisi, le couteau par défaut de l'équipe.
 - [ ] `!guns` ouvert pendant le round : le joueur ne bouge plus tant que le menu est ouvert, retrouve sa vitesse normale dès la fermeture (choix, Retour/Fermer, début du round).
 - [ ] `Menu.FreezeWhileOpen = false` dans `hud.json` : le joueur bouge à nouveau avec le menu ouvert.
+
+## 4.4.0 — nettoyage de map
+
+- [ ] Mirage, Inferno, Nuke, Dust2 : au début de chaque round, portes ouvertes, vitres et aérations cassées ; caisses, barils et décor intacts ; aucune entité qui disparaît ou reste en l'air.
+- [ ] `DoorOpenChancePercent` à 0 : aucune porte ouverte, vitres et aérations toujours cassées.
+- [ ] Pendant l'échauffement et pendant l'éditeur de spawns : rien n'est touché.
+- [ ] `!retake cleanup` (ou menu admin → Nettoyage de map, et `!admin` → Retake avec SimpleAdmin) : le panneau montre l'entité visée (classe, modèle, nom).
+- [ ] Corriger une porte en « Ne pas toucher », Sauvegarder, Quitter : elle reste fermée aux rounds suivants, et après un redémarrage du serveur.
+- [ ] « Auto » retire la correction ; « Rejouer le nettoyage » applique tout de suite la sélection en cours.
+- [ ] Un second admin qui ouvre l'éditeur reçoit « déjà en cours ».
+- [ ] Changement de map avec l'éditeur ouvert : il se ferme, aucune erreur dans les logs.
+- [ ] Éditeur ouvert puis `!guns` (ou 3 minutes sans action) : l'éditeur se ferme et le nettoyage reprend au round suivant.

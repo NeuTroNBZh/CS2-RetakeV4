@@ -2,7 +2,6 @@ using System.Collections.Immutable;
 using System.Globalization;
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
-using CounterStrikeSharp.API.Modules.Admin;
 using CounterStrikeSharp.API.Modules.Commands;
 using CounterStrikeSharp.API.Modules.Utils;
 using Microsoft.Extensions.Logging;
@@ -20,7 +19,6 @@ namespace RetakeV4.Modules.Spawns;
 
 public sealed class SpawnsModule : IRetakeModule
 {
-    private const string AdminFlag = "@retakev4/admin";
 
     private readonly IRandom _random = SystemRandom.Shared;
     private SpawnsConfig _config = new();
@@ -201,7 +199,7 @@ public sealed class SpawnsModule : IRetakeModule
         {
             return;
         }
-        foreach (var admin in PlayerQueries.Humans().Where(p => AdminManager.PlayerHasPermissions(p, AdminFlag)))
+        foreach (var admin in PlayerQueries.Humans().Where(RetakePermissions.IsAdmin))
         {
             Context.Bus.Publish(new HudAlert(new PlayerId(admin.Slot), HudText.Of("spawns.missing.admin", map)));
         }
@@ -209,7 +207,7 @@ public sealed class SpawnsModule : IRetakeModule
 
     // The server console is always allowed.
     private static bool IsAdmin(CCSPlayerController? player) =>
-        player is null || (player.IsValid && AdminManager.PlayerHasPermissions(player, AdminFlag));
+        player is null || RetakePermissions.IsAdmin(player);
 
     private void Reply(CCSPlayerController? player, string key, params object[] args)
     {
