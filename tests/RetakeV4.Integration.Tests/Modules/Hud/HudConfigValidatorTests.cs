@@ -75,4 +75,15 @@ public class HudConfigValidatorTests
         Assert.True(result.Config.Widgets.QueueStatus.Enabled);
         Assert.Equal(new[] { "Widgets.QueueStatus" }, result.Keys);
     }
+
+    [Fact]
+    public void MenuDisplay_DefaultsToWorldText() => Assert.Equal(MenuDisplay.WorldText, Defaults.Menu.Display);
+
+    [Fact]
+    public void UndefinedMenuDisplay_FallsBackToWorldText()
+    {
+        var result = Validate(Defaults with { Menu = Defaults.Menu with { Display = (MenuDisplay)5 } });
+        Assert.Equal(MenuDisplay.WorldText, result.Config.Menu.Display);
+        Assert.Equal(new[] { "Menu.Display" }, result.Keys);
+    }
 }

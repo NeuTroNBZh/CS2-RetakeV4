@@ -45,6 +45,7 @@ public sealed partial class HudConfigValidator : IConfigValidator<HudConfig>
 
     private static HudMenuConfig ValidateMenu(HudMenuConfig menu, HudMenuConfig defaults, string file, List<ConfigIssue> issues) => menu with
     {
+        Display = Defined(menu.Display, defaults.Display, "Menu.Display", file, issues),
         Input = Defined(menu.Input, defaults.Input, "Menu.Input", file, issues),
         FollowMode = Defined(menu.FollowMode, defaults.FollowMode, "Menu.FollowMode", file, issues),
         DistanceUnits = InRange(menu.DistanceUnits, 10f, 200f, defaults.DistanceUnits, "Menu.DistanceUnits", file, issues),

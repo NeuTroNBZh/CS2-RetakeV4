@@ -9,6 +9,12 @@ public enum MenuFollowMode
     Parent,
 }
 
+public enum MenuDisplay
+{
+    WorldText,
+    Chat,
+}
+
 public sealed record HudThemeConfig
 {
     public string Accent { get; init; } = "#4FC3F7";
@@ -41,6 +47,9 @@ public sealed record HudWidgetsConfig
 // Orientation and FollowMode select the formulas tested by the HUD prototype (docs/spikes/hud-probe-findings.md).
 public sealed record HudMenuConfig
 {
+    // WorldText: menus in front of the player (point_worldtext). Chat: numbered chat menus chosen with !1, !2... (V3 style).
+    public MenuDisplay Display { get; init; } = MenuDisplay.WorldText;
+
     public MenuInputSetting Input { get; init; } = MenuInputSetting.AimAndKeys;
 
     public float DistanceUnits { get; init; } = 60f;

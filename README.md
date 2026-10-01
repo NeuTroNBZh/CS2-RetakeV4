@@ -15,7 +15,7 @@ Depuis V3 : voir [docs/MIGRATION-V3.md](docs/MIGRATION-V3.md).
 - Équipes : file d'attente avec priorités VIP, ratio T/CT, rotation après une victoire CT, scramble après une série de victoires T, blocage du changement d'équipe.
 - Armes : menu HUD `!guns` (au viseur ou au clavier) ou menu d'achat CS2, préférences sauvegardées (SQLite ou MySQL), AWP pour les volontaires, kits, Zeus, kits de grenades par camp.
 - Plant : AutoPlant ou FastPlant. InstaDefuse avec blocages (HE, molotov, feu) et explosion forcée.
-- HUD : bloc d'informations (round, file d'attente, alertes) et menus `point_worldtext` configurables (`hud.json`).
+- HUD : bloc d'informations (round, file d'attente, alertes) et menus `point_worldtext` configurables (`hud.json`) ; ou menus de chat numérotés comme en V3 (`Menu.Display = Chat`).
 - Administration : menu `!retake`, éditeur de spawns en jeu, forçage du site, scramble, intégration CS2-SimpleAdmin, commandes communautaires (`links.json`).
 - API publique pour les autres plugins (`RetakeV4.Contracts`).
 
@@ -32,7 +32,7 @@ Un fichier par module dans `addons/counterstrikesharp/configs/plugins/RetakeV4/`
 | `grenades.json` | kits de grenades par pool |
 | `plant.json` | `AutoPlant`/`FastPlant` |
 | `instadefuse.json` | règles de l'InstaDefuse |
-| `hud.json` | thème, widgets, menus (orientation, distance, entrée) |
+| `hud.json` | thème, widgets, menus : `Menu.Display` = `WorldText` (menus devant le joueur, défaut) ou `Chat` (menus de chat, choix avec `!1`, `!2`…), orientation, distance, entrée |
 | `admin.json` | pont CS2-SimpleAdmin |
 | `links.json` | commandes communautaires |
 | `api.json` | API publique |

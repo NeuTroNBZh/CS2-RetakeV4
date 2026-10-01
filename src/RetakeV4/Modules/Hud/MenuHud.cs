@@ -313,16 +313,7 @@ internal sealed class MenuHud
             .ToList();
     }
 
-    private string Label(CCSPlayerController player, MenuLine line)
-    {
-        var label = HudTextFormatter.Format(_text, player, line.Label);
-        return line.ItemKind switch
-        {
-            MenuItemKind.Toggle => $"{label} : {_text.For(player, line.IsOn ? "hud.menu.on" : "hud.menu.off")}",
-            MenuItemKind.Choice when line.IsOn => $"> {label}",
-            _ => label,
-        };
-    }
+    private string Label(CCSPlayerController player, MenuLine line) => MenuLineLabel.Format(_text, player, line);
 
     private static bool Pressed(PlayerButtons pressed, PlayerButtons button) => (pressed & button) != 0;
 }

@@ -150,3 +150,14 @@ Remplir aussi `docs/spikes/hud-probe-findings.md` : les réglages `hud.json` →
 - [ ] Joueur connecté : changer en base `primary_weapon` d'une de ses lignes (et `updated_at`), attendre le round suivant : l'arme reçue est la nouvelle, sans reconnexion.
 - [ ] Choisir une arme dans `!guns` puis lancer un round : le choix reste (pas d'écrasement par l'ancienne valeur).
 - [ ] Couper MySQL pendant la partie : les joueurs gardent leurs armes choisies, un seul avertissement par période de retry dans la console.
+
+## Menus de chat (`Menu.Display`)
+
+- [ ] `hud.json` avec `"Menu": { "Display": "Chat" }`, redémarrer : `!guns` affiche une liste numérotée dans le chat, aucune entité de menu devant le joueur.
+- [ ] `!1` sur un sous-menu affiche le niveau suivant ; « Retour » revient au niveau parent.
+- [ ] Choisir une arme ferme le menu et l'arme est appliquée (en freeze time) et enregistrée (visible sur le panel).
+- [ ] Le toggle AWP affiche son état (ON/OFF) à la réouverture de `!guns`.
+- [ ] Menu admin (`!retake`) et éditeur de spawns fonctionnent aussi en chat.
+- [ ] Choisir dans le chat ne provoque ni kick ni « Long frame » au premier usage.
+- [ ] `"Display": "WorldText"` (ou absent) : retour aux menus devant le joueur, comportement inchangé.
+- [ ] Valeur invalide (`"Display": "Foo"`) : avertissement « invalid JSON » dans les logs, tout `hud.json` repris par défaut (menus `WorldText`).
