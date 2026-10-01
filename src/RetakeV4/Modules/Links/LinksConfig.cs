@@ -7,6 +7,8 @@ public sealed record LinkConfig
     public IReadOnlyList<string> Commands { get; init; } = Array.Empty<string>();
 
     public string Message { get; init; } = string.Empty;
+
+    public IReadOnlyList<string> Lines { get; init; } = Array.Empty<string>();
 }
 
 public sealed record LinksConfig : ModuleConfig

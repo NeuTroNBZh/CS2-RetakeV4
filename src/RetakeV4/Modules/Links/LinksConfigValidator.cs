@@ -7,6 +7,7 @@ public sealed partial class LinksConfigValidator : IConfigValidator<LinksConfig>
 {
     public const int MaxLinks = 32;
     public const int MaxMessageLength = 512;
+    public const int MaxLines = 16;
 
     // Commands the plugin already registers (weapon menu aliases, !awp): a link must never shadow them.
     private static readonly HashSet<string> Reserved = new(StringComparer.Ordinal)
@@ -37,7 +38,7 @@ public sealed partial class LinksConfigValidator : IConfigValidator<LinksConfig>
             }
             var commands = config.Links[i].Commands.Select(Normalize).ToList();
             used.UnionWith(commands);
-            kept.Add(config.Links[i] with { Commands = commands });
+            kept.Add(config.Links[i] with { Commands = commands, Lines = CleanLines(config.Links[i]) });
         }
         return new ValidationResult<LinksConfig>(config with { Links = kept }, issues);
     }
@@ -65,12 +66,25 @@ public sealed partial class LinksConfigValidator : IConfigValidator<LinksConfig>
         {
             return "duplicate command";
         }
-        if (string.IsNullOrWhiteSpace(link.Message) || link.Message.Length > MaxMessageLength)
+        var lines = CleanLines(link);
+        var hasMessage = !string.IsNullOrWhiteSpace(link.Message);
+        if (hasMessage == lines.Count > 0)
+        {
+            return "set either Message or Lines";
+        }
+        if (hasMessage && link.Message.Length > MaxMessageLength)
         {
             return $"message must be 1 to {MaxMessageLength} characters";
         }
+        if (lines.Count > MaxLines || lines.Any(l => l.Length > MaxMessageLength))
+        {
+            return $"at most {MaxLines} lines of {MaxMessageLength} characters";
+        }
         return null;
     }
+
+    private static IReadOnlyList<string> CleanLines(LinkConfig link) =>
+        (link.Lines ?? Array.Empty<string>()).Where(l => !string.IsNullOrWhiteSpace(l)).ToList();
 
     private static bool IsAllowed(string command, IReadOnlySet<string> used) =>
         CommandName().IsMatch(command)
