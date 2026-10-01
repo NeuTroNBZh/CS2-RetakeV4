@@ -187,4 +187,13 @@ public class LoadoutPlannerTests
         var withRifle = withAwp with { Primary = "weapon_ak47" };
         Assert.Equal("weapon_galilar", LoadoutPlanner.WithWeapons(withRifle, definition, request).Primary);
     }
+
+    [Fact]
+    public void SwapBetween_OnlyFlagsTheChangedSlots()
+    {
+        var before = new Loadout(WeaponCatalog.Awp, "weapon_glock", ArmorKind.KevlarHelmet, false, false, Array.Empty<string>());
+        Assert.Equal(new WeaponSwap(false, true), LoadoutPlanner.SwapBetween(before, before with { Secondary = "weapon_deagle" }));
+        Assert.Equal(new WeaponSwap(true, false), LoadoutPlanner.SwapBetween(before, before with { Primary = "weapon_ak47" }));
+        Assert.Equal(new WeaponSwap(false, false), LoadoutPlanner.SwapBetween(before, before));
+    }
 }

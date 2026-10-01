@@ -196,6 +196,7 @@ public sealed class AllocationModule : IRetakeModule
         foreach (var (controller, _) in players)
         {
             LoadoutApplier.Apply(controller, plan[new PlayerId(controller.Slot)]);
+            Context.Bus.Publish(new LoadoutApplied(new PlayerId(controller.Slot)));
         }
         foreach (var awp in plan.Where(p => p.Value.Primary == WeaponCatalog.Awp))
         {
@@ -266,7 +267,7 @@ public sealed class AllocationModule : IRetakeModule
             var request = new LoadoutRequest(id, selection.Team, preferences.RequestFor(player.SteamID, selection.Team, definition.Name));
             var adjusted = LoadoutPlanner.WithWeapons(loadout, definition, request);
             _lastPlan = _lastPlan.SetItem(id, adjusted);
-            LoadoutApplier.Apply(player, adjusted);
+            LoadoutApplier.SwapWeapons(player, loadout, adjusted);
             Context.Bus.Publish(new HudAlert(id, HudText.Of("allocation.menu.applied_now")));
             return;
         }

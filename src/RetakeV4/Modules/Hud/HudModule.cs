@@ -52,11 +52,12 @@ public sealed class HudModule : IRetakeModule
 
     private void LoadMenus(ModuleContext context)
     {
-        var menus = new MenuHud(_config, context.Text, context.Bus, context.Logger, () => context.Rounds.State.Phase);
+        var menus = new MenuHud(_config, context.Text, context.Bus, context.Logger, () => context.Rounds.State.Phase, () => DateTimeOffset.UtcNow);
         _menus = menus;
         var hooks = context.Hooks;
         hooks.OnBus<HudMenuOpen>(menus.OnOpen);
         hooks.OnBus<HudMenuClose>(menus.OnClose);
+        hooks.OnBus<LoadoutApplied>(menus.OnLoadoutApplied);
         hooks.OnBus<MapStarted>(_ => menus.Reset());
         hooks.OnTick("menu_tick", menus.Tick);
         hooks.OnCheckTransmit("menu_transmit", menus.OnCheckTransmit);
@@ -68,7 +69,7 @@ public sealed class HudModule : IRetakeModule
         {
             if (e.Userid is { } player)
             {
-                menus.Close(player.Slot);
+                menus.Forget(player.Slot);
             }
         });
         for (var key = 1; key <= MenuNavigator.MaxLines; key++)

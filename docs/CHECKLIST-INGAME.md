@@ -83,3 +83,6 @@ Remplir aussi `docs/spikes/hud-probe-findings.md` : les réglages `hud.json` →
 - [ ] Déconnexion avec le menu ouvert : aucune entité orpheline (`ent_find point_worldtext`).
 - [ ] Perf : 2+ menus ouverts, aucune chute de fps notable.
 - [ ] `hud.json` → `Menu.Input` = `Keys` : la visée ne sélectionne plus, le clavier fonctionne.
+- [ ] `plant.json` en `FastPlant` : le poseur change d'arme pendant le freeze time et garde la C4 (pas de victoire CT forcée).
+- [ ] Début de round avec le menu ouvert automatiquement : aucune ligne n'est sélectionnée toute seule par les commandes `slot1-3` envoyées à la distribution ; l'arme principale est bien en main.
+- [ ] `ent_remove` d'une ligne de menu : le menu se reconstruit, le module Hud n'est pas désactivé.

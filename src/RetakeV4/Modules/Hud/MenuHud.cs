@@ -15,24 +15,29 @@ namespace RetakeV4.Modules.Hud;
 // round_start (CS2 cleans the map in between): sessions survive and are rendered again when the window reopens.
 internal sealed class MenuHud
 {
+    private static readonly TimeSpan SlotKeyMute = TimeSpan.FromSeconds(1);
+
     private readonly HudConfig _config;
     private readonly ITextService _text;
     private readonly IEventBus _bus;
     private readonly ILogger _logger;
     private readonly Func<RoundPhase> _phase;
+    private readonly Func<DateTimeOffset> _clock;
     private readonly Color _accent;
     private readonly Color _normal;
     private readonly Color _muted;
     private readonly Dictionary<int, MenuSession> _sessions = new();
     private bool _entitiesAllowed = true;
+    private KeyMute _keyMute = KeyMute.Empty;
 
-    public MenuHud(HudConfig config, ITextService text, IEventBus bus, ILogger logger, Func<RoundPhase> phase)
+    public MenuHud(HudConfig config, ITextService text, IEventBus bus, ILogger logger, Func<RoundPhase> phase, Func<DateTimeOffset> clock)
     {
         _config = config;
         _text = text;
         _bus = bus;
         _logger = logger;
         _phase = phase;
+        _clock = clock;
         _accent = ColorTranslator.FromHtml(config.Theme.Accent);
         _normal = ColorTranslator.FromHtml(config.Theme.Text);
         _muted = ColorTranslator.FromHtml(config.Theme.Muted);
@@ -55,6 +60,14 @@ internal sealed class MenuHud
             _sessions[slot] = new MenuSession(MenuNavigator.Open(e.Menu));
         }
         Render(slot);
+    }
+
+    public void OnLoadoutApplied(LoadoutApplied e) => _keyMute = _keyMute.Mute(e.Player.Slot, _clock(), SlotKeyMute);
+
+    public void Forget(int slot)
+    {
+        Close(slot);
+        _keyMute = _keyMute.Forget(slot);
     }
 
     public void OnClose(HudMenuClose e)
@@ -153,7 +166,7 @@ internal sealed class MenuHud
     public HookResult OnSlotKey(CCSPlayerController? player, int key)
     {
         if (player is not { IsValid: true } || !_sessions.TryGetValue(player.Slot, out var session) || session.View is null
-            || !Controls(player).Keys || key > session.Navigator.Lines().Count)
+            || !Controls(player).Keys || key > session.Navigator.Lines().Count || _keyMute.IsMuted(player.Slot, _clock()))
         {
             return HookResult.Continue;
         }
@@ -218,6 +231,12 @@ internal sealed class MenuHud
     {
         if (session.View is null || session.Opened is not { } opened || PlayerView.Of(player) is not { } view)
         {
+            return;
+        }
+        if (session.View.Entities.Any(e => !e.IsValid))
+        {
+            // Removed behind our back (other plugin, ent_remove, parent gone): rebuild next tick instead of failing every tick.
+            session.Detach();
             return;
         }
         var layout = Layout(session);
