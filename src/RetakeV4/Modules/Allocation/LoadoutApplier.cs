@@ -1,3 +1,4 @@
+using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Modules.Entities.Constants;
 using RetakeV4.Domain.Loadouts;
@@ -67,6 +68,39 @@ internal static class LoadoutApplier
         {
             player.GiveNamedItem(primary);
         }
+    }
+
+    // After a captured native buy: every gun goes, the round's guns come back (the bought one never stays).
+    public static void ReplaceGuns(CCSPlayerController player, Loadout loadout)
+    {
+        var pawn = player.PlayerPawn.Value;
+        if (pawn is null || !pawn.IsValid || pawn.WeaponServices is null)
+        {
+            return;
+        }
+        var guns = pawn.WeaponServices.MyWeapons
+            .Select(handle => handle.Value)
+            .Where(weapon => weapon is { IsValid: true } && (WeaponCatalog.IsPrimary(weapon.DesignerName) || WeaponCatalog.IsSecondary(weapon.DesignerName)))
+            .ToList();
+        foreach (var weapon in guns)
+        {
+            weapon!.Remove();
+        }
+        player.GiveNamedItem(loadout.Secondary);
+        if (loadout.Primary is { } primary)
+        {
+            player.GiveNamedItem(primary);
+        }
+    }
+
+    public static void ResetCash(CCSPlayerController player)
+    {
+        if (player.InGameMoneyServices is not { } money)
+        {
+            return;
+        }
+        money.Account = NativeBuy.Cash;
+        Utilities.SetStateChanged(player, "CCSPlayerController", "m_pInGameMoneyServices");
     }
 
     private static void Strip(CCSPlayerPawn pawn)

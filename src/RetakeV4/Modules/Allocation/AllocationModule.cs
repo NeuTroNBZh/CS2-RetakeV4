@@ -31,6 +31,7 @@ public sealed class AllocationModule : IRetakeModule
     private GrenadesConfig _grenades = new();
     private ModuleContext? _context;
     private PreferenceService? _preferences;
+    private NativeBuySelector? _nativeBuy;
     private readonly HashSet<ulong> _menuSeen = new();
     private readonly HashSet<int> _autoOpened = new();
     private ImmutableDictionary<PlayerId, Loadout> _lastPlan = ImmutableDictionary<PlayerId, Loadout>.Empty;
@@ -84,6 +85,18 @@ public sealed class AllocationModule : IRetakeModule
         {
             hooks.Command($"css_{alias}", "Opens the weapon menu", (player, _) => OnGunsCommand(player));
         }
+        if (AllocationModes.UsesNativeBuy(_config.Mode))
+        {
+            var nativeBuy = new NativeBuySelector(context, () => _current, OnNativeBuy, RestoreGuns);
+            _nativeBuy = nativeBuy;
+            hooks.CommandListener("buy", nativeBuy.OnBuy, HookMode.Pre);
+            hooks.OnEvent<EventItemPickup>("item_pickup", nativeBuy.OnItemPickup);
+        }
+        if (_config.HowToIntervalMinutes > 0)
+        {
+            hooks.RepeatTimer("howto", _config.HowToIntervalMinutes * 60f, () => Context.Text.ChatAll(AllocationModes.HowToKey(_config.Mode)));
+        }
+        ApplyBuyCvars();
         foreach (var player in PlayerQueries.Humans())
         {
             OnConnected(player);
@@ -94,6 +107,7 @@ public sealed class AllocationModule : IRetakeModule
     {
         _preferences?.DisposeAsync().AsTask().Wait(TimeSpan.FromSeconds(5));
         _preferences = null;
+        _nativeBuy = null;
         SqliteConnection.ClearAllPools();
         _context = null;
     }
@@ -198,6 +212,15 @@ public sealed class AllocationModule : IRetakeModule
             LoadoutApplier.Apply(controller, plan[new PlayerId(controller.Slot)]);
             Context.Bus.Publish(new LoadoutApplied(new PlayerId(controller.Slot)));
         }
+        if (_nativeBuy is not null)
+        {
+            _nativeBuy.ClearPending();
+            ApplyBuyCvars();
+            foreach (var (controller, _) in players)
+            {
+                LoadoutApplier.ResetCash(controller);
+            }
+        }
         foreach (var awp in plan.Where(p => p.Value.Primary == WeaponCatalog.Awp))
         {
             Context.Bus.Publish(new HudAlert(awp.Key, HudText.Of("allocation.awp.received")));
@@ -211,11 +234,17 @@ public sealed class AllocationModule : IRetakeModule
 
     private void OnGunsCommand(CCSPlayerController? player)
     {
-        if (player is { IsValid: true } && player.SteamID != 0)
+        if (player is not { IsValid: true } || player.SteamID == 0)
         {
-            _menuSeen.Add(player.SteamID);
-            OpenMenu(player, refreshOnly: false);
+            return;
         }
+        if (!AllocationModes.UsesMenu(_config.Mode))
+        {
+            Context.Text.Chat(player, AllocationModes.HowToKey(_config.Mode));
+            return;
+        }
+        _menuSeen.Add(player.SteamID);
+        OpenMenu(player, refreshOnly: false);
     }
 
     private void OpenMenu(CCSPlayerController player, bool refreshOnly)
@@ -289,7 +318,7 @@ public sealed class AllocationModule : IRetakeModule
     // New players and every player after a round type change get the menu once, if the round offers a choice.
     private void AutoOpenMenus()
     {
-        if (!_config.AutoOpenMenu || _current is not { } current)
+        if (!_config.AutoOpenMenu || !AllocationModes.UsesMenu(_config.Mode) || _current is not { } current)
         {
             return;
         }
@@ -315,6 +344,47 @@ public sealed class AllocationModule : IRetakeModule
             Context.Bus.Publish(new HudMenuClose(new PlayerId(slot), WeaponMenu.MenuId));
         }
         _autoOpened.Clear();
+    }
+
+    private void OnNativeBuy(CCSPlayerController player, BuyDecision decision)
+    {
+        if (_preferences is not { } preferences)
+        {
+            return;
+        }
+        var id = new PlayerId(player.Slot);
+        switch (decision.Outcome)
+        {
+            case BuyOutcome.SetWeapon when decision.Selection is { } selection:
+                ApplySelection(player, preferences, selection);
+                break;
+            case BuyOutcome.AwpVolunteer:
+                if (!preferences.IsAwpVolunteer(player.SteamID))
+                {
+                    preferences.ToggleAwp(player.SteamID);
+                }
+                Context.Bus.Publish(new HudAlert(id, HudText.Of("allocation.buy.awp_volunteer")));
+                break;
+            default:
+                Context.Bus.Publish(new HudAlert(id, HudText.Of("allocation.buy.not_available")));
+                break;
+        }
+    }
+
+    private void RestoreGuns(CCSPlayerController player)
+    {
+        if (player.PawnIsAlive && _lastPlan.TryGetValue(new PlayerId(player.Slot), out var loadout))
+        {
+            LoadoutApplier.ReplaceGuns(player, loadout);
+        }
+    }
+
+    private void ApplyBuyCvars()
+    {
+        foreach (var (name, value) in AllocationModes.Cvars(_config.Mode))
+        {
+            Server.ExecuteCommand($"{name} {value}");
+        }
     }
 
     private IReadOnlyList<GrenadeKit> GrenadeKits(string pool)
