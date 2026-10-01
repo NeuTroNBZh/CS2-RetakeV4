@@ -85,5 +85,6 @@
   "spawns.forcesite.cleared": "Site forcing cancelled.",
   "spawns.forcesite.usage": "Usage: css_retake_forcesite <A|B|off> [once|sticky]",
   "spawns.forcesite.no_spawns": "No spawn on site {0}: forcing refused.",
-  "spawns.missing.admin": "No spawns for {0}: default CS2 spawns are used (css_retake_edit)."
+  "spawns.missing.admin": "No spawns for {0}: default CS2 spawns are used (css_retake_edit).",
+  "spawns.editor.not_editing": "Enter the editor first: css_retake_edit."
 }

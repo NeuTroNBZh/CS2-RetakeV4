@@ -168,6 +168,7 @@ public partial class LangFilesTests
     [InlineData("spawns.forcesite.usage")]
     [InlineData("spawns.forcesite.no_spawns")]
     [InlineData("spawns.missing.admin")]
+    [InlineData("spawns.editor.not_editing")]
     public void Phase4aKeys_ArePresent(string key)
     {
         Assert.Contains(key, Load("en").Keys);

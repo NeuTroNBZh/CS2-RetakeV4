@@ -71,4 +71,15 @@ public sealed class SpawnFileStoreTests : IDisposable
         Assert.Throws<ArgumentException>(() => Store().Save(map, Array.Empty<SpawnPoint>()));
         Assert.Empty(Directory.GetFiles(_dir.Path, "*", SearchOption.AllDirectories));
     }
+
+    [Fact]
+    public void Save_OverAnInvalidFile_KeepsTheOriginalForever()
+    {
+        const string broken = "{ \"SchemaVersion\": 2, \"Spawns\": [ , ] }";
+        File.WriteAllText(_dir.File("de_inferno.json"), broken);
+        Store().Save("de_inferno", new[] { Spawn(TeamSide.T, BombSite.A) });
+        Store().Save("de_inferno", new[] { Spawn(TeamSide.CT, BombSite.B) });
+        var kept = Directory.GetFiles(_dir.Path, "de_inferno.json.*.invalid.bak");
+        Assert.Equal(broken, File.ReadAllText(Assert.Single(kept)));
+    }
 }

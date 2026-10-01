@@ -27,8 +27,8 @@ public class SpawnEditorMenuTests
         var nearest = Assert.Single(menu.Items, i => i.Id == "nearest");
         Assert.Equal(new object[] { "[T][A][C4] #01" }, nearest.Label.Args);
         Assert.Equal(
-            new[] { SpawnEditorMenu.DeleteId, SpawnEditorMenu.TeamId, SpawnEditorMenu.SiteId, SpawnEditorMenu.PlantId },
-            nearest.Submenu!.Items.Select(i => i.Id));
+            new[] { NearestAction.Delete, NearestAction.Team, NearestAction.Site, NearestAction.Plant }.Select(a => new NearestEdit(a, A.Id)),
+            nearest.Submenu!.Items.Select(i => SpawnEditorMenu.ParseNearest(i.Id)));
         Assert.True(nearest.Submenu.Items[^1].IsOn);
         Assert.True(Assert.Single(menu.Items, i => i.Id == SpawnEditorMenu.NoclipId).IsOn);
     }
@@ -70,5 +70,15 @@ public class SpawnEditorMenuTests
         Assert.Equal(A.Id, SpawnEditorMenu.ParseTeleport(entry.Id));
         Assert.Equal("[T][A][C4] #01", entry.Label.Literal);
         Assert.Null(SpawnEditorMenu.ParseTeleport("tp:nope"));
+    }
+
+    [Fact]
+    public void NearestEdits_TargetTheDisplayedSpawn()
+    {
+        var edit = new NearestEdit(NearestAction.Site, Guid.NewGuid());
+        Assert.Equal(edit, SpawnEditorMenu.ParseNearest(SpawnEditorMenu.NearestItemId(edit)));
+        Assert.Null(SpawnEditorMenu.ParseNearest("nearest:delete"));
+        Assert.Null(SpawnEditorMenu.ParseNearest("nearest:explode:" + Guid.NewGuid()));
+        Assert.Null(SpawnEditorMenu.ParseNearest(SpawnEditorMenu.SaveId));
     }
 }

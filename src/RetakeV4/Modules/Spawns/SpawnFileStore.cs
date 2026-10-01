@@ -34,10 +34,17 @@ public sealed class SpawnFileStore
         if (File.Exists(path))
         {
             var current = File.ReadAllText(path);
+            var parsed = SpawnFileFormat.Parse(current);
             var legacyBackup = path + ".v3.bak";
-            if (!File.Exists(legacyBackup) && SpawnFileFormat.Parse(current).IsLegacyFormat)
+            if (!File.Exists(legacyBackup) && parsed.IsLegacyFormat)
             {
                 File.WriteAllText(legacyBackup, current);
+            }
+            // A file that did not load cleanly (hand-edit mistake) may hold spawns the editor never saw: it gets its own
+            // timestamped copy that later saves never overwrite.
+            if (parsed.Issues.Count > 0)
+            {
+                File.WriteAllText($"{path}.{DateTime.UtcNow:yyyyMMddHHmmssfff}.invalid.bak", current);
             }
             File.WriteAllText(path + ".bak", current);
         }

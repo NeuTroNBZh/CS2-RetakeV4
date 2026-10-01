@@ -321,14 +321,12 @@ internal sealed class SpawnEditor
             case SpawnEditorMenu.ExitDiscardId:
                 Discard(player);
                 return;
-            case SpawnEditorMenu.DeleteId:
-                DeleteNearest(player);
-                return;
-            case SpawnEditorMenu.TeamId or SpawnEditorMenu.SiteId or SpawnEditorMenu.PlantId:
-                EditNearest(player, itemId);
-                return;
         }
-        if (SpawnEditorMenu.ParseAdd(itemId) is { } add)
+        if (SpawnEditorMenu.ParseNearest(itemId) is { } nearestEdit)
+        {
+            EditSpawn(player, nearestEdit);
+        }
+        else if (SpawnEditorMenu.ParseAdd(itemId) is { } add)
         {
             AddHere(player, add);
         }
@@ -345,21 +343,28 @@ internal sealed class SpawnEditor
         Leave(player, player.Slot);
     }
 
-    private void EditNearest(CCSPlayerController player, string itemId)
+    private void EditSpawn(CCSPlayerController player, NearestEdit edit)
     {
-        if (NearestTo(player) is not { } nearest)
+        if (_catalog.Set.Spawns.FirstOrDefault(s => s.Id == edit.Spawn) is not { } spawn)
         {
             Notify(player, "spawns.editor.none_nearby");
             return;
         }
-        var change = itemId switch
+        var label = _catalog.Set.Label(spawn);
+        if (edit.Action == NearestAction.Delete)
         {
-            SpawnEditorMenu.TeamId => new SpawnChange(Team: nearest.Team == TeamSide.T ? TeamSide.CT : TeamSide.T),
-            SpawnEditorMenu.SiteId => new SpawnChange(Site: nearest.Site == BombSite.A ? BombSite.B : BombSite.A),
-            _ => new SpawnChange(CanPlant: !nearest.CanPlant),
+            Apply(_catalog.Set.Remove(spawn.Id));
+            Notify(player, "spawns.editor.deleted", label);
+            return;
+        }
+        var change = edit.Action switch
+        {
+            NearestAction.Team => new SpawnChange(Team: spawn.Team == TeamSide.T ? TeamSide.CT : TeamSide.T),
+            NearestAction.Site => new SpawnChange(Site: spawn.Site == BombSite.A ? BombSite.B : BombSite.A),
+            _ => new SpawnChange(CanPlant: !spawn.CanPlant),
         };
-        Apply(_catalog.Set.Update(nearest.Id, change));
-        var updated = _catalog.Set.Spawns.First(s => s.Id == nearest.Id);
+        Apply(_catalog.Set.Update(spawn.Id, change));
+        var updated = _catalog.Set.Spawns.First(s => s.Id == spawn.Id);
         Notify(player, "spawns.editor.updated", _catalog.Set.Label(updated));
     }
 

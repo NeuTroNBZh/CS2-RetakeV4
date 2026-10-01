@@ -103,3 +103,6 @@ Remplir aussi `docs/spikes/hud-probe-findings.md` : les réglages `hud.json` →
 - [ ] `css_retake_forcesite B` : le round suivant est sur B, puis tirage normal ; `css_retake_forcesite A sticky` : tous les rounds sur A jusqu'à `css_retake_forcesite off`.
 - [ ] `css_retake_forcesite B` sur une map sans spawn B : refusé.
 - [ ] Map sans fichier de spawns : chaque admin reçoit l'alerte HUD « Aucun spawn pour <map> » à chaque round.
+- [ ] `css_retake_addspawn` / `css_retake_delspawn` hors de l'éditeur : refusés (« Entre d'abord dans l'éditeur »).
+- [ ] En noclip, ouvrir « Le plus proche » puis s'éloigner vers un autre spawn avant de cliquer « Supprimer » : c'est bien le spawn affiché qui est supprimé.
+- [ ] Fichier `spawns/<map>.json` volontairement cassé (virgule en trop) puis deux sauvegardes : `<map>.json.<date>.invalid.bak` contient toujours l'original.

@@ -7,6 +7,17 @@ public sealed record SpawnEditorView(SpawnSet Set, SpawnPoint? Nearest, bool Noc
 
 public sealed record SpawnToAdd(TeamSide Team, BombSite Site, bool CanPlant);
 
+public enum NearestAction
+{
+    Delete,
+    Team,
+    Site,
+    Plant,
+}
+
+// The spawn id travels with the action: the nearest spawn may change between the menu refresh and the click.
+public sealed record NearestEdit(NearestAction Action, Guid Spawn);
+
 public static class SpawnEditorMenu
 {
     public const string MenuId = "spawns.editor";
@@ -16,13 +27,10 @@ public static class SpawnEditorMenu
     public const string ExitId = "exit";
     public const string ExitSaveId = "exit:save";
     public const string ExitDiscardId = "exit:discard";
-    public const string DeleteId = "nearest:delete";
-    public const string TeamId = "nearest:team";
-    public const string SiteId = "nearest:site";
-    public const string PlantId = "nearest:plant";
 
     private const string AddPrefix = "add:";
     private const string TeleportPrefix = "tp:";
+    private const string NearestPrefix = "nearest:";
     private const string PlantSuffix = ":plant";
 
     private static readonly SpawnToAdd[] AddChoices =
@@ -71,6 +79,18 @@ public static class SpawnEditorMenu
     public static Guid? ParseTeleport(string itemId) =>
         itemId.StartsWith(TeleportPrefix, StringComparison.Ordinal) && Guid.TryParse(itemId[TeleportPrefix.Length..], out var id) ? id : null;
 
+    public static string NearestItemId(NearestEdit edit) => $"{NearestPrefix}{edit.Action}:{edit.Spawn}";
+
+    public static NearestEdit? ParseNearest(string itemId)
+    {
+        var parts = itemId.Split(':');
+        return parts.Length == 3 && parts[0] + ":" == NearestPrefix
+            && Enum.TryParse<NearestAction>(parts[1], out var action) && Enum.IsDefined(action)
+            && Guid.TryParse(parts[2], out var spawn)
+                ? new NearestEdit(action, spawn)
+                : null;
+    }
+
     private static Menu AddMenu() => new(
         "add",
         HudText.Of("spawns.editor.menu.add"),
@@ -85,12 +105,14 @@ public static class SpawnEditorMenu
         var otherSite = nearest.Site == BombSite.A ? BombSite.B : BombSite.A;
         return new Menu("nearest", HudText.Raw(set.Label(nearest)), new[]
         {
-            new MenuItem(DeleteId, HudText.Of("spawns.editor.menu.delete"), MenuItemKind.Action),
-            new MenuItem(TeamId, HudText.Of("spawns.editor.menu.set_team", otherTeam.ToString()), MenuItemKind.Action),
-            new MenuItem(SiteId, HudText.Of("spawns.editor.menu.set_site", otherSite.ToString()), MenuItemKind.Action),
-            new MenuItem(PlantId, HudText.Of("spawns.editor.menu.can_plant"), MenuItemKind.Toggle, IsOn: nearest.CanPlant),
+            new MenuItem(Nearest(NearestAction.Delete, nearest), HudText.Of("spawns.editor.menu.delete"), MenuItemKind.Action),
+            new MenuItem(Nearest(NearestAction.Team, nearest), HudText.Of("spawns.editor.menu.set_team", otherTeam.ToString()), MenuItemKind.Action),
+            new MenuItem(Nearest(NearestAction.Site, nearest), HudText.Of("spawns.editor.menu.set_site", otherSite.ToString()), MenuItemKind.Action),
+            new MenuItem(Nearest(NearestAction.Plant, nearest), HudText.Of("spawns.editor.menu.can_plant"), MenuItemKind.Toggle, IsOn: nearest.CanPlant),
         });
     }
+
+    private static string Nearest(NearestAction action, SpawnPoint spawn) => NearestItemId(new NearestEdit(action, spawn.Id));
 
     private static Menu TeleportMenu(SpawnSet set) => new(
         "teleport",

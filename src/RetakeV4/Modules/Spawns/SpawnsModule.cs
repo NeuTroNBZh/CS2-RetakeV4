@@ -220,7 +220,7 @@ public sealed class SpawnsModule : IRetakeModule
     {
         hooks.Command("css_retake_edit", "Spawn editor: css_retake_edit [save|discard|exit]", (p, c) => WithAdminPlayer(p, player => Editor.HandleEditCommand(player, c.ArgCount > 1 ? c.GetArg(1) : null)));
         hooks.Command("css_retake_addspawn", "Adds a spawn here: css_retake_addspawn <T|CT> <A|B> [plant]", OnAddSpawn);
-        hooks.Command("css_retake_delspawn", "Deletes the nearest spawn", (p, _) => WithAdminPlayer(p, Editor.DeleteNearest));
+        hooks.Command("css_retake_delspawn", "Deletes the nearest spawn", (p, _) => WithEditor(p, Editor.DeleteNearest));
         hooks.Command("css_retake_tpspawn", "Teleports to spawn <number>", OnTeleportToSpawn);
         hooks.Command("css_retake_teleport", "Teleports to <x> <y> <z>", OnTeleportToPosition);
         hooks.Command("css_retake_savespawns", "Saves the spawns of the current map", (p, _) => WithAdmin(p, () => Editor.Save(p)));
@@ -258,7 +258,7 @@ public sealed class SpawnsModule : IRetakeModule
             return;
         }
         var canPlant = command.ArgCount > 3 && SpawnArgs.IsPlantFlag(command.GetArg(3));
-        WithAdminPlayer(player, p => Editor.AddHere(p, new SpawnToAdd(team.Value, site.Value, canPlant)));
+        WithEditor(player, p => Editor.AddHere(p, new SpawnToAdd(team.Value, site.Value, canPlant)));
     }
 
     private void OnTeleportToSpawn(CCSPlayerController? player, CommandInfo command)
@@ -283,6 +283,18 @@ public sealed class SpawnsModule : IRetakeModule
         }
         WithAdminPlayer(player, p => Editor.TeleportToPosition(p, new Vec3(coordinates[0]!.Value, coordinates[1]!.Value, coordinates[2]!.Value)));
     }
+
+    // Changing spawns outside the editor would silently alter the live game with an unsaved set.
+    private void WithEditor(CCSPlayerController? player, Action<CCSPlayerController> action) =>
+        WithAdminPlayer(player, p =>
+        {
+            if (!Editor.IsEditing(p.Slot))
+            {
+                Reply(p, "spawns.editor.not_editing");
+                return;
+            }
+            action(p);
+        });
 
     private void WithAdmin(CCSPlayerController? player, Action action)
     {
