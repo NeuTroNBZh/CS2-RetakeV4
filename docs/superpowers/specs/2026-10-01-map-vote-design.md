@@ -9,7 +9,7 @@ Faire tourner les maps du serveur Retake : à la fin d'une partie, les joueurs v
 
 Critères de réussite :
 - les maps proposées sont exactement celles qui ont des spawns Retake (moins la map en cours et les maps exclues), sans liste à tenir à jour ;
-- le vote se fait dans le menu HUD Retake, sans geler les joueurs ;
+- le vote se fait dans un menu du chat (`!1`, `!2`…), qui ne gêne ni les déplacements ni le round en cours ;
 - la map change toute seule à la fin de la partie, ou à la fin du round après un `!rtv` réussi ;
 - aucun plugin tiers.
 
@@ -24,8 +24,8 @@ Critères de réussite :
 ## Vote de fin de partie
 
 - Déclenchement (`VoteTrigger`, Domain) : au début d'un round, si `mp_maxrounds` > 0, hors échauffement, aucun vote déjà fait sur cette map, et `mp_maxrounds - TotalRoundsPlayed <= TriggerRoundsBeforeEnd`.
-- Le menu `mapvote.menu` s'ouvre pour chaque joueur humain connecté (T, CT ou spectateur). Il liste toutes les maps, sur plusieurs pages si besoin. Une ligne d'en-tête rappelle le temps restant.
-- Un joueur peut changer son vote tant que le vote est ouvert. Un joueur qui arrive pendant le vote reçoit le menu.
+- Le menu `mapvote.menu` s'ouvre dans le chat pour chaque joueur humain connecté (T, CT ou spectateur). Il liste toutes les maps ; le menu du chat pagine tout seul. Le chat annonce l'ouverture et la durée.
+- Un joueur peut changer son vote tant que le vote est ouvert : `!vote` (et `css_vote`) rouvre le menu. Un joueur qui arrive pendant le vote reçoit le menu.
 - Durée : `VoteSeconds`. À la fin, le menu se ferme pour tous.
 - Résultat (`MapVote.Result(IRandom)`, Domain) : la map qui a le plus de voix ; égalité → tirage au sort parmi les ex æquo ; aucune voix → tirage au sort dans la liste.
 - Annonce dans le chat : la map choisie et son nombre de voix. Le module fixe `nextlevel <map>`.
@@ -42,9 +42,9 @@ Critères de réussite :
   - dans les deux cas, la map change à `round_end`, après `ChangeDelaySeconds` (pas d'attente de la fin de partie).
 - Une fois le seuil atteint, `!rtv` répond « déjà en cours ». Un joueur qui se déconnecte perd son `!rtv` et sa voix ; le seuil est recalculé avec les joueurs restants.
 
-## HUD : menu sans gel
+## HUD : menu dans le chat
 
-`Menu` (Domain) reçoit `bool FreezeWhileOpen = true`. Le moteur HUD ne gèle le joueur que si `HudConfig.Menu.FreezeWhileOpen` **et** `Menu.FreezeWhileOpen` sont vrais. Le menu de vote passe `false`. Les autres menus ne changent pas.
+Le menu central et les menus `point_worldtext` se pilotent avec les touches de déplacement et gèlent le joueur : inutilisables pendant un round en cours. `Menu` (Domain) reçoit `bool ChatOnly = false`. Quel que soit `hud.json → Menu.Display`, un menu `ChatOnly` est affiché par le menu du chat (`ChatMenuHud`), jamais par le menu central ni par les menus `point_worldtext`. Le menu de vote passe `true`. Les autres menus ne changent pas.
 
 ## Configuration
 
