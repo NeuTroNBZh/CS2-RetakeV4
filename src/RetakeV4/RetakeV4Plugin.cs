@@ -1,9 +1,11 @@
+using System.Diagnostics;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Core.Attributes;
 using Microsoft.Extensions.Logging;
 using RetakeV4.Adapters;
 using RetakeV4.Configuration;
 using RetakeV4.Contracts;
+using RetakeV4.Domain.Common;
 using RetakeV4.Domain.Events;
 using RetakeV4.Domain.Modules;
 using RetakeV4.Domain.Rounds;
@@ -16,6 +18,7 @@ namespace RetakeV4;
 public sealed class RetakeV4Plugin : BasePlugin
 {
     private const int MaxErrorsPerRound = 5;
+    private static readonly TimeSpan SlowHandlerThreshold = TimeSpan.FromMilliseconds(50);
 
     private ModuleHost? _host;
     private EventBus? _bus;
@@ -30,9 +33,11 @@ public sealed class RetakeV4Plugin : BasePlugin
     {
         // Registers the API capability even if the Api module is disabled: consumers then get null instead of an exception.
         RetakeApiHost.Publish(null);
+        WarmUpInBackground();
         var bus = new EventBus(OnBusError);
         _bus = bus;
-        var guard = new ModuleGuard(MaxErrorsPerRound, OnGuardFailure);
+        var guard = new ModuleGuard(MaxErrorsPerRound, OnGuardFailure,
+            new SlowRunReporter(SlowHandlerThreshold, () => Stopwatch.GetElapsedTime(0), OnSlowRun));
         var pipeline = new PreparationPipeline(guard);
         var rounds = new RoundTracker(bus, pipeline, RoundState.Initial, GameRulesAccessor.TotalRoundsPlayed);
         var text = new TextService(Localizer);
@@ -62,6 +67,14 @@ public sealed class RetakeV4Plugin : BasePlugin
     }
 
     public override void OnAllPluginsLoaded(bool hotReload) => _bus?.Publish(new AllPluginsLoaded(hotReload));
+
+    private void WarmUpInBackground() =>
+        Task.Run(DomainWarmup.Run).ContinueWith(
+            t => Logger.LogWarning(t.Exception, "Domain warm-up failed: the first round may stall the server"),
+            TaskContinuationOptions.OnlyOnFaulted);
+
+    private void OnSlowRun(SlowRun run) =>
+        Logger.LogWarning("Slow handler {Module}/{Stage}: {Elapsed} ms", run.Module, run.Stage, (int)run.Elapsed.TotalMilliseconds);
 
     private string ConfigDirectory() =>
         Path.GetFullPath(Path.Combine(ModuleDirectory, "..", "..", "configs", "plugins", "RetakeV4"));
