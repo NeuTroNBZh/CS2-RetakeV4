@@ -6,6 +6,7 @@ using RetakeV4.Modules.Core;
 using RetakeV4.Modules.Hud;
 using RetakeV4.Modules.InstaDefuse;
 using RetakeV4.Modules.Links;
+using RetakeV4.Modules.MapCleanup;
 using RetakeV4.Modules.Plant;
 using RetakeV4.Modules.RoundTypes;
 using RetakeV4.Modules.Spawns;
@@ -29,6 +30,7 @@ public static class ModuleCatalog
         new AdminModule(),
         new LinksModule(),
         new AnnouncementsModule(),
+        new MapCleanupModule(),
         new ApiModule(),
     };
 }

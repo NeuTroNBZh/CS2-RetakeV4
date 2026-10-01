@@ -39,7 +39,7 @@ public sealed class AdminModule : IRetakeModule
     {
         _context = context;
         var hooks = context.Hooks;
-        hooks.Command("css_retake", "Retake admin menu: css_retake [edit]", OnRetakeCommand);
+        hooks.Command("css_retake", "Retake admin menu: css_retake [edit|cleanup]", OnRetakeCommand);
         hooks.OnBus<HudMenuSelected>(OnMenuSelected);
         if (_config.SimpleAdminBridge)
         {
@@ -67,6 +67,9 @@ public sealed class AdminModule : IRetakeModule
                 break;
             case AdminAction.Scramble:
                 Context.Bus.Publish(new ScrambleRequested(id));
+                break;
+            case AdminAction.MapCleanupEditor:
+                Context.Bus.Publish(new MapCleanupEditorRequested(id));
                 break;
             case AdminAction.ForceSite when selection.Force is { } request:
                 Context.Bus.Publish(new ForceSiteRequested(id, request));
@@ -96,6 +99,9 @@ public sealed class AdminModule : IRetakeModule
                 break;
             case RetakeCommandKind.Editor:
                 Execute(player, new AdminSelection(AdminAction.SpawnEditor));
+                break;
+            case RetakeCommandKind.Cleanup:
+                Execute(player, new AdminSelection(AdminAction.MapCleanupEditor));
                 break;
             default:
                 Context.Text.ChatHelp(player, "admin.usage");

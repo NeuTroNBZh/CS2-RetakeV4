@@ -9,7 +9,7 @@ public class ModuleCatalogTests
     {
         var names = ModuleCatalog.CreateAll().Select(m => m.Name).ToList();
         Assert.Equal(
-            new[] { "Core", "Hud", "RoundTypes", "Teams", "Spawns", "Allocation", "Plant", "InstaDefuse", "Admin", "Links", "Announcements", "Api" },
+            new[] { "Core", "Hud", "RoundTypes", "Teams", "Spawns", "Allocation", "Plant", "InstaDefuse", "Admin", "Links", "Announcements", "MapCleanup", "Api" },
             names);
     }
 
