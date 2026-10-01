@@ -237,3 +237,9 @@ Pour signaler un bug : ouvrez une [issue](https://github.com/NeuTroNBZh/CS2-Reta
 - Release : poussez un tag `vx.y.z` ; GitHub Actions construit et publie les archives.
 - Architecture et règles : [CLAUDE.md](CLAUDE.md). Toute la logique métier est dans `src/RetakeV4.Domain` (sans dépendance au jeu, testée), et `src/RetakeV4` ne contient que les adaptateurs CounterStrikeSharp.
 - Tests en jeu avant une release : [docs/CHECKLIST-INGAME.md](docs/CHECKLIST-INGAME.md).
+
+---
+
+## Licence
+
+Distribué sous licence [MIT](LICENSE) : vous pouvez utiliser, modifier et redistribuer le plugin librement, en conservant la mention de copyright.
