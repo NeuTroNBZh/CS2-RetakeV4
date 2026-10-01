@@ -13,6 +13,7 @@ public sealed class HudModule : IRetakeModule
     private HudConfig _config = new();
     private ModuleContext? _context;
     private MenuHud? _menus;
+    private ChatMenuHud? _chatMenus;
 
     public string Name => "Hud";
 
@@ -30,13 +31,22 @@ public sealed class HudModule : IRetakeModule
     {
         _context = context;
         LoadCenter(context);
-        LoadMenus(context);
+        if (_config.Menu.Display == MenuDisplay.Chat)
+        {
+            LoadChatMenus(context);
+        }
+        else
+        {
+            LoadMenus(context);
+        }
     }
 
     public void Unload()
     {
         _menus?.CloseAll();
         _menus = null;
+        _chatMenus?.CloseAll();
+        _chatMenus = null;
         _context = null;
     }
 
@@ -48,6 +58,24 @@ public sealed class HudModule : IRetakeModule
         hooks.OnBus<TeamStateChanged>(center.OnTeams);
         hooks.OnBus<HudAlert>(center.OnAlert);
         hooks.OnTick("center_tick", center.Tick);
+    }
+
+    // Chat menus need none of the world-text machinery: no entities, no aim, no slot-key interception.
+    private void LoadChatMenus(ModuleContext context)
+    {
+        var menus = new ChatMenuHud(context.Text, context.Bus, NextFrame);
+        _chatMenus = menus;
+        var hooks = context.Hooks;
+        hooks.OnBus<HudMenuOpen>(e => NextFrame("menu_open", () => _chatMenus?.OnOpen(e)));
+        hooks.OnBus<HudMenuClose>(e => NextFrame("menu_close", () => _chatMenus?.OnClose(e)));
+        hooks.OnBus<MapStarted>(_ => menus.CloseAll());
+        hooks.OnEvent<EventPlayerDisconnect>("player_disconnect", e =>
+        {
+            if (e.Userid is { } player)
+            {
+                menus.Forget(player.Slot);
+            }
+        });
     }
 
     private void LoadMenus(ModuleContext context)

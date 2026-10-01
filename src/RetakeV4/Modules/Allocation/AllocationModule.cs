@@ -101,7 +101,7 @@ public sealed class AllocationModule : IRetakeModule
         }
         if (_config.HowToIntervalMinutes > 0)
         {
-            hooks.RepeatTimer("howto", _config.HowToIntervalMinutes * 60f, () => Context.Text.ChatAll(AllocationModes.HowToKey(_config.Mode)));
+            hooks.RepeatTimer("howto", (float)(_config.HowToIntervalMinutes * 60), () => Context.Text.ChatAll(AllocationModes.HowToKey(_config.Mode)));
         }
         ApplyBuyCvars();
         // Players already on the server only exist after a hot reload; at server start the engine globals are not ready yet.
