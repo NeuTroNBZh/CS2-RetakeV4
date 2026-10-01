@@ -79,7 +79,12 @@ public sealed class AllocationModule : IRetakeModule
         });
         hooks.Command("css_awp", "Toggles AWP volunteering", OnAwpCommand);
         hooks.Command("css_retake_import_v3", "Imports V3 weapon preferences: css_retake_import_v3 <path to cs2retake.db>", OnImportCommand);
-        hooks.OnBus<RoundTypesLoaded>(e => _definitions = e.Definitions);
+        hooks.OnBus<RoundTypesLoaded>(e =>
+        {
+            _definitions = e.Definitions;
+            _preferences?.PublishCatalog(_config.Database.ServerKey, CatalogExport.Build(e.Definitions));
+        });
+        hooks.OnEvent<EventRoundStart>("preferences_check", _ => _preferences?.CheckForExternalChanges());
         hooks.OnBus<HudMenuSelected>(OnMenuSelected);
         hooks.OnBus<RoundPhaseChanged>(OnPhaseChanged);
         foreach (var alias in GunsAliases)

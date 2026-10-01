@@ -142,3 +142,11 @@ Remplir aussi `docs/spikes/hud-probe-findings.md` : les réglages `hud.json` →
 - [ ] Un abonné qui lève une exception : avertissement dans les logs, le round continue.
 - [ ] `css_plugins reload RetakeV4` : un nouvel appel à `Get()` renvoie l'API rechargée (et non null).
 - [ ] `api.json` → `Enabled: false` : `Get()` renvoie null, sans exception.
+
+## Phase panel (4.1.0)
+
+- [ ] Avec `Database.Type = MySql`, au démarrage, la table `retake_catalog` contient une ligne `server_key = default` dont le JSON liste les types de round de `roundtypes.json`.
+- [ ] Modifier `Database.ServerKey` en `test-1`, redémarrer : une ligne `test-1` apparaît.
+- [ ] Joueur connecté : changer en base `primary_weapon` d'une de ses lignes (et `updated_at`), attendre le round suivant : l'arme reçue est la nouvelle, sans reconnexion.
+- [ ] Choisir une arme dans `!guns` puis lancer un round : le choix reste (pas d'écrasement par l'ancienne valeur).
+- [ ] Couper MySQL pendant la partie : les joueurs gardent leurs armes choisies, un seul avertissement par période de retry dans la console.
