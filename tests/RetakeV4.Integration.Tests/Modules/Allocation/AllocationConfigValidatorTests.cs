@@ -89,4 +89,29 @@ public class AllocationConfigValidatorTests
     [Fact]
     public void DisabledReminder_IsValid() =>
         Assert.Empty(_validator.Validate(Defaults with { HowToIntervalMinutes = 0, Mode = AllocationMode.Both }, Defaults, "allocation.json").Issues);
+
+    [Fact]
+    public void ServerKey_DefaultsToDefault() => Assert.Equal("default", Defaults.Database.ServerKey);
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("my server")]
+    [InlineData("a'; DROP TABLE x;--")]
+    [InlineData("0123456789012345678901234567890123456789012345678901234567890123456789")]
+    public void InvalidServerKey_FallsBackToDefault(string key)
+    {
+        var config = Validate(new DatabaseConfig { ServerKey = key }, out var issues);
+        Assert.Equal("default", config.Database.ServerKey);
+        Assert.Equal(1, issues);
+    }
+
+    [Theory]
+    [InlineData("agora-1")]
+    [InlineData("Retake_EU")]
+    public void ValidServerKey_IsKept(string key)
+    {
+        var config = Validate(new DatabaseConfig { ServerKey = key }, out var issues);
+        Assert.Equal(key, config.Database.ServerKey);
+        Assert.Equal(0, issues);
+    }
 }

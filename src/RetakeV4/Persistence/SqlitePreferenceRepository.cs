@@ -20,6 +20,13 @@ public sealed class SqlitePreferenceRepository : IPreferenceRepository
             updated_at TEXT NOT NULL,
             PRIMARY KEY (steam_id, team, round_type))
         """,
+        """
+        CREATE TABLE IF NOT EXISTS retake_catalog (
+            server_key TEXT NOT NULL PRIMARY KEY,
+            format_version INTEGER NOT NULL,
+            catalog TEXT NOT NULL,
+            updated_at TEXT NOT NULL)
+        """,
     };
 
     private const string UpsertSql = """
@@ -29,6 +36,15 @@ public sealed class SqlitePreferenceRepository : IPreferenceRepository
             primary_weapon = excluded.primary_weapon,
             secondary_weapon = excluded.secondary_weapon,
             awp_opt_in = excluded.awp_opt_in,
+            updated_at = excluded.updated_at
+        """;
+
+    private const string PublishCatalogSql = """
+        INSERT INTO retake_catalog (server_key, format_version, catalog, updated_at)
+        VALUES (@server_key, @format_version, @catalog, @updated_at)
+        ON CONFLICT (server_key) DO UPDATE SET
+            format_version = excluded.format_version,
+            catalog = excluded.catalog,
             updated_at = excluded.updated_at
         """;
 
@@ -52,6 +68,43 @@ public sealed class SqlitePreferenceRepository : IPreferenceRepository
     public async Task<IReadOnlyList<StoredPreference>> LoadAsync(ulong steamId, CancellationToken ct)
     {
         await using var connection = await OpenAsync(ct).ConfigureAwait(false);
+        return await ReadRowsAsync(connection, steamId, ct).ConfigureAwait(false);
+    }
+
+    public async Task<PlayerSnapshot?> SnapshotAsync(ulong steamId, CancellationToken ct)
+    {
+        await using var connection = await OpenAsync(ct).ConfigureAwait(false);
+        // Stamp first: a write landing between the two reads then shows up as a change at the next check.
+        var stamps = await ReadStampsAsync(connection, new[] { steamId }, ct).ConfigureAwait(false);
+        var rows = await ReadRowsAsync(connection, steamId, ct).ConfigureAwait(false);
+        return new PlayerSnapshot(rows, stamps.GetValueOrDefault(steamId, PreferenceSync.NoRows));
+    }
+
+    public async Task<IReadOnlyDictionary<ulong, string>?> StampsAsync(IReadOnlyCollection<ulong> steamIds, CancellationToken ct)
+    {
+        if (steamIds.Count == 0)
+        {
+            return new Dictionary<ulong, string>();
+        }
+        await using var connection = await OpenAsync(ct).ConfigureAwait(false);
+        return await ReadStampsAsync(connection, steamIds, ct).ConfigureAwait(false);
+    }
+
+    public async Task<bool> PublishCatalogAsync(PublishedCatalog catalog, CancellationToken ct)
+    {
+        await using var connection = await OpenAsync(ct).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandText = PublishCatalogSql;
+        command.Parameters.AddWithValue("@server_key", catalog.ServerKey);
+        command.Parameters.AddWithValue("@format_version", catalog.FormatVersion);
+        command.Parameters.AddWithValue("@catalog", catalog.Json);
+        command.Parameters.AddWithValue("@updated_at", DateTimeOffset.UtcNow.ToString("O"));
+        await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+        return true;
+    }
+
+    private static async Task<IReadOnlyList<StoredPreference>> ReadRowsAsync(SqliteConnection connection, ulong steamId, CancellationToken ct)
+    {
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT team, round_type, primary_weapon, secondary_weapon, awp_opt_in FROM player_loadout WHERE steam_id = @steam_id";
         command.Parameters.AddWithValue("@steam_id", unchecked((long)steamId));
@@ -65,6 +118,26 @@ public sealed class SqlitePreferenceRepository : IPreferenceRepository
                 reader.IsDBNull(3) ? null : reader.GetString(3),
                 reader.GetInt32(4) != 0);
             result.Add(new StoredPreference(new PreferenceKey(steamId, team, reader.GetString(1)), preference));
+        }
+        return result;
+    }
+
+    private static async Task<Dictionary<ulong, string>> ReadStampsAsync(SqliteConnection connection, IReadOnlyCollection<ulong> steamIds, CancellationToken ct)
+    {
+        await using var command = connection.CreateCommand();
+        var names = new List<string>();
+        foreach (var steamId in steamIds)
+        {
+            var name = $"@s{names.Count}";
+            command.Parameters.AddWithValue(name, unchecked((long)steamId));
+            names.Add(name);
+        }
+        command.CommandText = $"SELECT steam_id, MAX(updated_at) FROM player_loadout WHERE steam_id IN ({string.Join(", ", names)}) GROUP BY steam_id";
+        var result = new Dictionary<ulong, string>();
+        await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        while (await reader.ReadAsync(ct).ConfigureAwait(false))
+        {
+            result[unchecked((ulong)reader.GetInt64(0))] = reader.GetString(1);
         }
         return result;
     }

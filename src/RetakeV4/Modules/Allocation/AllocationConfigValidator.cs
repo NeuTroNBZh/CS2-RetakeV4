@@ -11,6 +11,9 @@ public sealed partial class AllocationConfigValidator : IConfigValidator<Allocat
     [GeneratedRegex(@"^[A-Za-z0-9_\-]+(/[A-Za-z0-9_\-]+)*\.db\z")]
     private static partial Regex SafeDatabaseFile();
 
+    [GeneratedRegex(@"^[A-Za-z0-9_\-]{1,64}\z")]
+    private static partial Regex SafeServerKey();
+
     public ValidationResult<AllocationConfig> Validate(AllocationConfig config, AllocationConfig defaults, string file)
     {
         var issues = new List<ConfigIssue>();
@@ -24,6 +27,11 @@ public sealed partial class AllocationConfigValidator : IConfigValidator<Allocat
         {
             issues.Add(new ConfigIssue(file, "Database.MySqlConnectionString", "MySql selected without a connection string; using Sqlite"));
             database = database with { Type = DatabaseType.Sqlite };
+        }
+        if (!SafeServerKey().IsMatch(database.ServerKey ?? string.Empty))
+        {
+            issues.Add(new ConfigIssue(file, "Database.ServerKey", "must be 1 to 64 letters, digits, _ or -; using default"));
+            database = database with { ServerKey = defaults.Database.ServerKey };
         }
         var mode = config.Mode;
         if (!Enum.IsDefined(mode))

@@ -59,7 +59,8 @@ public sealed class AllocationModule : IRetakeModule
     public void Load(ModuleContext context)
     {
         _context = context;
-        _preferences = new PreferenceService(CreateStore(context), context.Logger);
+        _preferences = new PreferenceService(CreateStore(context), context.Logger,
+            apply => Server.NextFrame(() => _context?.Guard.Run(Name, "preferences", apply)));
         var hooks = context.Hooks;
         hooks.PreparationStep(new DelegatePreparationStep("loadout", PreparationOrder.Loadout, AssignLoadouts));
         hooks.OnEvent<EventPlayerConnectFull>("player_connect_full", e => OnConnected(e.Userid));
@@ -78,7 +79,13 @@ public sealed class AllocationModule : IRetakeModule
         });
         hooks.Command("css_awp", "Toggles AWP volunteering", OnAwpCommand);
         hooks.Command("css_retake_import_v3", "Imports V3 weapon preferences: css_retake_import_v3 <path to cs2retake.db>", OnImportCommand);
-        hooks.OnBus<RoundTypesLoaded>(e => _definitions = e.Definitions);
+        hooks.OnBus<RoundTypesLoaded>(e =>
+        {
+            _definitions = e.Definitions;
+            _preferences?.PublishCatalog(_config.Database.ServerKey, CatalogExport.Build(e.Definitions));
+        });
+        // Loadouts are assigned at round_start: checking at round_end lets a reload land during the end-of-round delay.
+        hooks.OnEvent<EventRoundEnd>("preferences_check", _ => _preferences?.CheckForExternalChanges());
         hooks.OnBus<HudMenuSelected>(OnMenuSelected);
         hooks.OnBus<RoundPhaseChanged>(OnPhaseChanged);
         foreach (var alias in GunsAliases)
@@ -155,7 +162,7 @@ public sealed class AllocationModule : IRetakeModule
     {
         if (player is { IsValid: true, IsBot: false, IsHLTV: false } && player.SteamID != 0)
         {
-            _preferences?.PlayerConnected(player.SteamID, apply => Server.NextFrame(() => _context?.Guard.Run(Name, "preferences_loaded", apply)));
+            _preferences?.PlayerConnected(player.SteamID);
         }
     }
 

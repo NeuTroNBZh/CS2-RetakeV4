@@ -76,6 +76,16 @@ public override void OnAllPluginsLoaded(bool hotReload)
 ```
 Événements : `RoundPrepared`, `BombPlanted`, `LoadoutAssigned`, `LastPlayerAlive`, `RoundEnded`, `PlayerQueued`. Actions : `ForceSite`, `RequestScramble`. Tous les membres s'utilisent depuis le thread de jeu, où arrivent aussi les événements ; une exception dans un abonné est journalisée et n'arrête pas le retake. Après un rechargement de RetakeV4 (`css_plugins reload RetakeV4`), rappeler `Get()` : l'ancienne instance ne déclenche plus d'événements. Évolutions de l'API : uniquement par ajouts (nouvelles propriétés, événements ou interfaces), `RetakeApi.Version` augmente à chaque ajout.
 
+## Panel web
+
+Le panel web [CS2-RetakeV4-Panel](https://github.com/NeuTroNBZh/CS2-RetakeV4-Panel) permet aux joueurs de régler leurs armes depuis un navigateur (connexion Steam). Il partage la base MySQL du plugin :
+
+- `Database.Type` doit valoir `MySql` dans `allocation.json` (le panel ne lit pas SQLite) ;
+- `Database.ServerKey` (défaut `default`) identifie ce serveur dans la table `retake_catalog`, où le plugin publie les armes proposées à chaque chargement des types de round ;
+- un choix fait sur le panel s'applique au round suivant, sans reconnexion.
+
+Le format partagé est figé dans `contract/` (voir `contract/README.md`).
+
 ## Développement
 - Build : `dotnet build RetakeV4.sln -c Release` ; tests : `dotnet test RetakeV4.sln`.
 - Package de test : `pwsh scripts/package-dev.ps1` ; release : `pwsh scripts/package-release.ps1 -Version x.y.z` (fait par GitHub Actions sur un tag `vx.y.z`).

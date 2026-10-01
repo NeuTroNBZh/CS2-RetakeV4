@@ -42,6 +42,29 @@ public sealed record PreferenceBook(
         Sessions = Sessions.Remove(steamId),
     };
 
+    // Like WithPlayer without a session token: entries already in memory (chosen in game) win.
+    public PreferenceBook Merge(ulong steamId, IEnumerable<StoredPreference> stored)
+    {
+        if (!Sessions.ContainsKey(steamId))
+        {
+            return this;
+        }
+        var fresh = stored.Where(s => s.Key.SteamId == steamId && !Entries.ContainsKey(s.Key));
+        return this with { Entries = Entries.SetItems(fresh.Select(s => KeyValuePair.Create(s.Key, s.Preference))) };
+    }
+
+    // The database is the reference (changed outside the game): every entry of the player is replaced.
+    public PreferenceBook Replace(ulong steamId, IEnumerable<StoredPreference> stored)
+    {
+        if (!Sessions.ContainsKey(steamId))
+        {
+            return this;
+        }
+        var kept = Entries.RemoveRange(Entries.Keys.Where(k => k.SteamId == steamId));
+        var fresh = stored.Where(s => s.Key.SteamId == steamId).Select(s => KeyValuePair.Create(s.Key, s.Preference));
+        return this with { Entries = kept.SetItems(fresh) };
+    }
+
     public PreferenceBook With(StoredPreference preference) =>
         this with { Entries = Entries.SetItem(preference.Key, preference.Preference) };
 

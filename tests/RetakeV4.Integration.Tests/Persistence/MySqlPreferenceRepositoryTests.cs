@@ -30,4 +30,23 @@ public class MySqlPreferenceRepositoryTests
     [Fact]
     public void Constructor_RejectsBlankConnectionString() =>
         Assert.Throws<ArgumentException>(() => new MySqlPreferenceRepository(" "));
+
+    [Fact]
+    public async Task StampsSnapshotAndCatalog_WhenAMySqlServerIsConfigured()
+    {
+        if (string.IsNullOrWhiteSpace(ConnectionString))
+        {
+            return;
+        }
+        var repository = new MySqlPreferenceRepository(ConnectionString);
+        await repository.InitializeAsync(CancellationToken.None);
+        var steamId = (ulong)Random.Shared.NextInt64(1, long.MaxValue) + (ulong)long.MaxValue;
+        var preference = new StoredPreference(new PreferenceKey(steamId, TeamSide.T, "Mid"), new LoadoutPreference("weapon_mac10", null, false));
+        await repository.UpsertAsync(preference, CancellationToken.None);
+        var stamps = await repository.StampsAsync(new[] { steamId }, CancellationToken.None);
+        var snapshot = await repository.SnapshotAsync(steamId, CancellationToken.None);
+        Assert.Equal(stamps![steamId], snapshot!.Stamp);
+        Assert.Equal(preference, Assert.Single(snapshot.Preferences));
+        await repository.PublishCatalogAsync(new PublishedCatalog("test", 1, """{"roundTypes":[]}"""), CancellationToken.None);
+    }
 }

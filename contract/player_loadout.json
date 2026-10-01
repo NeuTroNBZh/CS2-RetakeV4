@@ -1,0 +1,9 @@
+{
+  "table": "player_loadout",
+  "teams": { "T": 0, "CT": 1 },
+  "anyRoundType": "*",
+  "rows": [
+    { "steam_id": "76561198000000001", "team": 1, "round_type": "FullBuy", "primary_weapon": "weapon_m4a1_silencer", "secondary_weapon": null, "awp_opt_in": 0, "updated_at": "2026-10-01 12:00:00.000001" },
+    { "steam_id": "76561198000000001", "team": 0, "round_type": "*", "primary_weapon": null, "secondary_weapon": null, "awp_opt_in": 1, "updated_at": "2026-10-01 12:00:00.000002" }
+  ]
+}

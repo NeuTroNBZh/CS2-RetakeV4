@@ -17,6 +17,9 @@ public sealed record DatabaseConfig
     public string SqliteFile { get; init; } = "data/retakev4.db";
 
     public string MySqlConnectionString { get; init; } = string.Empty;
+
+    // Identifies this server's row in retake_catalog, read by the web panel.
+    public string ServerKey { get; init; } = "default";
 }
 
 public sealed record AllocationConfig : ModuleConfig
