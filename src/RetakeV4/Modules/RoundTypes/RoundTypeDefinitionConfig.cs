@@ -57,9 +57,9 @@ public sealed record DefuseKitConfig
 
 public sealed record ZeusConfig
 {
-    public bool Enabled { get; init; }
+    public bool Enabled { get; init; } = true;
 
-    public double Chance { get; init; } = 20;
+    public double Chance { get; init; } = 100;
 
     public ZeusSettings ToDomain() => new(Enabled, Chance);
 }

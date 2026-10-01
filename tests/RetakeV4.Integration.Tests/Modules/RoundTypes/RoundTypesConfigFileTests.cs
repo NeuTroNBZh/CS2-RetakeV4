@@ -21,4 +21,11 @@ public sealed class RoundTypesConfigFileTests : IDisposable
         Assert.Equal(new RoundTypesConfig().ToDefinitions()["FullBuy"].DefaultCT, definitions["FullBuy"].DefaultCT);
         Assert.Equal(34.44444, definitions["Pistol"].DefuseKit.Chance);
     }
+
+    // Same as the reference V3 server (CommandAllocator: EnableZeus true, ZeusChance 100).
+    [Fact]
+    public void Defaults_GiveTheZeusOnEveryRoundType()
+    {
+        Assert.All(new RoundTypesConfig().ToDefinitions().Values, d => Assert.Equal(new Domain.Loadouts.ZeusSettings(true, 100), d.Zeus));
+    }
 }

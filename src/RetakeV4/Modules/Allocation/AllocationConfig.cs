@@ -32,5 +32,5 @@ public sealed record AllocationConfig : ModuleConfig
 
     public AllocationMode Mode { get; init; } = AllocationMode.Menu;
 
-    public int HowToIntervalMinutes { get; init; } = 5;
+    public double HowToIntervalMinutes { get; init; } = 3.5;
 }

@@ -62,27 +62,13 @@ public class AllocationConfigValidatorTests
     }
 
     [Fact]
-    public void Defaults_UseTheMenuMode_AndAFiveMinuteReminder()
-    {
-        Assert.Equal(AllocationMode.Menu, Defaults.Mode);
-        Assert.Equal(5, Defaults.HowToIntervalMinutes);
-    }
+    public void Defaults_UseTheMenuMode() => Assert.Equal(AllocationMode.Menu, Defaults.Mode);
 
     [Fact]
     public void UnknownMode_FallsBackToMenu()
     {
         var result = _validator.Validate(Defaults with { Mode = (AllocationMode)9 }, Defaults, "allocation.json");
         Assert.Equal(AllocationMode.Menu, result.Config.Mode);
-        Assert.Single(result.Issues);
-    }
-
-    [Theory]
-    [InlineData(-1)]
-    [InlineData(121)]
-    public void OutOfRangeReminder_FallsBack(int minutes)
-    {
-        var result = _validator.Validate(Defaults with { HowToIntervalMinutes = minutes }, Defaults, "allocation.json");
-        Assert.Equal(5, result.Config.HowToIntervalMinutes);
         Assert.Single(result.Issues);
     }
 
@@ -113,5 +99,21 @@ public class AllocationConfigValidatorTests
         var config = Validate(new DatabaseConfig { ServerKey = key }, out var issues);
         Assert.Equal(key, config.Database.ServerKey);
         Assert.Equal(0, issues);
+    }
+
+    // Same as the reference V3 server (HowToMessageDelayInMinutes 3.5).
+    [Fact]
+    public void HowToInterval_DefaultsToThreeAndAHalfMinutes() => Assert.Equal(3.5, Defaults.HowToIntervalMinutes);
+
+    [Theory]
+    [InlineData(0.5, 0.5, 0)]
+    [InlineData(0, 0, 0)]
+    [InlineData(-1, 3.5, 1)]
+    [InlineData(121, 3.5, 1)]
+    public void HowToInterval_AcceptsFractionsWithinRange(double value, double expected, int expectedIssues)
+    {
+        var result = _validator.Validate(Defaults with { HowToIntervalMinutes = value }, Defaults, "allocation.json");
+        Assert.Equal(expected, result.Config.HowToIntervalMinutes);
+        Assert.Equal(expectedIssues, result.Issues.Count);
     }
 }
