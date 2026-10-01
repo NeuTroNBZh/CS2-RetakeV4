@@ -19,5 +19,10 @@
   "instadefuse.blocked.molotov": "Instant defuse impossible: a molotov is in the air.",
   "instadefuse.blocked.inferno": "Instant defuse impossible: fire is burning near the bomb.",
   "instadefuse.not_enough_time": "{0} cannot instadefuse: {1}s missing.",
-  "instadefuse.success": "{0} instadefused with {1}s left."
+  "instadefuse.success": "{0} instadefused with {1}s left.",
+  "allocation.awp.enabled": "You now volunteer for the AWP on full-buy rounds.",
+  "allocation.awp.disabled": "You no longer volunteer for the AWP.",
+  "allocation.import.done": "{0} V3 preference(s) imported.",
+  "allocation.import.failed": "V3 import failed: {0}",
+  "allocation.no_permission": "You do not have permission to use this command."
 }

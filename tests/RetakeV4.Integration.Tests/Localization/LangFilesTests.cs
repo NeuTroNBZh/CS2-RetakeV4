@@ -88,4 +88,15 @@ public partial class LangFilesTests
         Assert.Contains("core.info.version", en.Keys);
         Assert.Contains("core.warmup.forced_end", en.Keys);
     }
+
+    [Theory]
+    [InlineData("allocation.awp.enabled")]
+    [InlineData("allocation.awp.disabled")]
+    [InlineData("allocation.import.done")]
+    [InlineData("allocation.import.failed")]
+    [InlineData("allocation.no_permission")]
+    public void Phase3aKeys_ArePresent(string key)
+    {
+        Assert.Contains(key, Load("en").Keys);
+    }
 }

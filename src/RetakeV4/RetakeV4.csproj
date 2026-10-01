@@ -4,11 +4,15 @@
     <AssemblyName>RetakeV4</AssemblyName>
     <Version>4.0.0-alpha.1</Version>
     <GenerateRuntimeConfigurationFiles>true</GenerateRuntimeConfigurationFiles>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="CounterStrikeSharp.API" Version="1.0.370">
       <ExcludeAssets>runtime</ExcludeAssets>
     </PackageReference>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.9" />
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.3" />
+    <PackageReference Include="MySqlConnector" Version="2.3.6" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\RetakeV4.Domain\RetakeV4.Domain.csproj" />

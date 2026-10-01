@@ -18,6 +18,12 @@ foreach ($file in @("RetakeV4.dll", "RetakeV4.Domain.dll", "RetakeV4.deps.json",
 }
 Copy-Item (Join-Path $bin "lang") $pluginDir -Recurse
 Copy-Item (Join-Path $bin "spawns") $pluginDir -Recurse
+foreach ($dependency in @("Microsoft.Data.Sqlite.dll", "SQLitePCLRaw.core.dll", "SQLitePCLRaw.batteries_v2.dll", "SQLitePCLRaw.provider.e_sqlite3.dll", "MySqlConnector.dll")) {
+    $source = Join-Path $bin $dependency
+    if (-not (Test-Path $source)) { throw "Missing dependency: $dependency" }
+    Copy-Item $source $pluginDir
+}
+Copy-Item (Join-Path $bin "runtimes") $pluginDir -Recurse
 
 $cfgDir = Join-Path $out "cfg/RetakeV4"
 New-Item -ItemType Directory -Force $cfgDir | Out-Null
