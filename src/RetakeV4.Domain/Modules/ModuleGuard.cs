@@ -41,5 +41,7 @@ public sealed class ModuleGuard
         }
     }
 
+    public void Disable(string module) => _budget = _budget.Disable(module);
+
     public void ResetRound() => _budget = _budget.ResetRound();
 }

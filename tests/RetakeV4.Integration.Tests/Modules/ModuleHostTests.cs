@@ -31,12 +31,13 @@ public sealed class ModuleHostTests : IDisposable
     private readonly TempDirectory _dir = new();
     private readonly List<string> _journal = new();
     private readonly ListLogger _logger = new();
+    private readonly List<string> _disabled = new();
 
     public void Dispose() => _dir.Dispose();
 
     private ModuleHost Start(params IRetakeModule[] modules)
     {
-        var host = new ModuleHost(modules, _logger);
+        var host = new ModuleHost(modules, _logger, _disabled.Add);
         host.Start(new JsonConfigStore(_dir.Path), (module, registrations) =>
         {
             registrations.Track(() => _journal.Add($"release:{module.Name}"));
@@ -45,10 +46,15 @@ public sealed class ModuleHostTests : IDisposable
         return host;
     }
 
+    // CounterStrikeSharp cannot unhook an event registered before the game loop starts: releasing a failed module's
+    // registrations at server start would leave the engine calling a freed delegate. They are kept, inert, until Stop.
     [Fact]
-    public void ModuleFailingToLoad_ReleasesItsRegistrations()
+    public void ModuleFailingToLoad_IsDisabled_AndKeepsItsRegistrationsUntilStop()
     {
-        Start(new FakeModule("Core", _journal, throwOnLoad: true));
+        var host = Start(new FakeModule("Core", _journal, throwOnLoad: true));
+        Assert.Equal(new[] { "unload:Core" }, _journal);
+        Assert.Equal(new[] { "Core" }, _disabled);
+        host.Stop();
         Assert.Equal(new[] { "unload:Core", "release:Core" }, _journal);
     }
 

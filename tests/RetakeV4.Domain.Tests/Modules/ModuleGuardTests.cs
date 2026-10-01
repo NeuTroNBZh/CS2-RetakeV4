@@ -70,4 +70,16 @@ public class ModuleGuardTests
     {
         Assert.Throws<ArgumentOutOfRangeException>(() => ErrorBudget.Create(0));
     }
+
+    [Fact]
+    public void Disable_StopsRunningTheModule()
+    {
+        var guard = new ModuleGuard(5, _ => { });
+        guard.Disable("Allocation");
+        var ran = false;
+        guard.Run("Allocation", "test", () => ran = true);
+        Assert.False(ran);
+        Assert.True(guard.IsDisabled("Allocation"));
+        Assert.False(guard.IsDisabled("Core"));
+    }
 }

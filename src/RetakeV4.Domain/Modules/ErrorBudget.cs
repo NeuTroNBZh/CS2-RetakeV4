@@ -21,5 +21,7 @@ public sealed record ErrorBudget(int MaxErrorsPerRound, ImmutableDictionary<stri
             : this with { Counts = counts };
     }
 
+    public ErrorBudget Disable(string module) => this with { Disabled = Disabled.Add(module) };
+
     public ErrorBudget ResetRound() => this with { Counts = ImmutableDictionary<string, int>.Empty };
 }

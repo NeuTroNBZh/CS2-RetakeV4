@@ -44,7 +44,7 @@ public sealed class RetakeV4Plugin : BasePlugin
             }
         });
 
-        _host = new ModuleHost(ModuleCatalog.CreateAll(), Logger);
+        _host = new ModuleHost(ModuleCatalog.CreateAll(), Logger, guard.Disable);
         _host.Start(new JsonConfigStore(ConfigDirectory()), (module, registrations) =>
             new ModuleContext(this, bus, guard, text, Logger, rounds,
                 new ModuleHooks(this, bus, pipeline, guard, module.Name, registrations)));
