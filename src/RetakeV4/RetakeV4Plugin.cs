@@ -40,7 +40,7 @@ public sealed class RetakeV4Plugin : BasePlugin
             new SlowRunReporter(SlowHandlerThreshold, () => Stopwatch.GetElapsedTime(0), OnSlowRun));
         var pipeline = new PreparationPipeline(guard);
         var rounds = new RoundTracker(bus, pipeline, RoundState.Initial, GameRulesAccessor.TotalRoundsPlayed);
-        var text = new TextService(Localizer);
+        var text = new TextService(Localizer, LangOverrideLoader.Load(ConfigDirectory(), Path.Combine(ModuleDirectory, "lang"), Logger));
         _roundResetSubscription = bus.Subscribe<RoundPhaseChanged>("bootstrap", e =>
         {
             if (e.To == RoundPhase.PostRound)
