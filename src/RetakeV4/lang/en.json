@@ -96,5 +96,11 @@
   "admin.menu.scramble": "Scramble teams at round end",
   "admin.no_permission": "You do not have permission to use the Retake admin menu.",
   "admin.usage": "Usage: !retake [edit]",
-  "admin.player_only": "This command must be used in game."
+  "admin.player_only": "This command must be used in game.",
+  "allocation.buy.auto_managed": "Armor, kit, grenades and Zeus are handed out automatically.",
+  "allocation.buy.not_available": "This weapon is not available for this round.",
+  "allocation.buy.awp_volunteer": "You now volunteer for the AWP.",
+  "allocation.howto.menu": "Type !guns to choose your weapons.",
+  "allocation.howto.native": "Use the buy menu (B) to choose your weapons: nothing is bought, your choice is saved.",
+  "allocation.howto.both": "Type !guns or use the buy menu (B) to choose your weapons."
 }

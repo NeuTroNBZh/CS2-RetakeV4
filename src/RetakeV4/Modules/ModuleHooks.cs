@@ -2,6 +2,7 @@ using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Modules.Commands;
 using CounterStrikeSharp.API.Modules.Events;
+using CounterStrikeSharp.API.Modules.Timers;
 using RetakeV4.Domain.Events;
 using RetakeV4.Domain.Modules;
 using RetakeV4.Domain.Rounds;
@@ -67,6 +68,12 @@ public sealed class ModuleHooks
         Listeners.OnPlayerButtonsChanged wrapper = (player, pressed, released) => _guard.Run(_module, stage, () => handler(player, pressed, released));
         _plugin.RegisterListener(wrapper);
         _registrations.Track(() => _plugin.RemoveListener(wrapper));
+    }
+
+    public void RepeatTimer(string stage, float intervalSeconds, Action handler)
+    {
+        var timer = _plugin.AddTimer(intervalSeconds, () => _guard.Run(_module, stage, handler), TimerFlags.REPEAT);
+        _registrations.Track(timer.Kill);
     }
 
     public void Command(string name, string description, Action<CCSPlayerController?, CommandInfo> handler)
