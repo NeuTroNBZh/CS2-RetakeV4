@@ -1,3 +1,5 @@
+using RetakeV4.Domain.Common;
+
 namespace RetakeV4.Domain.Hud;
 
 public enum MenuItemKind
@@ -8,7 +10,8 @@ public enum MenuItemKind
     Submenu,
 }
 
-public sealed record MenuItem(string Id, HudText Label, MenuItemKind Kind, bool IsOn = false, Menu? Submenu = null);
+// Team: displays may tint team-specific entries (T / CT colors).
+public sealed record MenuItem(string Id, HudText Label, MenuItemKind Kind, bool IsOn = false, Menu? Submenu = null, TeamSide? Team = null);
 
 public sealed record Menu(string Id, HudText Title, IReadOnlyList<MenuItem> Items);
 
@@ -21,7 +24,7 @@ public enum MenuLineKind
     Close,
 }
 
-public sealed record MenuLine(string Id, HudText Label, MenuLineKind Kind, MenuItemKind? ItemKind = null, bool IsOn = false);
+public sealed record MenuLine(string Id, HudText Label, MenuLineKind Kind, MenuItemKind? ItemKind = null, bool IsOn = false, TeamSide? Team = null);
 
 public enum MenuOutcomeKind
 {

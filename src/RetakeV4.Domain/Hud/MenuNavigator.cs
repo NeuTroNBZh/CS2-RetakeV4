@@ -155,7 +155,7 @@ public sealed record MenuNavigator
         ? new MenuLine(CloseId, HudText.Of("hud.menu.close"), MenuLineKind.Close)
         : new MenuLine(BackId, HudText.Of("hud.menu.back"), MenuLineKind.Back);
 
-    private static MenuLine ToLine(MenuItem item) => new(item.Id, item.Label, MenuLineKind.Item, item.Kind, item.IsOn);
+    private static MenuLine ToLine(MenuItem item) => new(item.Id, item.Label, MenuLineKind.Item, item.Kind, item.IsOn, item.Team);
 
     private static int PageCount(int itemCount) => (itemCount + ItemsPerPage - 1) / ItemsPerPage;
 
