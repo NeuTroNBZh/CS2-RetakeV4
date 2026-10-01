@@ -16,6 +16,9 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\RetakeV4.Domain\RetakeV4.Domain.csproj" />
+    <ProjectReference Include="..\RetakeV4.Contracts\RetakeV4.Contracts.csproj">
+      <Private>false</Private>
+    </ProjectReference>
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="RetakeV4.Integration.Tests" />

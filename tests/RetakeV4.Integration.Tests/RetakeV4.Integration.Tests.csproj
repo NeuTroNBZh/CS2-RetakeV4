@@ -14,5 +14,6 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\RetakeV4\RetakeV4.csproj" />
+    <ProjectReference Include="..\..\src\RetakeV4.Contracts\RetakeV4.Contracts.csproj" />
   </ItemGroup>
 </Project>
