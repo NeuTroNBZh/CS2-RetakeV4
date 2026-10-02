@@ -29,4 +29,19 @@ public class RoundClockTests
     [InlineData(true, true, "defused")]
     [InlineData(false, true, "defused")]
     public void Bomb(bool planted, bool defused, string expected) => Assert.Equal(expected, RoundClock.Bomb(planted, defused));
+
+    // Retake: the bomb is planted for the whole round, so its countdown is the time that matters.
+    [Theory]
+    [InlineData(150.4f, 120f, 31)]
+    [InlineData(110f, 120f, 0)]
+    public void TimeLeft_WithAPlantedBomb_IsTheBombCountdown(float c4Blow, float now, int expected)
+    {
+        Assert.Equal(expected, RoundClock.TimeLeft("Live", 100f, 115, now, c4Blow));
+    }
+
+    [Fact]
+    public void TimeLeft_WithABombOutsideLiveRounds_IsNull()
+    {
+        Assert.Null(RoundClock.TimeLeft("PostRound", 100f, 115, 120f, 150f));
+    }
 }

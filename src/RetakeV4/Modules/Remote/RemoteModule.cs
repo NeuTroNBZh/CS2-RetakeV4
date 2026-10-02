@@ -126,8 +126,17 @@ public sealed class RemoteModule : IRetakeModule
             (rules?.TotalRoundsPlayed ?? 0) + 1, ConVar.Find("mp_maxrounds")?.GetPrimitiveValue<int>() ?? 0,
             scores.GetValueOrDefault((int)CsTeam.Terrorist), scores.GetValueOrDefault((int)CsTeam.CounterTerrorist),
             _site, _roundType, players, _queue, _voteOpen, _nextMap, _spawnEditor, _cleanupEditor, _force, _scramblePending,
-            RoundClock.TimeLeft(phase, rules?.RoundStartTime ?? 0f, rules?.RoundTime ?? 0, Server.CurrentTime),
+            RoundClock.TimeLeft(phase, rules?.RoundStartTime ?? 0f, rules?.RoundTime ?? 0, Server.CurrentTime, BombBlow(rules)),
             RoundClock.Bomb(rules?.BombPlanted ?? false, rules?.BombDefused ?? false));
+    }
+
+    private static float? BombBlow(CCSGameRules? rules)
+    {
+        if (rules is not { BombPlanted: true, BombDefused: false })
+        {
+            return null;
+        }
+        return Utilities.FindAllEntitiesByDesignerName<CPlantedC4>("planted_c4").FirstOrDefault(b => b.IsValid)?.C4Blow;
     }
 
     private static string TeamOf(int teamNum) => (CsTeam)teamNum switch
