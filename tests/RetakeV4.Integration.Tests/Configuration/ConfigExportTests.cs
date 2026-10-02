@@ -17,7 +17,7 @@ public sealed class ConfigExportTests : IDisposable
             new[]
             {
                 "admin.json", "allocation.json", "announcements.json", "api.json", "core.json", "grenades.json", "hud.json", "instadefuse.json",
-                "links.json", "mapcleanup.json", "mapvote.json", "plant.json", "roundtypes.json", "spawns.json", "teams.json",
+                "links.json", "mapcleanup.json", "mapvote.json", "plant.json", "remote.json", "roundtypes.json", "spawns.json", "teams.json",
             },
             files);
         Assert.All(files, file => JsonDocument.Parse(File.ReadAllText(_dir.File(file))).Dispose());

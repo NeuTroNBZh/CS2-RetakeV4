@@ -146,5 +146,6 @@
   "mapvote.rtv.not_enough_players": "!rtv needs at least {0} players.",
   "mapvote.rtv.too_early": "!rtv will be available after {0} rounds.",
   "mapvote.change.soon": "Changing map to {0} in {1} s.",
-  "mapvote.rtv.no_maps": "!rtv is not available: there is no other Retake map to offer."
+  "mapvote.rtv.no_maps": "!rtv is not available: there is no other Retake map to offer.",
+  "remote.server_only": "This command is for the server console only."
 }

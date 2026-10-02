@@ -9,6 +9,7 @@ using RetakeV4.Modules.Links;
 using RetakeV4.Modules.MapCleanup;
 using RetakeV4.Modules.MapVote;
 using RetakeV4.Modules.Plant;
+using RetakeV4.Modules.Remote;
 using RetakeV4.Modules.RoundTypes;
 using RetakeV4.Modules.Spawns;
 using RetakeV4.Modules.Teams;
@@ -33,6 +34,7 @@ public static class ModuleCatalog
         new AnnouncementsModule(),
         new MapCleanupModule(),
         new MapVoteModule(),
+        new RemoteModule(),
         new ApiModule(),
     };
 }
