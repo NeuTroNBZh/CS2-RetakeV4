@@ -130,5 +130,21 @@
   "mapcleanup.editor.tested": "Nettoyage rejoué : {0} entité(s).",
   "mapcleanup.editor.busy": "Un autre admin édite déjà le nettoyage de la map.",
   "mapcleanup.editor.left": "Éditeur de nettoyage fermé.",
-  "mapcleanup.editor.expired": "Éditeur de nettoyage fermé après 3 minutes sans action ; le nettoyage automatique reprend."
+  "mapcleanup.editor.expired": "Éditeur de nettoyage fermé après 3 minutes sans action ; le nettoyage automatique reprend.",
+  "mapvote.menu.title": "Vote : prochaine map",
+  "mapvote.vote.opened": "Vote pour la prochaine map ouvert pendant {0} s : choisis dans le menu (!1, !2...), !mapvote pour le rouvrir.",
+  "mapvote.vote.cast": "Tu as voté pour {0}. !mapvote pour changer.",
+  "mapvote.vote.result": "Prochaine map : {0} ({1} voix).",
+  "mapvote.vote.none_open": "Aucun vote de map en cours.",
+  "mapvote.nextmap": "Prochaine map : {0}.",
+  "mapvote.nextmap_none": "Prochaine map : pas encore votée.",
+  "mapvote.rtv.count": "{0} veut changer de map ({1}/{2}). Tape !rtv pour le rejoindre.",
+  "mapvote.rtv.passed": "Changement de map accepté : la map change à la fin du round qui suit le vote.",
+  "mapvote.rtv.already": "Le changement de map est déjà décidé.",
+  "mapvote.rtv.disabled": "!rtv est désactivé sur ce serveur.",
+  "mapvote.rtv.warmup": "!rtv n'est pas disponible pendant l'échauffement.",
+  "mapvote.rtv.not_enough_players": "!rtv demande au moins {0} joueurs.",
+  "mapvote.rtv.too_early": "!rtv sera disponible après {0} rounds.",
+  "mapvote.change.soon": "Changement de map vers {0} dans {1} s.",
+  "mapvote.rtv.no_maps": "!rtv n'est pas disponible : il n'y a pas d'autre map Retake à proposer."
 }

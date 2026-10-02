@@ -13,7 +13,8 @@ public enum MenuItemKind
 // Team: displays may tint team-specific entries (T / CT colors).
 public sealed record MenuItem(string Id, HudText Label, MenuItemKind Kind, bool IsOn = false, Menu? Submenu = null, TeamSide? Team = null);
 
-public sealed record Menu(string Id, HudText Title, IReadOnlyList<MenuItem> Items);
+// ChatOnly: always shown as a chat menu (!1, !2...), never by the movement-driven center or world-text menus.
+public sealed record Menu(string Id, HudText Title, IReadOnlyList<MenuItem> Items, bool ChatOnly = false);
 
 public enum MenuLineKind
 {

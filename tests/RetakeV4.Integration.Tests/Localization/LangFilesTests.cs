@@ -118,6 +118,28 @@ public partial class LangFilesTests
         Assert.Contains(key, Load("en").Keys);
     }
 
+    [Theory]
+    [InlineData("mapvote.menu.title")]
+    [InlineData("mapvote.vote.opened")]
+    [InlineData("mapvote.vote.cast")]
+    [InlineData("mapvote.vote.result")]
+    [InlineData("mapvote.vote.none_open")]
+    [InlineData("mapvote.nextmap")]
+    [InlineData("mapvote.nextmap_none")]
+    [InlineData("mapvote.rtv.count")]
+    [InlineData("mapvote.rtv.passed")]
+    [InlineData("mapvote.rtv.already")]
+    [InlineData("mapvote.rtv.disabled")]
+    [InlineData("mapvote.rtv.warmup")]
+    [InlineData("mapvote.rtv.not_enough_players")]
+    [InlineData("mapvote.rtv.too_early")]
+    [InlineData("mapvote.rtv.no_maps")]
+    [InlineData("mapvote.change.soon")]
+    public void MapVoteKeys_ArePresent(string key)
+    {
+        Assert.Contains(key, Load("en").Keys);
+    }
+
     [Fact]
     public void Phase1Keys_ArePresent()
     {
