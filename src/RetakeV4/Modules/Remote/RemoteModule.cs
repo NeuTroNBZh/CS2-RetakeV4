@@ -1,3 +1,4 @@
+using System.Globalization;
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Modules.Commands;
@@ -8,6 +9,7 @@ using RetakeV4.Adapters;
 using RetakeV4.Configuration;
 using RetakeV4.Domain.Events;
 using RetakeV4.Domain.Remote;
+using RetakeV4.Domain.Spawns;
 
 namespace RetakeV4.Modules.Remote;
 
@@ -23,6 +25,8 @@ public sealed class RemoteModule : IRetakeModule
     private string? _nextMap;
     private bool _spawnEditor;
     private bool _cleanupEditor;
+    private RemoteForce? _force;
+    private bool _scramblePending;
 
     public string Name => "Remote";
 
@@ -42,12 +46,14 @@ public sealed class RemoteModule : IRetakeModule
     {
         _context = context;
         var hooks = context.Hooks;
-        hooks.OnBus<MapStarted>(_ => { _site = null; _roundType = null; _voteOpen = false; _nextMap = null; });
+        hooks.OnBus<MapStarted>(_ => { _site = null; _roundType = null; _voteOpen = false; _nextMap = null; _force = null; _scramblePending = false; });
         hooks.OnBus<RoundPrepared>(e => { _site = e.Context.Site?.ToString(); _roundType = e.Context.RoundType; });
         hooks.OnBus<TeamStateChanged>(e => _queue = e.State.Queue.Count);
         hooks.OnBus<MapVoteStateChanged>(e => { _voteOpen = e.Open; _nextMap = e.NextMap; });
         hooks.OnBus<SpawnEditorStateChanged>(e => _spawnEditor = e.Active);
         hooks.OnBus<MapCleanupEditorStateChanged>(e => _cleanupEditor = e.Active);
+        hooks.OnBus<SiteForceChanged>(e => _force = e.Force is { } f ? new RemoteForce(f.Site.ToString(), f.Mode == ForceSiteMode.Sticky) : null);
+        hooks.OnBus<ScrambleStateChanged>(e => _scramblePending = e.Pending);
         hooks.Command("css_retake_state", "Prints the Retake state as one JSON line (console only)", (p, c) => ConsoleOnly(p, c, () => PrintState(c)));
         hooks.Command("css_retake_mapvote", "Opens the map vote (console only)", (p, c) => ConsoleOnly(p, c, () =>
             Request(c, "Map vote unavailable (module disabled or failed)", reply => new MapVoteRequested(reply))));
@@ -105,19 +111,23 @@ public sealed class RemoteModule : IRetakeModule
     private ServerStateSnapshot Snapshot()
     {
         var rules = GameRulesAccessor.Get();
+        var phase = Context.Rounds.State.Phase.ToString();
         var scores = Utilities.FindAllEntitiesByDesignerName<CCSTeam>("cs_team_manager")
             .Where(t => t.IsValid)
             .GroupBy(t => (int)t.TeamNum)
             .ToDictionary(g => g.Key, g => g.First().Score);
         var players = Utilities.GetPlayers()
             .Where(p => p is { IsValid: true, IsHLTV: false } && p.Connected == PlayerConnectedState.Connected)
-            .Select(p => new RemotePlayer(p.UserId ?? -1, p.PlayerName, TeamOf(p.TeamNum), p.PawnIsAlive, p.IsBot))
+            .Select(p => new RemotePlayer(p.UserId ?? -1, p.IsBot ? string.Empty : p.SteamID.ToString(CultureInfo.InvariantCulture),
+                p.PlayerName, TeamOf(p.TeamNum), p.PawnIsAlive, p.IsBot, p.PawnIsAlive ? Math.Max(0, p.PlayerPawn.Value?.Health ?? 0) : 0))
             .ToList();
         return new ServerStateSnapshot(
-            Server.MapName, Context.Rounds.State.Phase.ToString(), rules?.WarmupPeriod ?? true, rules is { GamePaused: true } or { MatchWaitingForResume: true },
+            Server.MapName, phase, rules?.WarmupPeriod ?? true, rules is { GamePaused: true } or { MatchWaitingForResume: true },
             (rules?.TotalRoundsPlayed ?? 0) + 1, ConVar.Find("mp_maxrounds")?.GetPrimitiveValue<int>() ?? 0,
             scores.GetValueOrDefault((int)CsTeam.Terrorist), scores.GetValueOrDefault((int)CsTeam.CounterTerrorist),
-            _site, _roundType, players, _queue, _voteOpen, _nextMap, _spawnEditor, _cleanupEditor);
+            _site, _roundType, players, _queue, _voteOpen, _nextMap, _spawnEditor, _cleanupEditor, _force, _scramblePending,
+            RoundClock.TimeLeft(phase, rules?.RoundStartTime ?? 0f, rules?.RoundTime ?? 0, Server.CurrentTime),
+            RoundClock.Bomb(rules?.BombPlanted ?? false, rules?.BombDefused ?? false));
     }
 
     private static string TeamOf(int teamNum) => (CsTeam)teamNum switch

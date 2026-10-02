@@ -88,8 +88,18 @@ public sealed class SpawnsModule : IRetakeModule
     private void LoadMap(string mapName)
     {
         _history = SiteHistory.Empty;
-        _force = null;
+        SetForce(null);
         Catalog.Load(mapName);
+    }
+
+    private void SetForce(SiteForce? force)
+    {
+        var changed = _force != force;
+        _force = force;
+        if (changed)
+        {
+            Context.Bus.Publish(new SiteForceChanged(force));
+        }
     }
 
     private PreparationContext ChooseSite(PreparationContext context)
@@ -97,7 +107,7 @@ public sealed class SpawnsModule : IRetakeModule
         var available = Catalog.Set.Spawns.Select(s => s.Site).Distinct().ToList();
         var decision = SiteSelector.Choose(_history, _force, _config.MaxSameSiteInRow, available, _random);
         _history = decision.History;
-        _force = decision.Force;
+        SetForce(decision.Force);
         return context with { Site = decision.Site };
     }
 
@@ -179,7 +189,7 @@ public sealed class SpawnsModule : IRetakeModule
     {
         if (request.Force is not { } force)
         {
-            _force = null;
+            SetForce(null);
             Reply(player, "spawns.forcesite.cleared");
             return;
         }
@@ -189,7 +199,7 @@ public sealed class SpawnsModule : IRetakeModule
             Reply(player, "spawns.forcesite.no_spawns", force.Site.ToString());
             return;
         }
-        _force = force;
+        SetForce(force);
         Reply(player, force.Mode == ForceSiteMode.Sticky ? "spawns.forcesite.set_sticky" : "spawns.forcesite.set_once", force.Site.ToString());
     }
 
