@@ -329,8 +329,7 @@ To report a bug, open an [issue](https://github.com/NeuTroNBZh/CS2-RetakeV4/issu
 - Tests: `dotnet test RetakeV4.sln`.
 - Test server package: `pwsh scripts/package-dev.ps1` (output in `artifacts/dev/`).
 - Release: push a `vx.y.z` tag; GitHub Actions builds and publishes the archives.
-- Architecture: all game logic lives in `src/RetakeV4.Domain` (no game dependency, unit tested); `src/RetakeV4` only holds thin CounterStrikeSharp adapters, one folder per module. Project rules are in [CLAUDE.md](CLAUDE.md); design documents and plans in [`docs/superpowers`](docs/superpowers) (French).
-- In-game checks before a release: [docs/CHECKLIST-INGAME.md](docs/CHECKLIST-INGAME.md).
+- Architecture: all game logic lives in `src/RetakeV4.Domain` (no game dependency, unit tested); `src/RetakeV4` only holds thin CounterStrikeSharp adapters, one folder per module. The shared database formats used by the web panel are pinned in [`contract/`](contract).
 
 ---
 
