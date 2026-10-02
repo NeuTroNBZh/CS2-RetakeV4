@@ -65,6 +65,7 @@ public sealed class MapVoteModule : IRetakeModule
         hooks.OnEvent<EventPlayerConnectFull>("vote_join", e => ShowVote(e.Userid));
         hooks.OnEvent<EventPlayerDisconnect>("vote_leave", e => Left(e.Userid));
         hooks.OnBus<HudMenuSelected>(OnSelected);
+        hooks.OnBus<MapVoteRequested>(OnRemoteRequest);
         hooks.Command("css_rtv", "Asks for a map change", (player, _) => OnRtv(player));
         hooks.Command("css_nextmap", "Shows the next map", (_, _) => OnNextMap());
         hooks.Command("css_mapvote", "Reopens the map vote menu", (player, _) => OnVoteCommand(player));
@@ -91,6 +92,7 @@ public sealed class MapVoteModule : IRetakeModule
         _changeAtRoundEnd = false;
         _changeAt = null;
         _changeTarget = null;
+        _context?.Bus.Publish(new MapVoteStateChanged(false, null));
     }
 
     private static int MaxRounds() => ConVar.Find("mp_maxrounds")?.GetPrimitiveValue<int>() ?? 0;
@@ -116,6 +118,7 @@ public sealed class MapVoteModule : IRetakeModule
             return;
         }
         _vote = Vote.Open(pool);
+        Context.Bus.Publish(new MapVoteStateChanged(true, null));
         _voteEndsAt = DateTimeOffset.UtcNow.AddSeconds(_config.VoteSeconds);
         Context.Text.ChatAll("mapvote.vote.opened", _config.VoteSeconds);
         foreach (var player in PlayerQueries.Humans())
@@ -197,6 +200,7 @@ public sealed class MapVoteModule : IRetakeModule
         Context.Text.ChatAll("mapvote.vote.result", map, votes);
         Context.Logger.LogInformation("Map vote: next map {Map} with {Votes} vote(s)", map, votes);
         Server.ExecuteCommand($"nextlevel {map}");
+        Context.Bus.Publish(new MapVoteStateChanged(false, map));
     }
 
     private static void CloseMenus(ModuleContext context)
@@ -205,6 +209,28 @@ public sealed class MapVoteModule : IRetakeModule
         {
             context.Bus.Publish(new HudMenuClose(new PlayerId(player.Slot), MapVoteMenu.MenuId));
         }
+    }
+
+    private void OnRemoteRequest(MapVoteRequested e)
+    {
+        var refusal = MapVoteRequestCheck.Check(_vote is not null, _nextMap is not null, Pool().Count);
+        switch (refusal)
+        {
+            case MapVoteRequestRefusal.AlreadyOpen:
+                e.Reply("Map vote already open");
+                return;
+            case MapVoteRequestRefusal.AlreadyDecided:
+                e.Reply($"Map vote already decided: {_nextMap}");
+                return;
+            case MapVoteRequestRefusal.NotEnoughMaps:
+                e.Reply("Map vote refused: fewer than 2 maps available");
+                return;
+        }
+        // Same outcome as a successful !rtv: the voted map is played from the end of the current round.
+        _rtvPassed = true;
+        _changeAtRoundEnd = true;
+        OpenVote();
+        e.Reply($"Map vote opened ({_vote?.Maps.Count ?? 0} maps); the map changes at the end of the round");
     }
 
     private void OnRtv(CCSPlayerController? player)
@@ -304,6 +330,7 @@ public sealed class MapVoteModule : IRetakeModule
             Context.Logger.LogError("Map vote: {Map} is no longer a valid map; no map change", map);
             _nextMap = null;
             _changeAtRoundEnd = false;
+            Context.Bus.Publish(new MapVoteStateChanged(false, null));
             return;
         }
         _changeTarget = map;

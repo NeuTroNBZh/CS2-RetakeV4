@@ -47,6 +47,7 @@ internal sealed class CleanupEditor
         if (_session is null)
         {
             _session = new CleanupEditorSession(player.Slot, DateTimeOffset.UtcNow);
+            _context.Bus.Publish(new MapCleanupEditorStateChanged(true));
             _working = _host.Current().ToDictionary(o => o.Key, StringComparer.Ordinal);
             _dirty = false;
             _context.Text.Chat(player, "mapcleanup.editor.entered", _working.Count);
@@ -200,6 +201,7 @@ internal sealed class CleanupEditor
             return;
         }
         _session = null;
+        _context.Bus.Publish(new MapCleanupEditorStateChanged(false));
         _aimed = null;
         _working = new Dictionary<string, CleanupOverride>(StringComparer.Ordinal);
         _dirty = false;

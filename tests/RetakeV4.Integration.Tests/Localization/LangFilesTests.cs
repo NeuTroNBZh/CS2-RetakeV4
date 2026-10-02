@@ -134,6 +134,7 @@ public partial class LangFilesTests
     [InlineData("mapvote.rtv.not_enough_players")]
     [InlineData("mapvote.rtv.too_early")]
     [InlineData("mapvote.rtv.no_maps")]
+    [InlineData("remote.server_only")]
     [InlineData("mapvote.change.soon")]
     public void MapVoteKeys_ArePresent(string key)
     {
