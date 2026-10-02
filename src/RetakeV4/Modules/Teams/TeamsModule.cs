@@ -159,7 +159,7 @@ public sealed class TeamsModule : IRetakeModule
             _ => RoundWinner.None,
         };
         var plan = TeamPlanner.PlanRoundEnd(_state, winner, _scrambleRequested, _config.ToRules(), _random);
-        _scrambleRequested = false;
+        SetScramble(false);
         if (winner == RoundWinner.T && !plan.Scrambled)
         {
             Context.Text.ChatAll("teams.round.t_streak", plan.State.TWinStreak);
@@ -190,10 +190,20 @@ public sealed class TeamsModule : IRetakeModule
         timer.ReportIfSlow(Context.Logger, "Teams/warmup end");
     }
 
+    private void SetScramble(bool pending)
+    {
+        var changed = _scrambleRequested != pending;
+        _scrambleRequested = pending;
+        if (changed)
+        {
+            Context.Bus.Publish(new ScrambleStateChanged(pending));
+        }
+    }
+
     private void ResetForMap()
     {
         SetState(TeamState.Empty);
-        _scrambleRequested = false;
+        SetScramble(false);
         AdoptPlayersOnTeams();
     }
 
@@ -293,7 +303,7 @@ public sealed class TeamsModule : IRetakeModule
 
     private void RequestScramble()
     {
-        _scrambleRequested = true;
+        SetScramble(true);
         Context.Text.ChatAll("teams.scramble.requested");
         Context.Bus.Publish(new HudAlert(null, HudText.Of("teams.scramble.requested")));
     }
