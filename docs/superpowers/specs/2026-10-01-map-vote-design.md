@@ -25,7 +25,7 @@ Critères de réussite :
 
 - Déclenchement (`VoteTrigger`, Domain) : au début d'un round, si `mp_maxrounds` > 0, hors échauffement, aucun vote déjà fait sur cette map, et `mp_maxrounds - TotalRoundsPlayed <= TriggerRoundsBeforeEnd`.
 - Le menu `mapvote.menu` s'ouvre dans le chat pour chaque joueur humain connecté (T, CT ou spectateur). Il liste toutes les maps ; le menu du chat pagine tout seul. Le chat annonce l'ouverture et la durée.
-- Un joueur peut changer son vote tant que le vote est ouvert : `!vote` (et `css_vote`) rouvre le menu. Un joueur qui arrive pendant le vote reçoit le menu.
+- Un joueur peut changer son vote tant que le vote est ouvert : `!mapvote` (et `css_mapvote` ; `css_vote` appartient à CS2-SimpleAdmin) rouvre le menu. Un joueur qui arrive pendant le vote reçoit le menu.
 - Durée : `VoteSeconds`. À la fin, le menu se ferme pour tous.
 - Résultat (`MapVote.Result(IRandom)`, Domain) : la map qui a le plus de voix ; égalité → tirage au sort parmi les ex æquo ; aucune voix → tirage au sort dans la liste.
 - Annonce dans le chat : la map choisie et son nombre de voix. Le module fixe `nextlevel <map>`.

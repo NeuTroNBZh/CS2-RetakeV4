@@ -55,6 +55,8 @@ public sealed class MapVoteModule : IRetakeModule
         });
         hooks.OnEvent<EventCsWinPanelMatch>("match_end", _ =>
         {
+            // The engine changes level on its own after mp_match_restart_delay: a vote still open is decided now.
+            CloseVote();
             if (_nextMap is { } map)
             {
                 ScheduleChange(map);
@@ -65,7 +67,7 @@ public sealed class MapVoteModule : IRetakeModule
         hooks.OnBus<HudMenuSelected>(OnSelected);
         hooks.Command("css_rtv", "Asks for a map change", (player, _) => OnRtv(player));
         hooks.Command("css_nextmap", "Shows the next map", (_, _) => OnNextMap());
-        hooks.Command("css_vote", "Reopens the map vote menu", (player, _) => OnVoteCommand(player));
+        hooks.Command("css_mapvote", "Reopens the map vote menu", (player, _) => OnVoteCommand(player));
         hooks.RepeatTimer("tick", 1f, Tick);
     }
 
@@ -102,9 +104,11 @@ public sealed class MapVoteModule : IRetakeModule
         }
     }
 
+    private IReadOnlyList<string> Pool() => MapPool.Build(SpawnMaps(), Server.MapName, _config.ExcludedMaps, Server.IsMapValid);
+
     private void OpenVote()
     {
-        var pool = MapPool.Build(SpawnMaps(), Server.MapName, _config.ExcludedMaps, Server.IsMapValid);
+        var pool = Pool();
         _votedThisMap = true;
         if (pool.Count < MapPool.MinimumMaps)
         {
@@ -158,6 +162,10 @@ public sealed class MapVoteModule : IRetakeModule
         }
         _vote = _vote?.Remove(player.Slot);
         _rtv = _rtv.Left(player.Slot);
+        if (GameRulesAccessor.IsWarmup())
+        {
+            return;
+        }
         // The leaving player is still listed during the disconnect event.
         CheckRtv(PlayerQueries.Humans().Count(p => p.Slot != player.Slot));
     }
@@ -212,7 +220,7 @@ public sealed class MapVoteModule : IRetakeModule
         }
         var humans = PlayerQueries.Humans().Count;
         var refusal = RtvTracker.Check(_config.RtvEnabled, GameRulesAccessor.IsWarmup(), humans, _config.RtvMinPlayers,
-            GameRulesAccessor.TotalRoundsPlayed(), _config.RtvMinRounds);
+            GameRulesAccessor.TotalRoundsPlayed(), _config.RtvMinRounds, _nextMap is not null ? MapPool.MinimumMaps : Pool().Count);
         if (refusal is { } reason)
         {
             RefuseRtv(player, reason);
@@ -238,6 +246,9 @@ public sealed class MapVoteModule : IRetakeModule
                 break;
             case RtvRefusal.TooEarly:
                 Context.Text.Chat(player, "mapvote.rtv.too_early", _config.RtvMinRounds);
+                break;
+            case RtvRefusal.NoMaps:
+                Context.Text.Chat(player, "mapvote.rtv.no_maps");
                 break;
         }
     }
@@ -287,6 +298,14 @@ public sealed class MapVoteModule : IRetakeModule
         {
             return;
         }
+        if (!Server.IsMapValid(map))
+        {
+            // Logged once: forgetting the map stops every later round end from trying again.
+            Context.Logger.LogError("Map vote: {Map} is no longer a valid map; no map change", map);
+            _nextMap = null;
+            _changeAtRoundEnd = false;
+            return;
+        }
         _changeTarget = map;
         _changeAt = DateTimeOffset.UtcNow.AddSeconds(_config.ChangeDelaySeconds);
         Context.Text.ChatAll("mapvote.change.soon", map, _config.ChangeDelaySeconds);
@@ -294,11 +313,6 @@ public sealed class MapVoteModule : IRetakeModule
 
     private void ChangeLevel(string map)
     {
-        if (!Server.IsMapValid(map))
-        {
-            Context.Logger.LogError("Map vote: {Map} is no longer a valid map; no map change", map);
-            return;
-        }
         Context.Logger.LogInformation("Map vote: changing to {Map}", map);
         Server.ExecuteCommand($"changelevel {map}");
     }

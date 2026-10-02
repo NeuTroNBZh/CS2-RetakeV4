@@ -210,7 +210,7 @@ Préparation : `pwsh -NoProfile -File scripts/package-dev.ps1`, copier `artifact
 ## 4.5.0 — vote de map
 
 - [ ] Partie à `mp_maxrounds 30` : au début du round 28, le vote s'ouvre dans le chat pour tous (spectateurs compris) avec les 10 autres maps ; les joueurs ne sont pas gelés et peuvent bouger pendant le vote.
-- [ ] `!vote` rouvre le menu et permet de changer de vote ; le résultat est annoncé après 30 s ; `!nextmap` le rappelle.
+- [ ] `!mapvote` rouvre le menu et permet de changer de vote ; le résultat est annoncé après 30 s ; `!nextmap` le rappelle.
 - [ ] Fin de partie : la map change vers la gagnante après 8 s.
 - [ ] À 2 joueurs après 3 rounds : `!rtv` par les deux → vote immédiat, la map change à la fin du round.
 - [ ] `!rtv` pendant que le vote de fin de partie est ouvert : pas de second vote, la map change à la fin du round qui suit le résultat.

@@ -26,15 +26,16 @@ public class RtvTrackerTests
     }
 
     [Theory]
-    [InlineData(false, false, 5, 0, RtvRefusal.Disabled)]
-    [InlineData(true, true, 5, 0, RtvRefusal.Warmup)]
-    [InlineData(true, false, 1, 5, RtvRefusal.NotEnoughPlayers)]
-    [InlineData(true, false, 5, 2, RtvRefusal.TooEarly)]
-    public void Check_Refuses(bool enabled, bool warmup, int humans, int played, RtvRefusal expected)
+    [InlineData(false, false, 5, 0, 10, RtvRefusal.Disabled)]
+    [InlineData(true, true, 5, 0, 10, RtvRefusal.Warmup)]
+    [InlineData(true, false, 1, 5, 10, RtvRefusal.NotEnoughPlayers)]
+    [InlineData(true, false, 5, 2, 10, RtvRefusal.TooEarly)]
+    [InlineData(true, false, 5, 5, 1, RtvRefusal.NoMaps)]
+    public void Check_Refuses(bool enabled, bool warmup, int humans, int played, int maps, RtvRefusal expected)
     {
-        Assert.Equal(expected, RtvTracker.Check(enabled, warmup, humans, 2, played, 3));
+        Assert.Equal(expected, RtvTracker.Check(enabled, warmup, humans, 2, played, 3, maps));
     }
 
     [Fact]
-    public void Check_Accepts() => Assert.Null(RtvTracker.Check(true, false, 2, 2, 3, 3));
+    public void Check_Accepts() => Assert.Null(RtvTracker.Check(true, false, 2, 2, 3, 3, MapPool.MinimumMaps));
 }

@@ -82,7 +82,7 @@ RetakeV4 est une réécriture complète de CS2RetakeV3. Il est modulaire (chaque
 | Avancer / reculer, puis Utiliser (E) | Naviguer et choisir dans le menu |
 | `!1`, `!2`… | Choisir dans un menu de chat (vote de map, ou tous les menus si le serveur utilise ce mode) |
 | `!rtv` | Demander un changement de map (vote immédiat quand 60 % des joueurs l'ont demandé) |
-| `!vote` | Rouvrir le menu du vote de map en cours |
+| `!mapvote` | Rouvrir le menu du vote de map en cours |
 | `!nextmap` | Afficher la prochaine map |
 
 - **Choix des armes** : pour chaque équipe et chaque type de round, vous choisissez votre arme principale et votre pistolet. Le choix est enregistré et réutilisé à chaque round du même type. Un choix fait pendant le freeze time s'applique tout de suite.
@@ -122,7 +122,7 @@ Un spawn T marqué *plant* peut porter la bombe ; il en faut au moins un par sit
 
 Le module MapVote fait tourner les maps. Les maps proposées sont celles qui ont des spawns Retake (`plugins/RetakeV4/spawns/<map>.json`), connues du serveur, moins la map en cours et `ExcludedMaps`. Une map ajoutée avec l'éditeur de spawns entre donc toute seule dans le vote.
 
-- **Fin de partie** : quand il reste `TriggerRoundsBeforeEnd` rounds avant `mp_maxrounds` (3 par défaut), un vote s'ouvre dans le chat pour tous les joueurs, spectateurs compris, pendant `VoteSeconds`. `!vote` rouvre le menu pour changer de vote. La map la plus votée gagne (égalité ou aucune voix : tirage au sort) ; à la fin de la partie, la map change après `ChangeDelaySeconds`.
+- **Fin de partie** : quand il reste `TriggerRoundsBeforeEnd` rounds avant `mp_maxrounds` (3 par défaut), un vote s'ouvre dans le chat pour tous les joueurs, spectateurs compris, pendant `VoteSeconds`. `!mapvote` rouvre le menu pour changer de vote. La map la plus votée gagne (égalité ou aucune voix : tirage au sort) ; à la fin de la partie, la map change après `ChangeDelaySeconds`.
 - **`!rtv`** : quand `RtvPercentage` % des joueurs l'ont tapé (au moins `RtvMinPlayers` joueurs, après `RtvMinRounds` rounds), un vote s'ouvre tout de suite et la map change à la fin du round.
 - Le vote est toujours dans le chat (`!1`, `!2`…), même si les autres menus sont au centre de l'écran : le menu central se pilote avec les touches de déplacement.
 

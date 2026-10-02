@@ -133,6 +133,7 @@ public partial class LangFilesTests
     [InlineData("mapvote.rtv.warmup")]
     [InlineData("mapvote.rtv.not_enough_players")]
     [InlineData("mapvote.rtv.too_early")]
+    [InlineData("mapvote.rtv.no_maps")]
     [InlineData("mapvote.change.soon")]
     public void MapVoteKeys_ArePresent(string key)
     {

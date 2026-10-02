@@ -132,18 +132,19 @@
   "mapcleanup.editor.left": "Map cleanup editor closed.",
   "mapcleanup.editor.expired": "Map cleanup editor closed after 3 minutes without action; automatic cleanup resumes.",
   "mapvote.menu.title": "Vote: next map",
-  "mapvote.vote.opened": "Next map vote open for {0} s: pick in the menu (!1, !2...), !vote to reopen it.",
-  "mapvote.vote.cast": "You voted for {0}. !vote to change.",
+  "mapvote.vote.opened": "Next map vote open for {0} s: pick in the menu (!1, !2...), !mapvote to reopen it.",
+  "mapvote.vote.cast": "You voted for {0}. !mapvote to change.",
   "mapvote.vote.result": "Next map: {0} ({1} vote(s)).",
   "mapvote.vote.none_open": "No map vote in progress.",
   "mapvote.nextmap": "Next map: {0}.",
   "mapvote.nextmap_none": "Next map: not voted yet.",
   "mapvote.rtv.count": "{0} wants to change the map ({1}/{2}). Type !rtv to join.",
-  "mapvote.rtv.passed": "Map change accepted: the map changes at the end of the round.",
+  "mapvote.rtv.passed": "Map change accepted: the map changes at the end of the round after the vote.",
   "mapvote.rtv.already": "The map change is already decided.",
   "mapvote.rtv.disabled": "!rtv is disabled on this server.",
   "mapvote.rtv.warmup": "!rtv is not available during warmup.",
   "mapvote.rtv.not_enough_players": "!rtv needs at least {0} players.",
   "mapvote.rtv.too_early": "!rtv will be available after {0} rounds.",
-  "mapvote.change.soon": "Changing map to {0} in {1} s."
+  "mapvote.change.soon": "Changing map to {0} in {1} s.",
+  "mapvote.rtv.no_maps": "!rtv is not available: there is no other Retake map to offer."
 }

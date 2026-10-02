@@ -8,6 +8,7 @@ public enum RtvRefusal
     Warmup,
     NotEnoughPlayers,
     TooEarly,
+    NoMaps,
 }
 
 public sealed record RtvTracker(ImmutableHashSet<int> Wanting)
@@ -22,8 +23,10 @@ public sealed record RtvTracker(ImmutableHashSet<int> Wanting)
 
     public bool IsReached(int humans, int percentage) => Wanting.Count >= Needed(humans, percentage);
 
-    public static RtvRefusal? Check(bool enabled, bool warmup, int humans, int minPlayers, int roundsPlayed, int minRounds) =>
+    // NoMaps: with fewer than two maps to vote on, accepting !rtv would announce a map change that cannot happen.
+    public static RtvRefusal? Check(bool enabled, bool warmup, int humans, int minPlayers, int roundsPlayed, int minRounds, int mapsAvailable) =>
         !enabled ? RtvRefusal.Disabled
+        : mapsAvailable < MapPool.MinimumMaps ? RtvRefusal.NoMaps
         : warmup ? RtvRefusal.Warmup
         : humans < minPlayers ? RtvRefusal.NotEnoughPlayers
         : roundsPlayed < minRounds ? RtvRefusal.TooEarly
