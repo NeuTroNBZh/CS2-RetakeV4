@@ -1,260 +1,282 @@
+<div align="center">
+
 # RetakeV4
 
-Plugin **Retake** pour Counter-Strike 2, basé sur [CounterStrikeSharp](https://github.com/roflmuffin/CounterStrikeSharp).
+**A complete, modular Retake game mode for Counter-Strike 2, built on CounterStrikeSharp.**
 
-Chaque round, les terroristes défendent une bombe déjà posée sur un site et les antiterroristes doivent la reprendre. Le plugin s'occupe de tout : équipes, file d'attente, spawns, armes, pose de la bombe, désamorçage, HUD et administration.
+[![Release](https://img.shields.io/github/v/release/NeuTroNBZh/CS2-RetakeV4?style=flat-square)](https://github.com/NeuTroNBZh/CS2-RetakeV4/releases/latest)
+[![CI](https://img.shields.io/github/actions/workflow/status/NeuTroNBZh/CS2-RetakeV4/ci.yml?branch=main&style=flat-square&label=build)](https://github.com/NeuTroNBZh/CS2-RetakeV4/actions)
+[![CounterStrikeSharp](https://img.shields.io/badge/CounterStrikeSharp-1.0.370%2B-orange?style=flat-square)](https://github.com/roflmuffin/CounterStrikeSharp)
+[![.NET](https://img.shields.io/badge/.NET-10-512BD4?style=flat-square)](https://dotnet.microsoft.com/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
 
-RetakeV4 est une réécriture complète de CS2RetakeV3. Il est modulaire (chaque fonctionnalité peut être désactivée), entièrement configurable en JSON et testé automatiquement.
+</div>
 
-- **Joueurs** : armes choisies une fois puis retenues, menu `!guns` en jeu ou [panel web](#panel-web).
-- **Admins** : éditeur de spawns en jeu, menu `!retake`, intégration CS2-SimpleAdmin.
-- **Nettoyage de map** : portes ouvertes, vitres et aérations cassées à chaque round, sans toucher au reste ; corrections par map en jeu.
-- **Développeurs** : [API publique](#api-pour-les-autres-plugins) pour réagir aux rounds depuis un autre plugin.
+Every round, the Terrorists defend a bomb that is already planted on a site and the Counter-Terrorists have to retake it. RetakeV4 runs the whole mode: teams and queue, spawns, weapons, bomb plant, defuse, HUD, map rotation and administration.
 
----
+It is a full rewrite of CS2RetakeV3: every feature is a module that can be turned off, everything is configured in JSON, and the game logic is covered by more than a thousand automated tests.
 
-## Sommaire
+## Highlights
 
-1. [Comment se déroule un round](#comment-se-déroule-un-round)
+- **Fair rounds**: Pistol, Mid and Full-buy rounds, balanced T/CT ratio, team rotation on CT wins, scramble after a T win streak, VIP priority in the queue.
+- **Weapons players keep**: choose once with `!guns`, remembered per team and round type; optional buy-menu selection and AWP volunteering. Preferences are stored in SQLite or MySQL.
+- **Clean HUD**: a center panel with the round type, site and player counts; menus in the center of the screen, floating in the world, or in the chat.
+- **Map rotation**: an end-of-match vote over every map that has Retake spawns, plus `!rtv`.
+- **Map cleanup**: doors opened, windows and vents broken every round, nothing else touched; per-map corrections from an in-game editor.
+- **Admin tools**: in-game spawn editor, forced site, scramble, and a Retake category in the CS2-SimpleAdmin menu.
+- **For server owners**: text overrides, timed announcements, community commands (`!discord`, `!rules`), and a config checker shipped with every release.
+- **For developers**: a public API to react to rounds from other plugins, and a companion [web panel](https://github.com/NeuTroNBZh/CS2-RetakeV4-Panel).
+
+## Contents
+
+1. [How a round plays](#how-a-round-plays)
 2. [Installation](#installation)
-3. [Mise à jour et migration depuis la V3](#mise-à-jour-et-migration-depuis-la-v3)
-4. [Pour les joueurs](#pour-les-joueurs)
-5. [Pour les admins](#pour-les-admins)
-6. [Configuration](#configuration)
-7. [Préférences d'armes et base de données](#préférences-darmes-et-base-de-données)
-8. [Panel web](#panel-web)
-9. [API pour les autres plugins](#api-pour-les-autres-plugins)
-10. [Dépannage](#dépannage)
-11. [Développement](#développement)
+3. [Updating and migrating from V3](#updating-and-migrating-from-v3)
+4. [Player commands](#player-commands)
+5. [Administration](#administration)
+6. [Map vote](#map-vote)
+7. [Map cleanup](#map-cleanup)
+8. [Configuration](#configuration)
+9. [Customising your server](#customising-your-server)
+10. [Weapon preferences and database](#weapon-preferences-and-database)
+11. [Web panel](#web-panel)
+12. [Plugin API](#plugin-api)
+13. [Troubleshooting](#troubleshooting)
+14. [Development](#development)
+15. [License](#license)
 
 ---
 
-## Comment se déroule un round
+## How a round plays
 
-1. **Fin du round précédent** : les équipes sont recalculées. Les joueurs en file d'attente entrent dans la partie (priorité aux VIP), le ratio T/CT est respecté, les équipes tournent quand les CT gagnent et sont mélangées après une série de victoires T.
-2. **Préparation** : le plugin choisit le **type de round** (par défaut 3 rounds *Pistol*, 3 rounds *Mid*, puis *FullBuy*), le **site** (A ou B, sans longue série sur le même) et place chaque joueur sur un **spawn** de ce site.
-3. **Freeze time** : chacun reçoit ses armes selon ses préférences, plus armure, kit de désamorçage, Zeus et grenades selon le type de round. Le HUD affiche le type de round, le site et le nombre de joueurs.
-4. **Bombe** : elle est posée automatiquement sur le site (AutoPlant) ou par un terroriste en un instant (FastPlant).
-5. **Désamorçage** : l'InstaDefuse désamorce instantanément quand plus aucun T n'est en vie et qu'aucune grenade ni aucun feu ne menace le désamorceur ; si le temps manque, la bombe explose.
+1. **Round end**: teams are rebuilt. Queued players join (VIPs first), the T/CT ratio is respected, teams rotate when the CTs win and are scrambled after a T win streak.
+2. **Preparation**: the plugin picks the **round type** (by default 3 Pistol, 3 Mid, then Full-buy), the **site** (A or B, without long streaks on the same one) and a **spawn** on that site for every player.
+3. **Freeze time**: everyone gets their preferred weapons plus armour, defuse kits, Zeus and grenades according to the round type. The HUD shows the round type, the site and the player counts.
+4. **Bomb**: planted automatically on the site (AutoPlant) or instantly by a Terrorist (FastPlant).
+5. **Defuse**: InstaDefuse defuses immediately once no Terrorist is alive and no grenade or fire threatens the defuser; if there is not enough time left, the bomb explodes.
 
 ---
 
 ## Installation
 
-**Prérequis** : un serveur CS2 avec [Metamod:Source](https://www.sourcemm.net/downloads.php?branch=dev) et [CounterStrikeSharp](https://github.com/roflmuffin/CounterStrikeSharp/releases) **1.0.370 ou plus récent**.
+**Requirements**: a CS2 server with [Metamod:Source](https://www.sourcemm.net/downloads.php?branch=dev) and [CounterStrikeSharp](https://github.com/roflmuffin/CounterStrikeSharp/releases) **1.0.370 or newer**.
 
-1. Téléchargez la dernière version sur la page [Releases](https://github.com/NeuTroNBZh/CS2-RetakeV4/releases) :
-   - `RetakeV4-x.y.z.zip` pour une première installation (configs par défaut incluses) ;
-   - `RetakeV4-x.y.z-no-configs.zip` pour une mise à jour sans toucher vos configs.
-2. Décompressez l'archive dans le dossier `game/csgo/` du serveur. Vous devez obtenir :
+1. Download the latest version from [Releases](https://github.com/NeuTroNBZh/CS2-RetakeV4/releases/latest):
+   - `RetakeV4-x.y.z.zip` for a first install (default configs included);
+   - `RetakeV4-x.y.z-no-configs.zip` to update without touching your configs.
+2. Extract the archive into the server's `game/csgo/` folder:
    ```
    game/csgo/
-   ├── addons/counterstrikesharp/plugins/RetakeV4/          (plugin, spawns, textes)
-   ├── addons/counterstrikesharp/shared/RetakeV4.Contracts/ (API publique)
-   ├── addons/counterstrikesharp/configs/plugins/RetakeV4/  (un fichier JSON par module)
-   └── cfg/RetakeV4/retake.cfg                              (cvars du mode retake)
+   ├── addons/counterstrikesharp/plugins/RetakeV4/          plugin, spawns, texts
+   ├── addons/counterstrikesharp/shared/RetakeV4.Contracts/ public API
+   ├── addons/counterstrikesharp/configs/plugins/RetakeV4/  one JSON file per module
+   └── cfg/RetakeV4/retake.cfg                              Retake cvars
    ```
-3. Démarrez ou redémarrez le serveur sur une map compétitive (`de_dust2`, `de_mirage`…). Les fichiers de config manquants sont créés automatiquement.
-4. Vérifiez en console : `css_plugins list` doit afficher `RetakeV4`, et `css_retake_info` donne la version.
+3. Start or restart the server on a competitive map (`de_dust2`, `de_mirage`…). Missing config files are created automatically.
+4. Check in the console: `css_plugins list` lists `RetakeV4`, and `css_retake_info` prints the version.
 
-**Maps fournies** : ancient, ancient_night, anubis, cache, dust2, inferno, mirage, nuke, overpass, train, vertigo. Pour une autre map, créez les spawns avec l'[éditeur en jeu](#éditeur-de-spawns).
+**Maps with bundled spawns**: ancient, ancient_night, anubis, cache, dust2, inferno, mirage, nuke, overpass, train, vertigo. Any other map works once you create its spawns with the [in-game editor](#spawn-editor).
 
-**Hébergeurs (Dathost, etc.)** : vous n'avez rien à configurer. Le plugin réapplique `retake.cfg` au premier round de chaque map, après les configs du mode compétitif qui l'écrasaient (bots, échauffement, timings).
-
----
-
-## Mise à jour et migration depuis la V3
-
-- **Mise à jour** : remplacez le contenu de `plugins/RetakeV4/` par celui de l'archive `no-configs`, puis redémarrez. Vos configs sont conservées ; les nouvelles options prennent leur valeur par défaut.
-- **Depuis CS2RetakeV3** : suivez [docs/MIGRATION-V3.md](docs/MIGRATION-V3.md). En résumé :
-  - les spawns V3 sont lus tels quels ;
-  - les réglages correspondent un à un (le guide donne le tableau de correspondance) ;
-  - les préférences d'armes des joueurs s'importent avec `css_retake_import_v3 <chemin vers cs2retake.db>`.
+**Game server hosts (Dathost and others)**: nothing to set up. The plugin applies `retake.cfg` again on the first round of every map, after the host's competitive configs that would otherwise override it (bots, warmup, timings).
 
 ---
 
-## Pour les joueurs
+## Updating and migrating from V3
 
-| Commande | Effet |
+- **Updating**: replace `plugins/RetakeV4/` with the content of the `no-configs` archive and restart. Your configs are kept; new options take their default value.
+- **From CS2RetakeV3**: follow [docs/MIGRATION-V3.md](docs/MIGRATION-V3.md) (French). In short, V3 spawns are read as they are, settings map one to one, and players' weapon preferences are imported with `css_retake_import_v3 <path to cs2retake.db>`.
+
+---
+
+## Player commands
+
+| Command | Effect |
 |---|---|
-| `!guns` (alias : `!gun`, `!g`, `!weapons`, `!menu`…) | Ouvre le menu d'armes |
-| `!awp` | Se porter volontaire (ou non) pour l'AWP, pour ton équipe actuelle |
-| Avancer / reculer, puis Utiliser (E) | Naviguer et choisir dans le menu |
-| `!1`, `!2`… | Choisir dans un menu de chat (vote de map, ou tous les menus si le serveur utilise ce mode) |
-| `!rtv` | Demander un changement de map (vote immédiat quand 60 % des joueurs l'ont demandé) |
-| `!mapvote` | Rouvrir le menu du vote de map en cours |
-| `!nextmap` | Afficher la prochaine map |
+| `!guns` (also `!gun`, `!g`, `!weapons`, `!menu`) | Open the weapon menu |
+| `!awp` | Volunteer (or stop volunteering) for the AWP in your current team |
+| Forward / back, then Use (E) | Move through a center menu and select |
+| `!1`, `!2`… | Select in a chat menu (map vote, or every menu when the server uses chat menus) |
+| `!rtv` | Ask for a map change (a vote opens once enough players asked) |
+| `!mapvote` | Reopen the current map vote menu |
+| `!nextmap` | Show the next map |
 
-- **Choix des armes** : pour chaque équipe et chaque type de round, vous choisissez votre arme principale et votre pistolet. Le choix est enregistré et réutilisé à chaque round du même type. Un choix fait pendant le freeze time s'applique tout de suite.
-- **AWP** : le volontariat se règle par équipe, dans le menu de chaque type de round qui distribue des AWP (FullBuy par défaut). À chaque round concerné, une AWP par équipe est tirée au sort parmi les volontaires de cette équipe.
-- **Achat CS2** : si le serveur l'active, ouvrir le menu d'achat de CS2 et « acheter » une arme revient à la choisir comme préférence. Rien n'est réellement acheté.
-- **Langue** : les messages s'affichent en français ou en anglais selon votre langue CounterStrikeSharp.
+- **Weapons**: for each team and round type you pick a primary and a pistol. The choice is saved and reused every round of that type; a choice made during freeze time applies immediately.
+- **AWP**: volunteering is per team, in the menu of every round type that hands out AWPs (Full-buy by default). Each such round, one AWP per team goes to a random volunteer.
+- **Buy menu**: when the server enables it, "buying" a weapon in the CS2 buy menu sets it as your preference. Nothing is actually bought.
+- **Language**: messages follow your CounterStrikeSharp language (English and French included).
 
 ---
 
-## Pour les admins
+## Administration
 
-Les commandes admin demandent la permission `@retakev4/admin` (et `@retakev4/root` pour l'import V3) ; `@css/root` donne accès aux deux, à donner via `admins.json` de CounterStrikeSharp ou CS2-SimpleAdmin.
+Admin commands need the `@retakev4/admin` permission (`@retakev4/root` for the V3 import). `@css/root` grants both. Give them through CounterStrikeSharp's `admins.json` or CS2-SimpleAdmin.
 
-| Commande | Effet |
+| Command | Effect |
 |---|---|
-| `!retake` | Menu admin : éditeur de spawns, forçage du site, scramble, nettoyage de map |
-| `!retake edit` ou `css_retake_edit [save\|discard\|exit]` | Entrer ou sortir de l'éditeur de spawns |
-| `!retake cleanup` | Ouvrir l'éditeur du nettoyage de map |
-| `css_retake_forcesite <A\|B\|off> [once\|sticky]` | Forcer le prochain site, ou tous les suivants |
-| `css_retake_scramble` | Mélanger les équipes à la fin du round |
-| `css_retake_addspawn <T\|CT> <A\|B> [plant]` | Ajouter un spawn à votre position |
-| `css_retake_delspawn` | Supprimer le spawn le plus proche |
-| `css_retake_tpspawn <n>`, `css_retake_teleport <x> <y> <z>` | Se téléporter |
-| `css_retake_savespawns`, `css_retake_reloadspawns` | Enregistrer ou recharger les spawns de la map |
-| `css_retake_import_v3 <chemin>` | Importer les préférences d'armes de la V3 |
-| `css_retake_info` | Version du plugin |
+| `!retake` | Admin menu: spawn editor, forced site, scramble, map cleanup |
+| `!retake edit`, `css_retake_edit [save\|discard\|exit]` | Enter or leave the spawn editor |
+| `!retake cleanup` | Open the map cleanup editor |
+| `css_retake_forcesite <A\|B\|off> [once\|sticky]` | Force the next site, or every following one |
+| `css_retake_scramble` | Scramble the teams at round end |
+| `css_retake_addspawn <T\|CT> <A\|B> [plant]` | Add a spawn at your position |
+| `css_retake_delspawn` | Delete the nearest spawn |
+| `css_retake_tpspawn <n>`, `css_retake_teleport <x> <y> <z>` | Teleport |
+| `css_retake_savespawns`, `css_retake_reloadspawns` | Save or reload the current map's spawns |
+| `css_retake_import_v3 <path>` | Import V3 weapon preferences |
+| `css_retake_info` | Plugin version |
 
-### Éditeur de spawns
+### Spawn editor
 
-1. Tapez `!retake edit`. Le noclip est activé et tous les spawns de la map apparaissent, colorés par équipe et par site.
-2. Utilisez le menu de l'éditeur (ou les commandes ci-dessus) pour ajouter, supprimer ou vous téléporter. Le spawn le plus proche est mis en évidence.
-3. **Enregistrer** écrit `plugins/RetakeV4/spawns/<map>.json` et garde une copie `.bak` de l'ancien fichier. **Annuler** recharge la dernière version enregistrée.
+1. Type `!retake edit`. Noclip is enabled and every spawn of the map is shown, coloured by team and site.
+2. Use the editor menu (or the commands above) to add, delete or teleport. The nearest spawn is highlighted.
+3. **Save** writes `plugins/RetakeV4/spawns/<map>.json` and keeps the previous file as `.bak`. **Discard** reloads the last saved version.
 
-Un spawn T marqué *plant* peut porter la bombe ; il en faut au moins un par site pour l'AutoPlant.
-
-### Vote de map
-
-Le module MapVote fait tourner les maps. Les maps proposées sont celles qui ont des spawns Retake (`plugins/RetakeV4/spawns/<map>.json`), connues du serveur, moins la map en cours et `ExcludedMaps`. Une map ajoutée avec l'éditeur de spawns entre donc toute seule dans le vote.
-
-- **Fin de partie** : quand il reste `TriggerRoundsBeforeEnd` rounds avant `mp_maxrounds` (3 par défaut), un vote s'ouvre dans le chat pour tous les joueurs, spectateurs compris, pendant `VoteSeconds`. `!mapvote` rouvre le menu pour changer de vote. La map la plus votée gagne (égalité ou aucune voix : tirage au sort) ; à la fin de la partie, la map change après `ChangeDelaySeconds`.
-- **`!rtv`** : quand `RtvPercentage` % des joueurs l'ont tapé (au moins `RtvMinPlayers` joueurs, après `RtvMinRounds` rounds), un vote s'ouvre tout de suite et la map change à la fin du round.
-- Le vote est toujours dans le chat (`!1`, `!2`…), même si les autres menus sont au centre de l'écran : le menu central se pilote avec les touches de déplacement.
-
-### Nettoyage de map
-
-À chaque round, après la pose de la bombe, le module MapCleanup ouvre les portes et casse les vitres et les aérations ; à la fin du freeze time il renvoie la même action aux cibles encore présentes. Rien d'autre n'est touché : seules les classes `func_door`, `func_door_rotating`, `prop_door_rotating`, `func_breakable`, `func_shatterglass` et `prop_dynamic` sont lues, et seules les entrées `Open` (portes) et `Break` (vitres, aérations) sont envoyées. Un `prop_dynamic` n'est pris que s'il a des points de vie (objet cassable, comme les vitres et l'aération de Nuke). Un `func_breakable` ou `prop_dynamic` cassable n'est une vitre que si son modèle contient `glass` ou `window`, une aération que s'il contient `vent` ou `grate` ; sinon il est laissé tel quel. Rien n'est fait pendant l'échauffement ni pendant l'éditeur de spawns.
-
-Pour corriger une map : `!retake cleanup` (ou **Nettoyage de map** dans le menu admin). Regardez l'objet et validez la première ligne : le panneau affiche son modèle et sa classe (si rien n'est dans l'axe, l'objet le plus proche à moins de 600 unités est pris). Avec `"Debug": true` dans `mapcleanup.json`, chaque passe et chaque sélection détaillent les objets dans les logs. Choisissez **Porte**, **Vitre**, **Aération**, **Ne pas toucher** ou **Auto** (règle automatique), puis **Sauvegarder**. Les corrections vont dans `configs/plugins/RetakeV4/mapcleanup/<map>.json` (copie `.bak` de l'ancienne version) et s'appliquent dès le round suivant. Un seul admin édite à la fois ; le nettoyage automatique est suspendu tant que l'éditeur est ouvert. L'éditeur se ferme avec **Quitter**, à l'ouverture d'un autre menu, à la déconnexion, au changement de map ou après 3 minutes sans action.
+A T spawn marked *plant* can carry the bomb; AutoPlant needs at least one per site.
 
 ### CS2-SimpleAdmin
 
-Si [CS2-SimpleAdmin](https://github.com/daffyyyy/CS2-SimpleAdmin) est installé, une catégorie **Retake** apparaît dans son menu `!admin` avec les mêmes actions (`admin.json` → `SimpleAdminBridge`).
+With [CS2-SimpleAdmin](https://github.com/daffyyyy/CS2-SimpleAdmin) installed, a **Retake** category appears in its `!admin` menu with the same actions (`admin.json` → `SimpleAdminBridge`).
+
+---
+
+## Map vote
+
+The MapVote module rotates maps. The maps on offer are every map with Retake spawns (`plugins/RetakeV4/spawns/<map>.json`) that the server knows, except the current map and `ExcludedMaps`. A map added with the spawn editor joins the vote on its own.
+
+- **End of match**: when `TriggerRoundsBeforeEnd` rounds are left before `mp_maxrounds` (3 by default), a vote opens in the chat for every player, spectators included, for `VoteSeconds`. `!mapvote` reopens the menu to change one's vote. The most voted map wins; a tie, or no vote at all, is settled by a random draw. When the match ends, the map changes after `ChangeDelaySeconds`.
+- **`!rtv`**: once `RtvPercentage` % of the players typed it (at least `RtvMinPlayers` players, after `RtvMinRounds` rounds), a vote opens immediately and the map changes at the end of the round.
+- The vote always uses the chat menu (`!1`, `!2`…), even when other menus are in the center of the screen: center menus are driven by the movement keys and would get in the way of a live round.
+
+---
+
+## Map cleanup
+
+Every round, right after the bomb plant, the MapCleanup module opens doors and breaks windows and vents; at the end of freeze time it repeats the action on targets that are still there. Nothing else is ever touched:
+
+- only `func_door`, `func_door_rotating`, `prop_door_rotating`, `func_breakable`, `func_shatterglass` and breakable `prop_dynamic` (with health) entities are read;
+- only the `Open` (doors) and `Break` (windows, vents) inputs are sent;
+- a breakable is a window only if its model contains `glass` or `window`, a vent only if it contains `vent` or `grate`; anything else is left alone;
+- nothing happens during warmup or while the spawn editor is open.
+
+**Correcting a map**: `!retake cleanup` (or **Map cleanup** in the admin menu). Look at the object and select the first line; the panel shows its model and class (if nothing is in your line of sight, the nearest object within 600 units is taken). Choose **Door**, **Window**, **Vent**, **Leave it alone** or **Automatic**, then **Save**. Corrections are stored in `configs/plugins/RetakeV4/mapcleanup/<map>.json` (previous version kept as `.bak`) and apply from the next round. One admin edits at a time and automatic cleanup is paused meanwhile; the editor closes on **Leave**, when another menu opens, on disconnect, on map change or after 3 minutes without action. Set `"Debug": true` in `mapcleanup.json` to log every pass and every selection.
 
 ---
 
 ## Configuration
 
-Chaque module a son fichier dans `addons/counterstrikesharp/configs/plugins/RetakeV4/`. Tous contiennent `Enabled` (désactiver le module) et `Debug` (logs détaillés). Une valeur invalide est remplacée par sa valeur par défaut, avec un avertissement dans la console. Un fichier JSON illisible est ignoré en entier (valeurs par défaut) sans être écrasé.
+Each module has its own file in `addons/counterstrikesharp/configs/plugins/RetakeV4/`. All of them have `Enabled` (turn the module off) and `Debug` (verbose logs). An invalid value falls back to its default with a console warning; an unreadable JSON file is ignored as a whole (defaults apply) and never overwritten.
 
-| Fichier | Ce qu'on y règle | Valeurs par défaut principales |
+| File | What it controls | Main defaults |
 |---|---|---|
-| `core.json` | cfg exécutée à chaque map, fin forcée d'un échauffement bloqué | `RetakeV4/retake.cfg` |
-| `roundtypes.json` | types de round : armes proposées par équipe, armes par défaut, armure, AWP, kits, Zeus, grenades ; ordre des rounds | Pistol ×3, Mid ×3, puis FullBuy ; Zeus à 100 % |
-| `teams.json` | joueurs max, ratio T/CT, scramble, rotation, priorités VIP | 9 joueurs, ratio 0,499, scramble après 5 victoires T |
-| `spawns.json` | nombre max du même site d'affilée | `0` (pas de limite) |
-| `allocation.json` | base de données, mode d'attribution (`Menu`, `NativeBuy`, `Both`), ouverture auto du menu, rappel `!guns` | SQLite, `Menu`, rappel toutes les 3,5 min |
-| `grenades.json` | kits de grenades par pool et par équipe | — |
-| `plant.json` | `AutoPlant` ou `FastPlant` | `AutoPlant` |
-| `instadefuse.json` | conditions de l'InstaDefuse | activé, bloqué par HE, molotov et feu |
-| `hud.json` | thème (couleurs, couleurs d'équipe), widgets, affichage des menus | panneau au centre de l'écran |
-| `admin.json` | pont CS2-SimpleAdmin | activé |
-| `links.json` | commandes communautaires (`!discord` → message, `!regles` → plusieurs lignes) | — |
-| `announcements.json` | messages réguliers (par map possible) et message d'accueil | désactivé (listes vides) |
-| `mapvote.json` | vote de map : `TriggerRoundsBeforeEnd` (1–10), `VoteSeconds` (10–120), `ChangeDelaySeconds` (3–30), `RtvEnabled`, `RtvPercentage` (1–100), `RtvMinPlayers`, `RtvMinRounds`, `ExcludedMaps` | vote 3 rounds avant la fin, `!rtv` à 60 % |
-| `mapcleanup.json` | nettoyage de map : `OpenDoors`, `DoorOpenChancePercent` (0–100), `BreakWindows`, `BreakVents`, `MaxEntitiesPerRound` (1–4096), `FreezeEndCheck` | tout activé, portes ouvertes à 100 % |
-| `api.json` | API publique | activée |
+| `core.json` | cfg executed on every map, forced end of a stuck warmup | `RetakeV4/retake.cfg` |
+| `roundtypes.json` | round types: weapons per team, default weapons, armour, AWP, kits, Zeus, grenades; round order | Pistol ×3, Mid ×3, then Full-buy; Zeus 100 % |
+| `teams.json` | max players, T/CT ratio, scramble, rotation, VIP priorities | 9 players, ratio 0.499, scramble after 5 T wins |
+| `spawns.json` | max consecutive rounds on the same site | `0` (no limit) |
+| `allocation.json` | database, allocation mode (`Menu`, `NativeBuy`, `Both`), auto-open menu, `!guns` reminder | SQLite, `Menu`, reminder every 3.5 min |
+| `grenades.json` | grenade kits per pool and team | — |
+| `plant.json` | `AutoPlant` or `FastPlant` | `AutoPlant` |
+| `instadefuse.json` | InstaDefuse conditions | on, blocked by HE, molotov and fire |
+| `hud.json` | theme (colours, team colours), widgets, menu display | center panel |
+| `admin.json` | CS2-SimpleAdmin bridge | on |
+| `links.json` | community commands (`!discord` → one line, `!rules` → several lines) | — |
+| `announcements.json` | timed messages (optionally per map) and welcome message | off (empty lists) |
+| `mapvote.json` | `TriggerRoundsBeforeEnd` (1–10), `VoteSeconds` (10–120), `ChangeDelaySeconds` (3–30), `RtvEnabled`, `RtvPercentage` (1–100), `RtvMinPlayers`, `RtvMinRounds`, `ExcludedMaps` | vote 3 rounds before the end, `!rtv` at 60 % |
+| `mapcleanup.json` | `OpenDoors`, `DoorOpenChancePercent` (0–100), `BreakWindows`, `BreakVents`, `MaxEntitiesPerRound` (1–4096), `FreezeEndCheck` | everything on, doors opened 100 % |
+| `api.json` | public API | on |
 
-### Menus : HUD ou chat
+### Menu display
 
-Dans `hud.json`, `Menu.Display` choisit comment les menus (armes, admin, éditeur) s'affichent :
+`hud.json` → `Menu.Display` sets how menus (weapons, admin, editors) are shown:
 
-- `WorldText` : le menu flotte devant le joueur ; on choisit en visant une ligne et en tirant, ou avec avancer / reculer et Utiliser hors round.
-- `Chat` : liste numérotée dans le chat, comme en V3. On choisit avec `!1`, `!2`…
-- `CenterHtml` (par défaut) : grand panneau au centre de l'écran (titre, sections T / CT en couleur, arme choisie cochée, aide des touches). Avancer / reculer pour naviguer, Utiliser (E) pour valider, à tout moment. Les listes longues défilent (`Menu.CenterVisibleLines`, 6 lignes par défaut). `Menu.Input` ne s'applique pas à ce mode. Le joueur ne peut pas se déplacer tant que le menu est ouvert, comme dans les menus de WeaponPaints (`Menu.FreezeWhileOpen`, activé par défaut).
+- `CenterHtml` (default): a large panel in the center of the screen (title, coloured T / CT sections, chosen weapon ticked, key hints). Forward / back to move, Use (E) to select, at any time. Long lists scroll (`Menu.CenterVisibleLines`, 6 by default). The player cannot move while the menu is open, like WeaponPaints menus (`Menu.FreezeWhileOpen`, on by default).
+- `WorldText`: the menu floats in front of the player; aim at a line and shoot, or forward / back and Use outside rounds.
+- `Chat`: a numbered list in the chat, as in V3; select with `!1`, `!2`…
 
-Ce réglage est pris en compte au redémarrage du serveur ou au rechargement du plugin.
+The setting applies on server restart or plugin reload. The map vote always uses the chat, whatever this setting.
 
-### Textes
+---
 
-Tous les messages sont dans `plugins/RetakeV4/lang/en.json` et `fr.json`. Les codes couleur CounterStrikeSharp (`{green}`, `{red}`…) sont acceptés. Ne modifiez pas ces fichiers : ils sont remplacés à chaque mise à jour. Pour changer un texte, voir [Personnaliser son serveur](#personnaliser-son-serveur).
+## Customising your server
 
-### Personnaliser son serveur
+Everything below lives in `addons/counterstrikesharp/configs/plugins/RetakeV4/` and is never overwritten by an update.
 
-Tout ce qui suit vit dans `addons/counterstrikesharp/configs/plugins/RetakeV4/` et n'est jamais écrasé par une mise à jour.
-
-**Changer des textes.** Créez `lang/fr.json` (et `lang/en.json` pour les joueurs en anglais) avec seulement les clés à changer. La liste des clés est dans `plugins/RetakeV4/lang/fr.json`.
+**Texts.** The shipped texts are in `plugins/RetakeV4/lang/en.json` and `fr.json` and are replaced on every update, so do not edit them. Instead create `lang/en.json` (and `lang/fr.json` for French players) next to the configs with only the keys you want to change. CounterStrikeSharp colour tags (`{green}`, `{red}`…) are supported.
 
 ```json
 {
-  "core.prefix": "{default}[{gold}MonServeur{default}]",
-  "core.prefix_alert": "{default}[{red}!{default} {gold}MonServeur{default}]",
-  "core.prefix_help": "{default}[{lightblue}?{default} {gold}MonServeur{default}]"
+  "core.prefix": "{default}[{gold}MyServer{default}]",
+  "core.prefix_alert": "{default}[{red}!{default} {gold}MyServer{default}]",
+  "core.prefix_help": "{default}[{lightblue}?{default} {gold}MyServer{default}]"
 }
 ```
 
-`core.prefix` précède les messages normaux, `core.prefix_alert` les refus et erreurs, `core.prefix_help` les réponses aux commandes. Un texte remplacé peut reprendre ou omettre les `{0}`, `{1}`… du texte d'origine, pas en ajouter. Une clé inconnue ou invalide est ignorée, avec un avertissement dans la console au démarrage.
+`core.prefix` precedes normal messages, `core.prefix_alert` refusals and errors, `core.prefix_help` command answers. An override may keep or drop the `{0}`, `{1}`… placeholders of the original text but cannot add new ones. Unknown or invalid keys are ignored with a warning at startup.
 
-**Annonces** (`announcements.json`) : un message tiré au hasard toutes les `IntervalSeconds` secondes (30 minimum), jamais deux fois le même de suite ; sur une map qui a sa liste dans `MapMessages`, c'est cette liste qui sert. `Welcome` est envoyé une fois par connexion, quand le joueur rejoint une équipe.
+**Announcements** (`announcements.json`): a random message every `IntervalSeconds` seconds (30 minimum), never the same one twice in a row; a map listed in `MapMessages` uses its own list. `Welcome` is sent once per connection, when the player joins a team.
 
 ```json
 {
   "Version": 1,
   "IntervalSeconds": 420,
-  "Messages": ["Rejoignez notre Discord : !discord", "Tapez !guns pour choisir vos armes"],
-  "MapMessages": { "de_mirage": ["Bienvenue sur Mirage !"] },
-  "Welcome": "Bienvenue ! Tapez !commandes pour l'aide."
+  "Messages": ["Join our Discord: !discord", "Type !guns to pick your weapons"],
+  "MapMessages": { "de_mirage": ["Welcome to Mirage!"] },
+  "Welcome": "Welcome! Type !guns to pick your weapons."
 }
 ```
 
-**Commandes communautaires** (`links.json`) : `Message` pour une ligne, `Lines` pour plusieurs (affichées avec le préfixe d'aide).
+**Community commands** (`links.json`): `Message` for one line, `Lines` for several (shown with the help prefix).
 
 ```json
 {
   "Version": 1,
   "Links": [
-    { "Commands": ["discord", "dis"], "Message": "Discord : {lightblue}https://discord.gg/xxxx{default}" },
-    { "Commands": ["regles", "rules"], "Lines": ["1. Respect de tous", "2. Pas de triche"] }
+    { "Commands": ["discord", "dis"], "Message": "Discord: {lightblue}https://discord.gg/xxxx{default}" },
+    { "Commands": ["rules", "regles"], "Lines": ["1. Respect everyone", "2. No cheating"] }
   ]
 }
 ```
 
-**Vérifier sa configuration** avant de redémarrer : chaque release fournit `RetakeV4-<version>-configcheck.zip`. Avec .NET 10 :
+**Check your configuration** before restarting: every release ships `RetakeV4-<version>-configcheck.zip`. With .NET 10:
 
 ```bash
 dotnet RetakeV4.ConfigCheck.dll <configs/plugins/RetakeV4> [<plugins/RetakeV4/spawns>]
 ```
 
-Il affiche chaque problème (valeur invalide, clé de texte inconnue, spawn illisible) ou `Configuration OK`.
+It lists every problem (invalid value, unknown text key, unreadable spawn file) or prints `Configuration OK`.
 
 ---
 
-## Préférences d'armes et base de données
+## Weapon preferences and database
 
-Les choix des joueurs sont enregistrés dans une base, réglée dans `allocation.json` → `Database` :
+Player choices are stored in a database set in `allocation.json` → `Database`:
 
-| `Type` | Usage |
+| `Type` | Use |
 |---|---|
-| `Sqlite` (défaut) | Fichier local `plugins/RetakeV4/data/retakev4.db`, rien à installer. Nécessite Linux avec glibc 2.28 ou plus récente. |
-| `MySql` | Base partagée (plusieurs serveurs, [panel web](#panel-web)). Renseignez `MySqlConnectionString`, par exemple `Server=127.0.0.1;Port=3306;Database=retakev4;User ID=retake;Password=...`. Les tables sont créées automatiquement. |
-| `None` | Aucune sauvegarde (armes par défaut à chaque connexion). |
+| `Sqlite` (default) | Local file `plugins/RetakeV4/data/retakev4.db`, nothing to install. Needs Linux with glibc 2.28 or newer. |
+| `MySql` | Shared database (several servers, [web panel](#web-panel)). Set `MySqlConnectionString`, for example `Server=127.0.0.1;Port=3306;Database=retakev4;User ID=retake;Password=...`. Tables are created automatically. |
+| `None` | Nothing saved (default weapons on every connection). |
 
-La base n'est jamais interrogée sur le thread de jeu : une base lente ou en panne ne fait pas laguer le serveur. En cas de panne, les joueurs gardent leurs choix en mémoire et le plugin réessaie automatiquement.
-
----
-
-## Panel web
-
-[CS2-RetakeV4-Panel](https://github.com/NeuTroNBZh/CS2-RetakeV4-Panel) est un site où les joueurs se connectent avec Steam et choisissent leurs armes à la souris. Il s'installe en Docker (voir son README).
-
-Pour le relier au plugin :
-
-1. Utilisez MySQL : `allocation.json` → `Database.Type` = `MySql`.
-2. Donnez au panel l'accès à la même base.
-3. Si plusieurs serveurs partagent la base, donnez à chacun un `Database.ServerKey` différent et indiquez au panel celui à afficher.
-
-Le plugin publie la liste des armes proposées dans la table `retake_catalog`, et un choix fait sur le site s'applique au round suivant, sans reconnexion.
+The database is never queried on the game thread: a slow or unavailable database does not make the server lag. During an outage, players keep their choices in memory and the plugin retries on its own.
 
 ---
 
-## API pour les autres plugins
+## Web panel
 
-Référencez `RetakeV4.Contracts.dll` sans la copier dans votre plugin (elle est déjà dans `shared/`) :
+[CS2-RetakeV4-Panel](https://github.com/NeuTroNBZh/CS2-RetakeV4-Panel) is a website where players sign in with Steam and pick their weapons with the mouse. It runs in Docker (see its README).
+
+To connect it:
+
+1. Use MySQL: `allocation.json` → `Database.Type` = `MySql`.
+2. Give the panel access to the same database.
+3. If several servers share the database, give each one its own `Database.ServerKey` and tell the panel which one to show.
+
+The plugin publishes the weapons on offer in the `retake_catalog` table, and a choice made on the website applies on the next round, without reconnecting.
+
+---
+
+## Plugin API
+
+Reference `RetakeV4.Contracts.dll` without copying it into your plugin (it is already in `shared/`):
 
 ```csharp
 using RetakeV4.Contracts;
@@ -268,49 +290,52 @@ public override void OnAllPluginsLoaded(bool hotReload)
     }
     catch (KeyNotFoundException)
     {
-        return; // RetakeV4 n'est pas installé
+        return; // RetakeV4 is not installed
     }
-    if (retake is null) return; // module Api désactivé
+    if (retake is null) return; // Api module disabled
 
-    retake.RoundPrepared += e => Logger.LogInformation("Round {Round} : {Type} sur {Site}", e.RoundNumber, e.RoundType, e.Site);
-    retake.LastPlayerAlive += e => Logger.LogInformation("Clutch {Team} : slot {Slot}", e.Team, e.Player.Slot);
+    retake.RoundPrepared += e => Logger.LogInformation("Round {Round}: {Type} on {Site}", e.RoundNumber, e.RoundType, e.Site);
+    retake.LastPlayerAlive += e => Logger.LogInformation("Clutch {Team}: slot {Slot}", e.Team, e.Player.Slot);
 }
 ```
 
-- **Événements** : `RoundPrepared`, `BombPlanted`, `LoadoutAssigned`, `LastPlayerAlive`, `RoundEnded`, `PlayerQueued`.
-- **Actions** : `ForceSite`, `RequestScramble`.
-- Tout s'utilise depuis le thread de jeu, où arrivent les événements. Une exception dans votre abonné est journalisée et n'interrompt pas le retake.
-- Après `css_plugins reload RetakeV4`, rappelez `Get()`.
-- L'API n'évolue que par ajouts, et `RetakeApi.Version` augmente à chaque ajout.
+- **Events**: `RoundPrepared`, `BombPlanted`, `LoadoutAssigned`, `LastPlayerAlive`, `RoundEnded`, `PlayerQueued`.
+- **Actions**: `ForceSite`, `RequestScramble`.
+- Use everything from the game thread, where events are raised. An exception in your handler is logged and never stops the Retake.
+- After `css_plugins reload RetakeV4`, call `Get()` again.
+- The API only grows by additions, and `RetakeApi.Version` increases with each one.
 
 ---
 
-## Dépannage
+## Troubleshooting
 
-| Symptôme | Cause et solution |
+| Symptom | Cause and fix |
 |---|---|
-| Des bots apparaissent ou l'échauffement ne finit pas | La config compétitive de l'hébergeur est passée après `retake.cfg`. Le plugin la réapplique au premier round ; vérifiez que `core.json` → `ExecConfig` pointe bien sur `RetakeV4/retake.cfg`. |
-| `GLIBC_2.xx not found` au démarrage | Le système de l'hôte est trop ancien pour SQLite : passez en `MySql` dans `allocation.json`. |
-| Aucun spawn sur une map | La map n'est pas fournie : créez ses spawns avec `!retake edit`. |
-| Un module ne se charge pas | Regardez la console au démarrage : chaque module en erreur est désactivé seul et le reste continue. `Debug: true` dans son JSON donne plus de détails. |
-| Un joueur est kické (`NETWORK_DISCONNECT_OVERFLOW`) au premier round | Le serveur a gelé plus de ~450 ms. Le plugin précharge son code au démarrage pour l'éviter. Si ça persiste, les lignes `Slow handler` de la console indiquent quel module est lent. |
+| Bots appear or warmup never ends | The host's competitive config ran after `retake.cfg`. The plugin applies it again on the first round; check that `core.json` → `ExecConfig` points to `RetakeV4/retake.cfg`. |
+| `GLIBC_2.xx not found` at startup | The host system is too old for SQLite: switch to `MySql` in `allocation.json`. |
+| No spawns on a map | The map has no bundled spawns: create them with `!retake edit`. |
+| No map vote at the end of the match | `mp_maxrounds` is 0, or fewer than two other maps have spawns (see the console warning). |
+| A module does not load | Read the console at startup: a failing module is disabled on its own and the rest keeps running. `Debug: true` in its JSON gives more detail. |
+| A player is kicked (`NETWORK_DISCONNECT_OVERFLOW`) on the first round | The server froze for more than ~450 ms. The plugin warms its code up at startup to prevent it; if it persists, the `Slow handler` console lines name the slow module. |
 
-Pour signaler un bug : ouvrez une [issue](https://github.com/NeuTroNBZh/CS2-RetakeV4/issues) avec la version (`css_retake_info`) et les lignes de console concernées.
-
----
-
-## Développement
-
-- Prérequis : .NET 10 SDK.
-- Build : `dotnet build RetakeV4.sln -c Release` (aucun avertissement toléré).
-- Tests : `dotnet test RetakeV4.sln`.
-- Package de test serveur : `pwsh scripts/package-dev.ps1` (résultat dans `artifacts/dev/`).
-- Release : poussez un tag `vx.y.z` ; GitHub Actions construit et publie les archives.
-- Architecture et règles : [CLAUDE.md](CLAUDE.md). Toute la logique métier est dans `src/RetakeV4.Domain` (sans dépendance au jeu, testée), et `src/RetakeV4` ne contient que les adaptateurs CounterStrikeSharp.
-- Tests en jeu avant une release : [docs/CHECKLIST-INGAME.md](docs/CHECKLIST-INGAME.md).
+To report a bug, open an [issue](https://github.com/NeuTroNBZh/CS2-RetakeV4/issues) with the version (`css_retake_info`) and the relevant console lines.
 
 ---
 
-## Licence
+## Development
 
-Distribué sous licence [MIT](LICENSE) : vous pouvez utiliser, modifier et redistribuer le plugin librement, en conservant la mention de copyright.
+- Requirements: .NET 10 SDK.
+- Build: `dotnet build RetakeV4.sln -c Release` (no warning allowed).
+- Tests: `dotnet test RetakeV4.sln`.
+- Test server package: `pwsh scripts/package-dev.ps1` (output in `artifacts/dev/`).
+- Release: push a `vx.y.z` tag; GitHub Actions builds and publishes the archives.
+- Architecture: all game logic lives in `src/RetakeV4.Domain` (no game dependency, unit tested); `src/RetakeV4` only holds thin CounterStrikeSharp adapters, one folder per module. Project rules are in [CLAUDE.md](CLAUDE.md); design documents and plans in [`docs/superpowers`](docs/superpowers) (French).
+- In-game checks before a release: [docs/CHECKLIST-INGAME.md](docs/CHECKLIST-INGAME.md).
+
+---
+
+## License
+
+Released under the [MIT License](LICENSE): you may use, modify and redistribute the plugin freely, keeping the copyright notice.
+
+Made by [NeuTroNBZh](https://github.com/NeuTroNBZh).
