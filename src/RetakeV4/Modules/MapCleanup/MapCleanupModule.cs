@@ -57,6 +57,7 @@ public sealed class MapCleanupModule : IRetakeModule
             hooks.OnEvent<EventRoundFreezeEnd>("freeze_end", _ => Recheck());
         }
         hooks.OnBus<MapCleanupEditorRequested>(e => OpenEditor(e.Player));
+        hooks.OnBus<MapCleanupReplayRequested>(e => e.Reply($"Map cleanup replayed: {RunPass(_overrides)} entity(ies)"));
         hooks.OnBus<HudMenuSelected>(e => _editor?.OnSelected(e));
         hooks.OnBus<HudMenuOpen>(e => _editor?.OnMenuOpened(e));
         hooks.OnEvent<EventPlayerDisconnect>("editor_disconnect", e =>
