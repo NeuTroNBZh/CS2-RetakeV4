@@ -140,8 +140,8 @@ Three commands are reserved for the server console and RCON (a player typing the
 | Command | Effect |
 |---|---|
 | `css_retake_state` | Prints one line `RETAKE_STATE {json}`: map, phase, warmup, paused, round, max rounds, score, site, round type, players (`userId`, `name`, `team`, `alive`, `bot`), queue size, map vote (`open`, `nextMap`), open editors |
-| `css_retake_mapvote` | Opens the map vote now (refused if a vote is open or decided, or with fewer than two maps) |
-| `css_retake_cleanup` | Replays the map cleanup now and prints how many entities were handled |
+| `css_retake_mapvote` | Opens the map vote now, like a successful `!rtv`: the voted map is played from the end of the round (refused if a vote is open or decided, or with fewer than two maps) |
+| `css_retake_cleanup` | Replays the map cleanup now and prints how many entities were handled (refused while an editor is open) |
 
 ### CS2-SimpleAdmin
 

@@ -57,7 +57,7 @@ public sealed class MapCleanupModule : IRetakeModule
             hooks.OnEvent<EventRoundFreezeEnd>("freeze_end", _ => Recheck());
         }
         hooks.OnBus<MapCleanupEditorRequested>(e => OpenEditor(e.Player));
-        hooks.OnBus<MapCleanupReplayRequested>(e => e.Reply($"Map cleanup replayed: {RunPass(_overrides)} entity(ies)"));
+        hooks.OnBus<MapCleanupReplayRequested>(OnReplayRequested);
         hooks.OnBus<HudMenuSelected>(e => _editor?.OnSelected(e));
         hooks.OnBus<HudMenuOpen>(e => _editor?.OnMenuOpened(e));
         hooks.OnEvent<EventPlayerDisconnect>("editor_disconnect", e =>
@@ -75,6 +75,17 @@ public sealed class MapCleanupModule : IRetakeModule
         _editor = null;
         _store = null;
         _context = null;
+    }
+
+    // Warmup is allowed ("now" means now); an open editor is not: the admin is judging the current state of the map.
+    private void OnReplayRequested(MapCleanupReplayRequested e)
+    {
+        if (_editor is { Active: true } || _spawnEditing)
+        {
+            e.Reply("Map cleanup replay refused: an editor is open");
+            return;
+        }
+        e.Reply($"Map cleanup replayed: {RunPass(_overrides)} entity(ies)");
     }
 
     private bool ShouldRun() =>

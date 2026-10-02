@@ -226,8 +226,11 @@ public sealed class MapVoteModule : IRetakeModule
                 e.Reply("Map vote refused: fewer than 2 maps available");
                 return;
         }
+        // Same outcome as a successful !rtv: the voted map is played from the end of the current round.
+        _rtvPassed = true;
+        _changeAtRoundEnd = true;
         OpenVote();
-        e.Reply($"Map vote opened ({_vote?.Maps.Count ?? 0} maps)");
+        e.Reply($"Map vote opened ({_vote?.Maps.Count ?? 0} maps); the map changes at the end of the round");
     }
 
     private void OnRtv(CCSPlayerController? player)
@@ -327,6 +330,7 @@ public sealed class MapVoteModule : IRetakeModule
             Context.Logger.LogError("Map vote: {Map} is no longer a valid map; no map change", map);
             _nextMap = null;
             _changeAtRoundEnd = false;
+            Context.Bus.Publish(new MapVoteStateChanged(false, null));
             return;
         }
         _changeTarget = map;

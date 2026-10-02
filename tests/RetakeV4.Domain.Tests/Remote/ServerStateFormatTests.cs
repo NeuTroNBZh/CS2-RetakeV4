@@ -51,6 +51,14 @@ public class ServerStateFormatTests
         Assert.Equal(name, root.GetProperty("players")[0].GetProperty("name").GetString());
     }
 
+    // Non-ASCII names are written as UTF-8, not as six-byte escapes: a full server stays well under console line limits.
+    [Fact]
+    public void NonAsciiName_IsNotEscaped()
+    {
+        var line = ServerStateFormat.Format(Sample("Éric中"));
+        Assert.Contains("Éric中", line);
+    }
+
     [Fact]
     public void NullSiteAndRoundType_AreJsonNull()
     {

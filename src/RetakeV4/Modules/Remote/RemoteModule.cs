@@ -48,9 +48,11 @@ public sealed class RemoteModule : IRetakeModule
         hooks.OnBus<MapVoteStateChanged>(e => { _voteOpen = e.Open; _nextMap = e.NextMap; });
         hooks.OnBus<SpawnEditorStateChanged>(e => _spawnEditor = e.Active);
         hooks.OnBus<MapCleanupEditorStateChanged>(e => _cleanupEditor = e.Active);
-        hooks.Command("css_retake_state", "Prints the Retake state as one JSON line (console only)", (p, c) => ConsoleOnly(p, c, () => c.ReplyToCommand(ServerStateFormat.Format(Snapshot()))));
-        hooks.Command("css_retake_mapvote", "Opens the map vote (console only)", (p, c) => ConsoleOnly(p, c, () => Context.Bus.Publish(new MapVoteRequested(c.ReplyToCommand))));
-        hooks.Command("css_retake_cleanup", "Replays the map cleanup now (console only)", (p, c) => ConsoleOnly(p, c, () => Context.Bus.Publish(new MapCleanupReplayRequested(c.ReplyToCommand))));
+        hooks.Command("css_retake_state", "Prints the Retake state as one JSON line (console only)", (p, c) => ConsoleOnly(p, c, () => PrintState(c)));
+        hooks.Command("css_retake_mapvote", "Opens the map vote (console only)", (p, c) => ConsoleOnly(p, c, () =>
+            Request(c, "Map vote unavailable (module disabled or failed)", reply => new MapVoteRequested(reply))));
+        hooks.Command("css_retake_cleanup", "Replays the map cleanup now (console only)", (p, c) => ConsoleOnly(p, c, () =>
+            Request(c, "Map cleanup unavailable (module disabled or failed)", reply => new MapCleanupReplayRequested(reply))));
     }
 
     public void Unload() => _context = null;
@@ -68,6 +70,38 @@ public sealed class RemoteModule : IRetakeModule
         action();
     }
 
+    // Polled every few seconds: a failure (map change in progress) answers an error line instead of counting against
+    // the module's error budget.
+    private void PrintState(CommandInfo command)
+    {
+        string line;
+        try
+        {
+            line = ServerStateFormat.Format(Snapshot());
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or NullReferenceException or ArgumentException)
+        {
+            line = "RETAKE_STATE_ERROR";
+            Context.Logger.LogDebug(ex, "Remote state unavailable");
+        }
+        command.ReplyToCommand(line);
+    }
+
+    // The owner module answers synchronously; no answer means it is disabled or failed, and the caller must still get a line.
+    private void Request<T>(CommandInfo command, string unavailable, Func<Action<string>, T> create) where T : notnull
+    {
+        var replied = false;
+        Context.Bus.Publish(create(message =>
+        {
+            replied = true;
+            command.ReplyToCommand(message);
+        }));
+        if (!replied)
+        {
+            command.ReplyToCommand(unavailable);
+        }
+    }
+
     private ServerStateSnapshot Snapshot()
     {
         var rules = GameRulesAccessor.Get();
@@ -80,7 +114,7 @@ public sealed class RemoteModule : IRetakeModule
             .Select(p => new RemotePlayer(p.UserId ?? -1, p.PlayerName, TeamOf(p.TeamNum), p.PawnIsAlive, p.IsBot))
             .ToList();
         return new ServerStateSnapshot(
-            Server.MapName, Context.Rounds.State.Phase.ToString(), rules?.WarmupPeriod ?? true, rules?.GamePaused ?? false,
+            Server.MapName, Context.Rounds.State.Phase.ToString(), rules?.WarmupPeriod ?? true, rules is { GamePaused: true } or { MatchWaitingForResume: true },
             (rules?.TotalRoundsPlayed ?? 0) + 1, ConVar.Find("mp_maxrounds")?.GetPrimitiveValue<int>() ?? 0,
             scores.GetValueOrDefault((int)CsTeam.Terrorist), scores.GetValueOrDefault((int)CsTeam.CounterTerrorist),
             _site, _roundType, players, _queue, _voteOpen, _nextMap, _spawnEditor, _cleanupEditor);
