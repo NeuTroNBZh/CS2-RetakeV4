@@ -6,6 +6,7 @@ using RetakeV4.Adapters;
 using RetakeV4.Configuration;
 using RetakeV4.Contracts;
 using RetakeV4.Domain.Common;
+using RetakeV4.Domain.Compatibility;
 using RetakeV4.Domain.Events;
 using RetakeV4.Domain.Modules;
 using RetakeV4.Domain.Rounds;
@@ -54,7 +55,37 @@ public sealed class RetakeV4Plugin : BasePlugin
             new ModuleContext(this, bus, guard, text, Logger, rounds,
                 new ModuleHooks(this, bus, pipeline, guard, module.Name, registrations)));
         Logger.LogInformation("RetakeV4 {Version} loaded with modules: {Modules}", ModuleVersion, string.Join(", ", _host.LoadedModules));
+        WarnAboutLegacyPlugins();
         bus.Publish(new ModulesReady(hotReload));
+    }
+
+    private static bool HasPluginDll(string folder, string name) =>
+        Directory.EnumerateFiles(folder, "*.dll")
+            .Any(file => string.Equals(Path.GetFileNameWithoutExtension(file), name, StringComparison.OrdinalIgnoreCase));
+
+    private void WarnAboutLegacyPlugins()
+    {
+        try
+        {
+            var pluginsRoot = Directory.GetParent(ModuleDirectory)?.FullName;
+            if (pluginsRoot is null)
+            {
+                return;
+            }
+            var installed = Directory.EnumerateDirectories(pluginsRoot)
+                .Select(Path.GetFileName)
+                .Where(name => name is not null && HasPluginDll(Path.Combine(pluginsRoot, name), name))
+                .Select(name => name!);
+            var found = LegacyPlugins.Detect(installed);
+            if (found.Count > 0)
+            {
+                Logger.LogWarning("{Message}", LegacyPlugins.Describe(found));
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Logger.LogDebug(ex, "Legacy plugin check skipped");
+        }
     }
 
     public override void Unload(bool hotReload)
