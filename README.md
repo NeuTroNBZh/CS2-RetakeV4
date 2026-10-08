@@ -324,6 +324,7 @@ public override void OnAllPluginsLoaded(bool hotReload)
 |---|---|
 | Bots appear or warmup never ends | The host's competitive config ran after `retake.cfg`. The plugin applies it again on the first round; check that `core.json` → `ExecConfig` points to `RetakeV4/retake.cfg`. |
 | No bomb planted at the start of a round (`AutoPlant`) | AutoPlant needs at least **2 human players on a team** (bots do not count) and a human Terrorist to carry the bomb. When it skips, the console says why: `Auto plant skipped, no bomb this round: ...`. Also check that the map has spawns for the chosen site (`!retake edit`). |
+| Console warns `Legacy plugin(s) detected next to RetakeV4` | CS2-RETAKE (V3), CS2-SpawnEditor or CS2-BreakerAndOpenDoor is still in `addons/counterstrikesharp/plugins`. RetakeV4 replaces all three: remove their folders (and their configs if you like). Running them together duplicates teams, spawns and weapons. |
 | `GLIBC_2.xx not found` at startup | The host system is too old for SQLite: switch to `MySql` in `allocation.json`. |
 | No spawns on a map | The map has no bundled spawns: create them with `!retake edit`. |
 | No map vote at the end of the match | `mp_maxrounds` is 0, or fewer than two other maps have spawns (see the console warning). |
