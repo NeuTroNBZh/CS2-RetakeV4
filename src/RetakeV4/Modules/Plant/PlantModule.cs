@@ -20,6 +20,7 @@ public sealed class PlantModule : IRetakeModule
     private ModuleContext? _context;
     private PreparationContext? _prepared;
     private Timer? _plantCheck;
+    private AutoPlantDecision? _lastSkip;
 
     public string Name => "Plant";
 
@@ -55,6 +56,7 @@ public sealed class PlantModule : IRetakeModule
         {
             _plantCheck = null;
             _prepared = null;
+            _lastSkip = null;
         });
     }
 
@@ -101,11 +103,13 @@ public sealed class PlantModule : IRetakeModule
     private void AutoPlant(PreparationContext? prepared)
     {
         var playersOnTeams = PlayerQueries.Humans().Count(p => PlayerQueries.SideOf(p) is not null);
-        if (!PlantRules.CanAutoPlant(false, playersOnTeams, prepared?.Planter, prepared?.Site))
+        var decision = PlantRules.Evaluate(false, playersOnTeams, prepared?.Planter, prepared?.Site);
+        if (decision != AutoPlantDecision.Plant)
         {
-            Context.Logger.LogDebug("Auto plant skipped (planter {Planter}, site {Site}, players {Players})", prepared?.Planter, prepared?.Site, playersOnTeams);
+            ReportAutoPlantSkipped(decision, playersOnTeams, prepared);
             return;
         }
+        _lastSkip = null;
         var planter = Utilities.GetPlayerFromSlot(prepared!.Planter!.Value.Slot);
         var pawn = planter?.PlayerPawn.Value;
         if (planter is not { IsValid: true } || pawn is not { IsValid: true } || pawn.AbsOrigin is null || pawn.TeamNum != (byte)CsTeam.Terrorist)
@@ -117,6 +121,24 @@ public sealed class PlantModule : IRetakeModule
         {
             FireBombPlantedEvent(planter, prepared.Site.Value);
         }
+    }
+
+    private void ReportAutoPlantSkipped(AutoPlantDecision decision, int playersOnTeams, PreparationContext? prepared)
+    {
+        var detail = decision switch
+        {
+            AutoPlantDecision.NotEnoughPlayers => $"only {playersOnTeams} human player(s) on a team (minimum {PlantRules.MinimumPlayers}, bots do not count)",
+            AutoPlantDecision.NoPlanter => "no human Terrorist to carry the bomb",
+            AutoPlantDecision.NoSite => "no bomb site was chosen (does the map have spawns? see !retake edit)",
+            _ => decision.ToString(),
+        };
+        if (_lastSkip == decision)
+        {
+            Context.Logger.LogDebug("Auto plant skipped again: {Detail}", detail);
+            return;
+        }
+        _lastSkip = decision;
+        Context.Logger.LogWarning("Auto plant skipped, no bomb this round: {Detail} (planter {Planter}, site {Site})", detail, prepared?.Planter, prepared?.Site);
     }
 
     private bool CreatePlantedBomb(CCSPlayerPawn pawn, BombSite site)
