@@ -19,12 +19,15 @@ public static class RoundAnalyzer
         CountLeavers(record.Leavers, players, deathTimes);
         CountTrades(kills, sides, players, rules.TradeWindowSeconds);
         CountDamage(record.Damages, sides, players);
+        CountShots(record, players);
+        CountFlashes(record.Blinds, sides, players);
+        CountObjectives(record, players);
         MarkClutches(sides, players, deathTimes);
         var winner = record.Outcome.Winner;
         return new RoundSummary(
             record,
             record.Context.Participants.Select(p => players[p.SteamId].Build(winner, deathTimes.ContainsKey(p.SteamId))).ToList(),
-            Array.Empty<GrenadeSummary>());
+            GrenadeLinker.Link(record, sides));
     }
 
     private static bool IsEnemyKill(PlayerKilled kill, IReadOnlyDictionary<ulong, TeamSide> sides) =>
@@ -156,6 +159,80 @@ public static class RoundAnalyzer
             if (StatsWeapons.IsUtility(hurt.Weapon))
             {
                 attacker.UtilityDamage += dealt;
+            }
+        }
+    }
+
+    // A hit is one (attacker, tick) pair: the pellets of one shotgun shot land in the same tick and count once.
+    private static void CountShots(RoundRecord record, Dictionary<ulong, PlayerAccumulator> players)
+    {
+        foreach (var shot in record.Shots)
+        {
+            if (players.TryGetValue(shot.Shooter, out var shooter) && StatsWeapons.IsBullet(shot.Weapon))
+            {
+                shooter.Shots++;
+                shooter.Weapon(shot.Weapon).Shots++;
+            }
+        }
+        var hits = new HashSet<(ulong, int)>();
+        var headHits = new HashSet<(ulong, int)>();
+        foreach (var hurt in record.Damages)
+        {
+            if (hurt.VictimIsBot || hurt.Attacker is not { } attackerId || attackerId == hurt.Victim
+                || !players.TryGetValue(attackerId, out var attacker) || !StatsWeapons.IsBullet(hurt.Weapon))
+            {
+                continue;
+            }
+            if (hits.Add((attackerId, hurt.Tick)))
+            {
+                attacker.Hits++;
+                attacker.Weapon(hurt.Weapon).Hits++;
+            }
+            if (hurt.Hitgroup == StatsWeapons.HeadHitgroup && headHits.Add((attackerId, hurt.Tick)))
+            {
+                attacker.HeadshotHits++;
+                attacker.Weapon(hurt.Weapon).HeadshotHits++;
+            }
+        }
+    }
+
+    private static void CountFlashes(IReadOnlyList<PlayerBlinded> blinds, IReadOnlyDictionary<ulong, TeamSide> sides, Dictionary<ulong, PlayerAccumulator> players)
+    {
+        foreach (var blind in blinds)
+        {
+            if (blind.Seconds <= 0 || blind.Attacker is not { } attackerId || attackerId == blind.Victim
+                || !players.TryGetValue(attackerId, out var attacker) || !sides.TryGetValue(blind.Victim, out var victimSide))
+            {
+                continue;
+            }
+            if (victimSide == sides[attackerId])
+            {
+                attacker.TeammatesFlashed++;
+            }
+            else
+            {
+                attacker.EnemiesFlashed++;
+                attacker.BlindSeconds += blind.Seconds;
+            }
+        }
+    }
+
+    private static void CountObjectives(RoundRecord record, Dictionary<ulong, PlayerAccumulator> players)
+    {
+        if (record.Plant is { } plant && players.TryGetValue(plant.Planter, out var planter))
+        {
+            planter.Planted = true;
+        }
+        if (record.Defuse is { } defuse && players.TryGetValue(defuse.Defuser, out var defuser))
+        {
+            defuser.Defused = true;
+            defuser.DefusedWithKit = defuse.WithKit;
+        }
+        foreach (var mvp in record.Mvps)
+        {
+            if (players.TryGetValue(mvp.Player, out var player))
+            {
+                player.Mvp = true;
             }
         }
     }
