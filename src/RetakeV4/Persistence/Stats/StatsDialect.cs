@@ -19,7 +19,7 @@ public sealed class StatsDialect
         Bool = "TINYINT(1)",
         Real = "DOUBLE",
         DateTime = "DATETIME(3)",
-        TableOptions = " ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+        TableOptions = " ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin",
         LastInsertId = "SELECT LAST_INSERT_ID()",
         Greatest = "GREATEST",
     };
@@ -60,6 +60,10 @@ public sealed class StatsDialect
     public string LastInsertId { get; private init; } = string.Empty;
 
     public string Greatest { get; private init; } = string.Empty;
+
+    public string CreateView => IsMySql ? "CREATE OR REPLACE VIEW" : "CREATE VIEW IF NOT EXISTS";
+
+    public string FloatCast(string expression) => IsMySql ? $"CAST({expression} AS DOUBLE)" : $"CAST({expression} AS REAL)";
 
     public string Text(int length) => IsMySql ? $"VARCHAR({length.ToString(CultureInfo.InvariantCulture)})" : "TEXT";
 

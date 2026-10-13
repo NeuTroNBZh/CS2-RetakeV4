@@ -13,9 +13,19 @@ public static class StatsViews
 
     private static readonly string[] LeaderboardRatios = { "kpr", "kd", "adr", "hs_pct", "accuracy", "kast_pct", "win_pct", "rating" };
 
-    public static IReadOnlyList<StatsView> All { get; } = BuildViews();
+    private static readonly StatsView[] MySqlViews = BuildViews(StatsDialect.MySql);
 
-    private static IReadOnlyList<StatsView> BuildViews() => new[]
+    private static readonly StatsView[] SqliteViews = BuildViews(StatsDialect.Sqlite);
+
+    public static IReadOnlyList<string> Names { get; } = SqliteViews.Select(v => v.Name).ToArray();
+
+    public static IReadOnlyList<StatsView> For(StatsDialect dialect)
+    {
+        ArgumentNullException.ThrowIfNull(dialect);
+        return dialect.IsMySql ? MySqlViews : SqliteViews;
+    }
+
+    private static StatsView[] BuildViews(StatsDialect d) => new[]
     {
         new StatsView("v_stats_players", $"""
             SELECT p.steam_id, p.name, p.first_seen, p.last_seen, p.elo,
@@ -24,7 +34,7 @@ public static class StatsViews
                 COALESCE(pt.seconds_ct + pt.seconds_t + pt.seconds_spec + pt.seconds_queue, 0) AS seconds_total,
                 COALESCE(pt.sessions, 0) AS sessions,
                 {CountersOrZero("t.")},
-                {RatioColumns("t.", null)}
+                {RatioColumns(d, "t.", null)}
             FROM stats_players p
             LEFT JOIN stats_player_totals t ON t.steam_id = p.steam_id AND t.scope = 'all'
             LEFT JOIN stats_player_playtime pt ON pt.steam_id = p.steam_id
@@ -32,19 +42,19 @@ public static class StatsViews
         new StatsView("v_stats_player_scopes", $"""
             SELECT t.steam_id, p.name, t.scope,
                 {Counters("t.")},
-                {RatioColumns("t.", null)}
+                {RatioColumns(d, "t.", null)}
             FROM stats_player_totals t
             JOIN stats_players p ON p.steam_id = t.steam_id
             """),
-        new StatsView("v_stats_player_weapons", """
+        new StatsView("v_stats_player_weapons", $"""
             SELECT steam_id, weapon, shots, hits, headshot_hits, kills, headshot_kills, damage,
-                ROUND(100.0 * hits / NULLIF(shots, 0), 3) AS accuracy,
-                ROUND(100.0 * headshot_kills / NULLIF(kills, 0), 3) AS hs_pct
+                {d.FloatCast("ROUND(100.0 * hits / NULLIF(shots, 0), 3)")} AS accuracy,
+                {d.FloatCast("ROUND(100.0 * headshot_kills / NULLIF(kills, 0), 3)")} AS hs_pct
             FROM stats_player_weapons
             """),
         new StatsView("v_stats_leaderboard", $"""
             SELECT p.steam_id, p.name, p.elo, t.ranked_rounds, t.rounds, t.kills, t.deaths, t.damage,
-                {RatioColumns("t.", LeaderboardRatios)}
+                {RatioColumns(d, "t.", LeaderboardRatios)}
             FROM stats_players p
             JOIN stats_player_totals t ON t.steam_id = p.steam_id AND t.scope = 'all'
             WHERE t.ranked_rounds > 0
@@ -113,9 +123,9 @@ public static class StatsViews
 
     private static string CountersOrZero(string alias) => string.Join(", ", StatsCounters.Columns.Select(c => $"COALESCE({alias}{c}, 0) AS {c}"));
 
-    private static string RatioColumns(string alias, IReadOnlyCollection<string>? only) => string.Join(", ",
+    private static string RatioColumns(StatsDialect d, string alias, IReadOnlyCollection<string>? only) => string.Join(", ",
         Ratios.Where(r => only is null || only.Contains(r.Name))
-            .Select(r => $"{string.Format(CultureInfo.InvariantCulture, r.Expression, alias)} AS {r.Name}"));
+            .Select(r => $"{d.FloatCast(string.Format(CultureInfo.InvariantCulture, r.Expression, alias))} AS {r.Name}"));
 
     private static (string Name, string Expression)[] BuildRatios()
     {

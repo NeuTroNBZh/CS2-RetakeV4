@@ -49,7 +49,7 @@ public sealed class StatsSchemaTests : IDisposable
 
     [Fact]
     public void ContractViews_AreExactlyTheDefinedViews() =>
-        Assert.Equal(Contract().Keys.Order(StringComparer.Ordinal), StatsViews.All.Select(v => v.Name).Order(StringComparer.Ordinal));
+        Assert.Equal(Contract().Keys.Order(StringComparer.Ordinal), StatsViews.Names.Order(StringComparer.Ordinal));
 
     [Fact]
     public void ContractCounters_FollowStatsCounters()
@@ -84,17 +84,45 @@ public sealed class StatsSchemaTests : IDisposable
     public async Task EveryViewIsQueryable_OnAnEmptyDatabase()
     {
         await using var connection = await MigratedSqlite();
-        foreach (var view in StatsViews.All)
+        foreach (var view in StatsViews.Names)
         {
             await using var command = connection.CreateCommand();
-            command.CommandText = $"SELECT COUNT(*) FROM {view.Name}";
+            command.CommandText = $"SELECT COUNT(*) FROM {view}";
             Assert.Equal(0L, (long)(await command.ExecuteScalarAsync())!);
         }
     }
 
     [Fact]
-    public void BothDialects_HaveTheSameNumberOfMigrations() =>
-        Assert.Equal(StatsSchema.Migrations(StatsDialect.Sqlite).Count, StatsSchema.Migrations(StatsDialect.MySql).Count);
+    public async Task SqliteMigrations_CanBeReappliedStatementByStatement()
+    {
+        await using var connection = await MigratedSqlite();
+        foreach (var sql in StatsSchema.Migrations(StatsDialect.Sqlite))
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = sql;
+            await command.ExecuteNonQueryAsync();
+        }
+    }
+
+    [Fact]
+    public async Task SqliteIndexes_AreCreated()
+    {
+        await using var connection = await MigratedSqlite();
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT name FROM sqlite_master WHERE type = 'index'";
+        var found = new HashSet<string>();
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            found.Add(reader.GetString(0));
+        }
+        var expected = StatsSchema.Indexes.Values.SelectMany(i => i).Select(i => i.Name);
+        Assert.All(expected, name => Assert.Contains(name, found));
+    }
+
+    [Fact]
+    public void MySqlTables_DeclareTheirIndexesInline() =>
+        Assert.Contains(StatsSchema.Migrations(StatsDialect.MySql), m => m.Contains("KEY ix_stats_kills_victim (victim)", StringComparison.Ordinal));
 
     [Fact]
     public void OnConflict_PerDialect()
