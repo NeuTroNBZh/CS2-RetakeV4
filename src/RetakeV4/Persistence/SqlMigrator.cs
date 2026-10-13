@@ -14,7 +14,7 @@ public static partial class SqlMigrator
         {
             throw new ArgumentException("Version table must be lowercase letters and underscores", nameof(versionTable));
         }
-        await ExecuteAsync(connection, null, $"CREATE TABLE IF NOT EXISTS {versionTable} (version INTEGER NOT NULL PRIMARY KEY)", ct).ConfigureAwait(false);
+        await ExecuteAsync(connection, null, $"CREATE TABLE IF NOT EXISTS {versionTable} (version INTEGER NOT NULL)", ct).ConfigureAwait(false);
         var current = await CurrentVersionAsync(connection, versionTable, ct).ConfigureAwait(false);
         for (var index = current; index < migrations.Count; index++)
         {
