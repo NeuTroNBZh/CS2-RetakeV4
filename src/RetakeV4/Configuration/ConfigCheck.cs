@@ -1,7 +1,9 @@
 using Microsoft.Extensions.Logging;
 using RetakeV4.Localization;
 using RetakeV4.Modules;
+using RetakeV4.Modules.Allocation;
 using RetakeV4.Modules.Spawns;
+using RetakeV4.Modules.Stats;
 
 namespace RetakeV4.Configuration;
 
@@ -24,11 +26,12 @@ public static class ConfigCheck
             }
             var logger = new CollectingLogger();
             var store = new JsonConfigStore(copy);
+            var configs = new List<ModuleConfig>();
             foreach (var module in ModuleCatalog.CreateAll())
             {
                 try
                 {
-                    module.LoadConfig(store, logger);
+                    configs.Add(module.LoadConfig(store, logger));
                 }
                 catch (Exception ex)
                 {
@@ -36,6 +39,10 @@ public static class ConfigCheck
                 }
             }
             problems.AddRange(logger.Warnings);
+            if (configs.OfType<AllocationConfig>().FirstOrDefault() is { } allocation && configs.OfType<StatsConfig>().FirstOrDefault() is { } stats)
+            {
+                problems.AddRange(DatabaseConsistencyCheck.Check(allocation, stats));
+            }
         }
         finally
         {

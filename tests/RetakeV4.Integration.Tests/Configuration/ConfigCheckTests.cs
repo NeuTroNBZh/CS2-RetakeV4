@@ -17,6 +17,14 @@ public class ConfigCheckTests : IDisposable
     }
 
     [Fact]
+    public void StatsAndAllocationOnDifferentDatabases_IsReported()
+    {
+        ConfigExport.Run(_dir.Path, new ListLogger());
+        File.WriteAllText(_dir.File("stats.json"), """{ "Version": 1, "Database": { "Type": "Sqlite", "SqliteFile": "data/other.db", "ServerKey": "default" } }""");
+        Assert.Contains(ConfigCheck.Run(_dir.Path, null, PluginLang), p => p.Contains("stats.json", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void InvalidModuleConfig_IsReported_AndTheDirectoryIsNotModified()
     {
         File.WriteAllText(_dir.File("announcements.json"), "{ \"Version\": 1, \"IntervalSeconds\": 1 }");

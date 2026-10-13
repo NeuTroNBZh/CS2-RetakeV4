@@ -1,0 +1,408 @@
+using CounterStrikeSharp.API;
+using CounterStrikeSharp.API.Core;
+using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.Logging;
+using RetakeV4.Adapters;
+using RetakeV4.Configuration;
+using RetakeV4.Domain.Common;
+using RetakeV4.Domain.Events;
+using RetakeV4.Domain.Geometry;
+using RetakeV4.Domain.Rounds;
+using RetakeV4.Domain.Stats;
+using RetakeV4.Domain.Teams;
+using RetakeV4.Persistence;
+using RetakeV4.Persistence.Stats;
+using static RetakeV4.Modules.Stats.StatsEventMapper;
+
+namespace RetakeV4.Modules.Stats;
+
+// Translates CS2 events into stats facts. Decisions live in Domain/Stats; every write goes through StatsWriteQueue.
+public sealed class StatsModule : IRetakeModule
+{
+    private const float PresenceRefreshSeconds = 5f;
+
+    private readonly PlaytimeTracker _playtime = new();
+    private readonly Dictionary<ulong, int> _elo = new();
+    private readonly Dictionary<int, string?> _primaryBySlot = new();
+    private StatsConfig _config = new();
+    private StatsRules? _rules;
+    private RoundRecorder? _recorder;
+    private IStatsRepository? _repository;
+    private StatsWriteQueue? _writes;
+    private ModuleContext? _context;
+    private TeamState _teams = TeamState.Empty;
+    private float _roundStartTime;
+    private bool _missingPreparationWarned;
+
+    public string Name => "Stats";
+
+    public IReadOnlyList<string> DependsOn { get; } = new[] { "Core" };
+
+    private ModuleContext Context => _context ?? throw new InvalidOperationException("Stats module is not loaded");
+
+    private static double Clock() => Environment.TickCount64 / 1000.0;
+
+    public ModuleConfig LoadConfig(JsonConfigStore store, ILogger logger)
+    {
+        var result = store.Load("stats.json", new StatsConfig(), new StatsConfigValidator());
+        ConfigLogging.Report(logger, result.Issues);
+        _config = result.Config;
+        return _config;
+    }
+
+    public void Load(ModuleContext context)
+    {
+        _context = context;
+        _rules = _config.ToRules();
+        _recorder = new RoundRecorder(_rules.MaxShotsPerRound, _rules.MinPlayersPerSide);
+        _repository = StatsRepositories.Create(_config.Database, context.Plugin.ModuleDirectory,
+            new StatsWriteOptions(_config.Database.ServerKey, _rules.Elo.Start, _rules.Elo.Floor));
+        _writes = new StatsWriteQueue(_repository, context.Logger, _config.QueueCapacity,
+            TimeSpan.FromSeconds(_config.ShutdownFlushSeconds), OnInitializationFailed);
+        if (_config.Database.Type == DatabaseType.Sqlite)
+        {
+            context.Logger.LogInformation("Stats are stored in SQLite: the web panel and external sites can only read them from MySql");
+        }
+        var hooks = context.Hooks;
+        hooks.OnBus<MapStarted>(e => OnMapStarted(e.MapName));
+        hooks.OnBus<ModulesReady>(e =>
+        {
+            if (e.HotReload)
+            {
+                RefreshPresence();
+            }
+        });
+        hooks.OnBus<RoundPhaseChanged>(e =>
+        {
+            if (e.To == RoundPhase.Warmup)
+            {
+                _recorder?.Abandon();
+            }
+        });
+        hooks.OnBus<LoadoutsAssigned>(OnLoadoutsAssigned);
+        hooks.OnBus<RoundPrepared>(e => OpenRound(e.Context));
+        hooks.OnBus<TeamStateChanged>(e =>
+        {
+            _teams = e.State;
+            RefreshPresence();
+        });
+        hooks.OnEvent<EventWeaponFire>("stats_weapon_fire", OnWeaponFire);
+        hooks.OnEvent<EventPlayerHurt>("stats_player_hurt", OnPlayerHurt);
+        hooks.OnEvent<EventPlayerDeath>("stats_player_death", OnPlayerDeath);
+        hooks.OnEvent<EventGrenadeThrown>("stats_grenade_thrown", OnGrenadeThrown);
+        hooks.OnEvent<EventHegrenadeDetonate>("stats_he_detonate", e => OnDetonated(e.Userid, GrenadeType.He, e.Entityid, e.X, e.Y, e.Z));
+        hooks.OnEvent<EventFlashbangDetonate>("stats_flash_detonate", e => OnDetonated(e.Userid, GrenadeType.Flash, e.Entityid, e.X, e.Y, e.Z));
+        hooks.OnEvent<EventSmokegrenadeDetonate>("stats_smoke_detonate", e => OnDetonated(e.Userid, GrenadeType.Smoke, e.Entityid, e.X, e.Y, e.Z));
+        hooks.OnEvent<EventMolotovDetonate>("stats_molotov_detonate", e => OnDetonated(e.Userid, GrenadeType.Molotov, null, e.X, e.Y, e.Z));
+        hooks.OnEvent<EventDecoyStarted>("stats_decoy_started", e => OnDetonated(e.Userid, GrenadeType.Decoy, e.Entityid, e.X, e.Y, e.Z));
+        hooks.OnEvent<EventPlayerBlind>("stats_player_blind", OnPlayerBlind);
+        hooks.OnEvent<EventBombPlanted>("stats_bomb_planted", e =>
+        {
+            if (HumanId(e.Userid) is { } planter)
+            {
+                _recorder?.Add(new BombPlantedFact(planter, Now()));
+            }
+        });
+        hooks.OnEvent<EventBombDefused>("stats_bomb_defused", e =>
+        {
+            if (HumanId(e.Userid) is { } defuser)
+            {
+                _recorder?.Add(new BombDefusedFact(defuser, HasKit(e.Userid), Now()));
+            }
+        });
+        hooks.OnEvent<EventBombExploded>("stats_bomb_exploded", _ => _recorder?.Add(new BombExplodedFact(Now())));
+        hooks.OnEvent<EventRoundMvp>("stats_round_mvp", e =>
+        {
+            if (HumanId(e.Userid) is { } mvp)
+            {
+                _recorder?.Add(new MvpAwarded(mvp, e.Reason));
+            }
+        });
+        hooks.OnEvent<EventRoundEnd>("stats_round_end", OnRoundEnd);
+        hooks.OnEvent<EventPlayerConnectFull>("stats_connect", e => OnConnected(e.Userid));
+        hooks.OnEvent<EventPlayerDisconnect>("stats_disconnect", e => OnDisconnected(e.Userid, e.Reason));
+        hooks.RepeatTimer("stats_presence", PresenceRefreshSeconds, RefreshPresence);
+    }
+
+    public void Unload()
+    {
+        _recorder?.Abandon();
+        var at = DateTimeOffset.UtcNow;
+        foreach (var (player, playtime) in _playtime.CloseAll(Clock()))
+        {
+            _writes?.Enqueue(new CloseSessionCommand(player, at, null, playtime));
+        }
+        _writes?.DisposeAsync().AsTask().Wait(TimeSpan.FromSeconds(_config.ShutdownFlushSeconds + 2));
+        _writes = null;
+        _repository = null;
+        _recorder = null;
+        _elo.Clear();
+        ReleaseSqliteFiles();
+        _context = null;
+    }
+
+    private int Now() => (int)Math.Round((Server.CurrentTime - _roundStartTime) * 1000);
+
+    private void OnInitializationFailed(Exception exception) =>
+        Server.NextFrame(() => _context?.Guard.Run(Name, "stats_disable", () =>
+        {
+            _context?.Logger.LogError("Stats module disabled: its database could not be initialized");
+            _context?.Guard.Disable(Name);
+        }));
+
+    private void OnMapStarted(string mapName)
+    {
+        _recorder?.Abandon();
+        _primaryBySlot.Clear();
+        _missingPreparationWarned = false;
+        var at = DateTimeOffset.UtcNow;
+        foreach (var (player, playtime) in _playtime.CloseAll(Clock()))
+        {
+            _writes?.Enqueue(new CloseSessionCommand(player, at, null, playtime));
+        }
+        _writes?.Enqueue(new CloseMapCommand(at));
+        _writes?.Enqueue(new OpenMapCommand(mapName, at));
+        if (_config.RawRetentionDays > 0)
+        {
+            _writes?.Enqueue(new PurgeCommand(at.AddDays(-_config.RawRetentionDays)));
+        }
+    }
+
+    private void OnLoadoutsAssigned(LoadoutsAssigned e)
+    {
+        _primaryBySlot.Clear();
+        foreach (var (player, loadout) in e.Loadouts)
+        {
+            _primaryBySlot[player.Slot] = loadout.Primary is null ? null : StatsWeapons.Normalize(loadout.Primary);
+        }
+    }
+
+    private void OpenRound(PreparationContext preparation)
+    {
+        if (_recorder is not { } recorder || _rules is not { } rules)
+        {
+            return;
+        }
+        var participants = new List<RoundParticipant>();
+        foreach (var player in PlayerQueries.Humans())
+        {
+            if (HumanId(player) is not { } id || PlayerQueries.SideOf(player) is not { } side)
+            {
+                continue;
+            }
+            participants.Add(new RoundParticipant(
+                id, player.PlayerName, side, _elo.GetValueOrDefault(id, rules.Elo.Start), _primaryBySlot.GetValueOrDefault(player.Slot)));
+        }
+        _roundStartTime = Server.CurrentTime;
+        recorder.Open(new RoundContext(Server.MapName, preparation.RoundNumber, preparation.Site, preparation.RoundType, DateTimeOffset.UtcNow, participants));
+    }
+
+    private void OnRoundEnd(EventRoundEnd e)
+    {
+        if (_recorder is not { } recorder)
+        {
+            return;
+        }
+        if (!recorder.IsOpen)
+        {
+            if (!_missingPreparationWarned && GameRulesAccessor.Get()?.WarmupPeriod != true)
+            {
+                _missingPreparationWarned = true;
+                Context.Logger.LogWarning("Stats: a round ended without being prepared; it is not recorded");
+            }
+            return;
+        }
+        if (WinnerOf(e.Winner) is not { } winner)
+        {
+            recorder.Abandon();
+            return;
+        }
+        var outcome = new RoundOutcome(winner, e.Reason, Now());
+        // round_mvp follows round_end: close on the next frame so that the MVP is part of the round.
+        Server.NextFrame(() => _context?.Guard.Run(Name, "stats_close_round", () => CloseRound(outcome)));
+    }
+
+    private void CloseRound(RoundOutcome outcome)
+    {
+        if (_recorder?.Close(outcome) is not { } record || _rules is not { } rules)
+        {
+            return;
+        }
+        var summary = RoundScoring.Process(record, rules);
+        foreach (var player in summary.Players)
+        {
+            _elo[player.SteamId] = player.EloAfter;
+        }
+        Context.Bus.Publish(new RoundStatsRecorded(summary));
+        _writes?.Enqueue(new WriteRoundCommand(summary));
+    }
+
+    private void OnWeaponFire(EventWeaponFire e)
+    {
+        if (_recorder is not { IsOpen: true } recorder || HumanId(e.Userid) is not { } shooter)
+        {
+            return;
+        }
+        var shot = new ShotFired(shooter, StatsWeapons.Normalize(e.Weapon), Now(), Server.TickCount, PositionOf(e.Userid), AnglesOf(e.Userid));
+        if (!recorder.Add(shot) && recorder.ShotsDropped == 1)
+        {
+            Context.Logger.LogWarning("Stats: more than {Max} shots this round; further shots are not recorded", _rules?.MaxShotsPerRound);
+        }
+    }
+
+    private void OnPlayerHurt(EventPlayerHurt e)
+    {
+        if (_recorder is not { IsOpen: true } recorder || VictimOf(e.Userid) is not { } victim)
+        {
+            return;
+        }
+        recorder.Add(new DamageDealt(
+            HumanId(e.Attacker), victim.Id, victim.IsBot, StatsWeapons.Normalize(e.Weapon), e.Hitgroup, e.DmgHealth, e.DmgArmor, e.Health, Now(), Server.TickCount));
+    }
+
+    private void OnPlayerDeath(EventPlayerDeath e)
+    {
+        if (_recorder is not { IsOpen: true } recorder || VictimOf(e.Userid) is not { } victim)
+        {
+            return;
+        }
+        recorder.Add(new PlayerKilled(
+            HumanId(e.Attacker), victim.Id, victim.IsBot, HumanId(e.Assister), e.Assistedflash, StatsWeapons.Normalize(e.Weapon), e.Headshot,
+            e.Penetrated, e.Noscope, e.Thrusmoke, e.Attackerblind, e.Attackerinair, e.Distance, PositionOf(e.Attacker), PositionOf(e.Userid), Now()));
+    }
+
+    private void OnGrenadeThrown(EventGrenadeThrown e)
+    {
+        if (HumanId(e.Userid) is { } thrower && StatsWeapons.GrenadeOf(e.Weapon) is { } type)
+        {
+            _recorder?.Add(new GrenadeThrown(thrower, type, Now(), PositionOf(e.Userid)));
+        }
+    }
+
+    private void OnDetonated(CCSPlayerController? thrower, GrenadeType type, int? entityId, float x, float y, float z)
+    {
+        if (HumanId(thrower) is { } id)
+        {
+            _recorder?.Add(new GrenadeDetonated(id, type, entityId, Now(), new Vec3(x, y, z)));
+        }
+    }
+
+    private void OnPlayerBlind(EventPlayerBlind e)
+    {
+        if (HumanId(e.Userid) is { } victim)
+        {
+            _recorder?.Add(new PlayerBlinded(HumanId(e.Attacker), victim, e.Entityid, e.BlindDuration, Now()));
+        }
+    }
+
+    private void OnConnected(CCSPlayerController? player)
+    {
+        if (HumanId(player) is not { } id || _playtime.IsTracked(id))
+        {
+            return;
+        }
+        _playtime.Set(id, PresenceOf(player!), Clock());
+        _writes?.Enqueue(new OpenSessionCommand(id, player!.PlayerName, DateTimeOffset.UtcNow));
+        LoadElo(id);
+    }
+
+    private void OnDisconnected(CCSPlayerController? player, int reason)
+    {
+        if (HumanId(player) is not { } id)
+        {
+            return;
+        }
+        _recorder?.Add(new PlayerLeftRound(id, Now()));
+        if (_playtime.Close(id, Clock()) is { } playtime)
+        {
+            _writes?.Enqueue(new CloseSessionCommand(id, DateTimeOffset.UtcNow, reason, playtime));
+        }
+        _elo.Remove(id);
+    }
+
+    private void RefreshPresence()
+    {
+        var now = Clock();
+        foreach (var player in PlayerQueries.Humans())
+        {
+            if (HumanId(player) is not { } id)
+            {
+                continue;
+            }
+            if (!_playtime.IsTracked(id))
+            {
+                OnConnected(player);
+                continue;
+            }
+            _playtime.Set(id, PresenceOf(player), now);
+        }
+    }
+
+    private Presence PresenceOf(CCSPlayerController player)
+    {
+        if (_teams.IsQueued(new PlayerId(player.Slot)))
+        {
+            return Presence.Queue;
+        }
+        return PlayerQueries.SideOf(player) switch
+        {
+            TeamSide.CT => Presence.Ct,
+            TeamSide.T => Presence.T,
+            _ => Presence.Spectator,
+        };
+    }
+
+    // Reads wait for the schema, run off the game thread, and come back through the guard.
+    private void LoadElo(ulong steamId)
+    {
+        if (_repository is not { } repository || _writes is not { } writes)
+        {
+            return;
+        }
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                if (!await writes.Initialized.ConfigureAwait(false))
+                {
+                    return;
+                }
+                var elo = await repository.LoadEloAsync(new[] { steamId }, CancellationToken.None).ConfigureAwait(false);
+                if (elo.TryGetValue(steamId, out var value))
+                {
+                    Server.NextFrame(() => _context?.Guard.Run(Name, "stats_elo_loaded", () => _elo[steamId] = value));
+                }
+            }
+            catch (Exception ex)
+            {
+                _context?.Logger.LogWarning(ex, "Stats: could not load the ELO of {SteamId}", steamId);
+            }
+        });
+    }
+
+    private static (ulong Id, bool IsBot)? VictimOf(CCSPlayerController? victim)
+    {
+        if (IsBot(victim))
+        {
+            return (0UL, true);
+        }
+        return HumanId(victim) is { } id ? (id, false) : null;
+    }
+
+    // Pooled connections keep the .db file open; a host where the native SQLite library cannot load has nothing to release.
+    private void ReleaseSqliteFiles()
+    {
+        if (_config.Database.Type != DatabaseType.Sqlite)
+        {
+            return;
+        }
+        try
+        {
+            SqliteConnection.ClearAllPools();
+        }
+        catch (Exception ex) when (ex is TypeInitializationException or DllNotFoundException)
+        {
+            _context?.Logger.LogWarning(ex, "SQLite is not available on this server: nothing to release");
+        }
+    }
+}
