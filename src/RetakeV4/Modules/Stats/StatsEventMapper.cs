@@ -14,13 +14,13 @@ internal static class StatsEventMapper
     public static bool IsBot(CCSPlayerController? player) => player is { IsValid: true, IsBot: true };
 
     public static Vec3? PositionOf(CCSPlayerController? player) =>
-        player?.PlayerPawn.Value is { IsValid: true, AbsOrigin: { } origin } ? new Vec3(origin.X, origin.Y, origin.Z) : null;
+        player is { IsValid: true } && player.PlayerPawn.Value is { IsValid: true, AbsOrigin: { } origin } ? new Vec3(origin.X, origin.Y, origin.Z) : null;
 
     public static ViewAngles? AnglesOf(CCSPlayerController? player) =>
-        player?.PlayerPawn.Value is { IsValid: true } pawn ? new ViewAngles(pawn.EyeAngles.X, pawn.EyeAngles.Y) : null;
+        player is { IsValid: true } && player.PlayerPawn.Value is { IsValid: true } pawn ? new ViewAngles(pawn.EyeAngles.X, pawn.EyeAngles.Y) : null;
 
     public static bool HasKit(CCSPlayerController? player) =>
-        player?.PlayerPawn.Value is { IsValid: true, ItemServices: { } items } && new CCSPlayer_ItemServices(items.Handle).HasDefuser;
+        player is { IsValid: true } && player.PlayerPawn.Value is { IsValid: true, ItemServices: { } items } && new CCSPlayer_ItemServices(items.Handle).HasDefuser;
 
     public static TeamSide? WinnerOf(int winner) => (CsTeam)winner switch
     {

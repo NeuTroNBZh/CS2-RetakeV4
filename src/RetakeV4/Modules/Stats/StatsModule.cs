@@ -23,6 +23,9 @@ public sealed class StatsModule : IRetakeModule
 
     private readonly PlaytimeTracker _playtime = new();
     private readonly Dictionary<ulong, int> _elo = new();
+    private readonly HashSet<ulong> _eloLoaded = new();
+    private readonly HashSet<ulong> _eloLoading = new();
+    private readonly Dictionary<ulong, int> _eloPendingDelta = new();
     private readonly Dictionary<int, string?> _primaryBySlot = new();
     private StatsConfig _config = new();
     private StatsRules? _rules;
@@ -57,8 +60,6 @@ public sealed class StatsModule : IRetakeModule
         _recorder = new RoundRecorder(_rules.MaxShotsPerRound, _rules.MinPlayersPerSide);
         _repository = StatsRepositories.Create(_config.Database, context.Plugin.ModuleDirectory,
             new StatsWriteOptions(_config.Database.ServerKey, _rules.Elo.Start, _rules.Elo.Floor));
-        _writes = new StatsWriteQueue(_repository, context.Logger, _config.QueueCapacity,
-            TimeSpan.FromSeconds(_config.ShutdownFlushSeconds), OnInitializationFailed);
         if (_config.Database.Type == DatabaseType.Sqlite)
         {
             context.Logger.LogInformation("Stats are stored in SQLite: the web panel and external sites can only read them from MySql");
@@ -122,6 +123,9 @@ public sealed class StatsModule : IRetakeModule
         hooks.OnEvent<EventPlayerConnectFull>("stats_connect", e => OnConnected(e.Userid));
         hooks.OnEvent<EventPlayerDisconnect>("stats_disconnect", e => OnDisconnected(e.Userid, e.Reason));
         hooks.RepeatTimer("stats_presence", PresenceRefreshSeconds, RefreshPresence);
+        // Created last: it starts a background worker, which a throw during hook registration would leak.
+        _writes = new StatsWriteQueue(_repository, context.Logger, _config.QueueCapacity,
+            TimeSpan.FromSeconds(_config.ShutdownFlushSeconds), OnInitializationFailed);
     }
 
     public void Unload()
@@ -137,6 +141,9 @@ public sealed class StatsModule : IRetakeModule
         _repository = null;
         _recorder = null;
         _elo.Clear();
+        _eloLoaded.Clear();
+        _eloLoading.Clear();
+        _eloPendingDelta.Clear();
         ReleaseSqliteFiles();
         _context = null;
     }
@@ -205,7 +212,7 @@ public sealed class StatsModule : IRetakeModule
         }
         if (!recorder.IsOpen)
         {
-            if (!_missingPreparationWarned && GameRulesAccessor.Get()?.WarmupPeriod != true)
+            if (!_missingPreparationWarned && WinnerOf(e.Winner) is not null && GameRulesAccessor.Get()?.WarmupPeriod != true)
             {
                 _missingPreparationWarned = true;
                 Context.Logger.LogWarning("Stats: a round ended without being prepared; it is not recorded");
@@ -232,6 +239,10 @@ public sealed class StatsModule : IRetakeModule
         foreach (var player in summary.Players)
         {
             _elo[player.SteamId] = player.EloAfter;
+            if (!_eloLoaded.Contains(player.SteamId))
+            {
+                _eloPendingDelta[player.SteamId] = _eloPendingDelta.GetValueOrDefault(player.SteamId) + player.EloDelta;
+            }
         }
         Context.Bus.Publish(new RoundStatsRecorded(summary));
         _writes?.Enqueue(new WriteRoundCommand(summary));
@@ -318,6 +329,9 @@ public sealed class StatsModule : IRetakeModule
             _writes?.Enqueue(new CloseSessionCommand(id, DateTimeOffset.UtcNow, reason, playtime));
         }
         _elo.Remove(id);
+        _eloLoaded.Remove(id);
+        _eloLoading.Remove(id);
+        _eloPendingDelta.Remove(id);
     }
 
     private void RefreshPresence()
@@ -335,6 +349,10 @@ public sealed class StatsModule : IRetakeModule
                 continue;
             }
             _playtime.Set(id, PresenceOf(player), now);
+            if (!_eloLoaded.Contains(id))
+            {
+                LoadElo(id);
+            }
         }
     }
 
@@ -355,7 +373,7 @@ public sealed class StatsModule : IRetakeModule
     // Reads wait for the schema, run off the game thread, and come back through the guard.
     private void LoadElo(ulong steamId)
     {
-        if (_repository is not { } repository || _writes is not { } writes)
+        if (_repository is not { } repository || _writes is not { } writes || !_eloLoading.Add(steamId))
         {
             return;
         }
@@ -368,16 +386,30 @@ public sealed class StatsModule : IRetakeModule
                     return;
                 }
                 var elo = await repository.LoadEloAsync(new[] { steamId }, CancellationToken.None).ConfigureAwait(false);
-                if (elo.TryGetValue(steamId, out var value))
-                {
-                    Server.NextFrame(() => _context?.Guard.Run(Name, "stats_elo_loaded", () => _elo[steamId] = value));
-                }
+                Server.NextFrame(() => _context?.Guard.Run(Name, "stats_elo_loaded", () => ApplyLoadedElo(steamId, elo)));
             }
             catch (Exception ex)
             {
                 _context?.Logger.LogWarning(ex, "Stats: could not load the ELO of {SteamId}", steamId);
+                Server.NextFrame(() => _context?.Guard.Run(Name, "stats_elo_load_failed", () => _eloLoading.Remove(steamId)));
             }
         });
+    }
+
+    // Game thread only: merges the stored value with the deltas of rounds closed while the load was pending.
+    private void ApplyLoadedElo(ulong steamId, IReadOnlyDictionary<ulong, int> loaded)
+    {
+        _eloLoading.Remove(steamId);
+        if (!_playtime.IsTracked(steamId) || _rules is not { } rules)
+        {
+            return;
+        }
+        if (loaded.TryGetValue(steamId, out var value))
+        {
+            _elo[steamId] = Math.Max(rules.Elo.Floor, value + _eloPendingDelta.GetValueOrDefault(steamId));
+        }
+        _eloLoaded.Add(steamId);
+        _eloPendingDelta.Remove(steamId);
     }
 
     private static (ulong Id, bool IsBot)? VictimOf(CCSPlayerController? victim)
