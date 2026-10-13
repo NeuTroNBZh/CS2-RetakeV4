@@ -26,6 +26,7 @@ public sealed class StatsWriteQueue : IAsyncDisposable
     private bool _failed;
     private int _dropped;
     private int _abandoned;
+    private int _disposed;
     private int _failedCommands;
 
     public StatsWriteQueue(
@@ -37,6 +38,10 @@ public sealed class StatsWriteQueue : IAsyncDisposable
         ArgumentNullException.ThrowIfNull(logger);
         ArgumentOutOfRangeException.ThrowIfLessThan(capacity, 1);
         ArgumentOutOfRangeException.ThrowIfLessThan(maxAttempts, 1);
+        if (drainTimeout < TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(nameof(drainTimeout), "The drain timeout must be finite and not negative");
+        }
         _repository = repository;
         _logger = logger;
         _drainTimeout = drainTimeout;
@@ -72,10 +77,25 @@ public sealed class StatsWriteQueue : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        if (Interlocked.Exchange(ref _disposed, 1) == 1)
+        {
+            return;
+        }
         _channel.Writer.TryComplete();
         if (await Task.WhenAny(_worker, Task.Delay(_drainTimeout)).ConfigureAwait(false) != _worker)
         {
-            await _stop.CancelAsync().ConfigureAwait(false);
+            // Not awaited: cancellation callbacks (e.g. a driver opening a connection to kill a query) must not extend the bounded wait.
+            _ = Task.Run(() =>
+            {
+                try
+                {
+                    _stop.Cancel();
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Stats write queue cancellation callback threw");
+                }
+            });
             await Task.WhenAny(_worker, Task.Delay(TimeSpan.FromSeconds(1))).ConfigureAwait(false);
         }
         if (Abandoned > 0)
@@ -100,16 +120,30 @@ public sealed class StatsWriteQueue : IAsyncDisposable
         catch (Exception ex)
         {
             _failed = true;
-            _initialized.TrySetResult(false);
-            if (!_stop.IsCancellationRequested)
+            try
             {
-                _logger.LogError(ex, "Stats database could not be initialized; stats are not recorded");
-                _initializationFailed?.Invoke(ex);
+                if (!_stop.IsCancellationRequested)
+                {
+                    _logger.LogError(ex, "Stats database could not be initialized; stats are not recorded");
+                    _initializationFailed?.Invoke(ex);
+                }
+            }
+            catch (Exception handlerEx)
+            {
+                _logger.LogError(handlerEx, "Stats initialization-failure handler threw");
+            }
+            finally
+            {
+                _initialized.TrySetResult(false);
             }
         }
         await foreach (var command in _channel.Reader.ReadAllAsync().ConfigureAwait(false))
         {
-            if (!_failed)
+            if (_failed)
+            {
+                Interlocked.Increment(ref _abandoned);
+            }
+            else
             {
                 await ApplyWithRetryAsync(command).ConfigureAwait(false);
             }
@@ -143,7 +177,7 @@ public sealed class StatsWriteQueue : IAsyncDisposable
                     _logger.LogError(ex, "Stats write gave up after {Attempts} attempts: {Command} dropped", attempt, command.GetType().Name);
                     return;
                 }
-                _logger.LogWarning(ex, "Stats write failed (attempt {Attempt}); retrying", attempt);
+                _logger.LogWarning(ex, "Stats write failed (attempt {Attempt}): {Command}; retrying", attempt, command.GetType().Name);
                 try
                 {
                     await Task.Delay(_backoff(attempt), _stop.Token).ConfigureAwait(false);

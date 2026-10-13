@@ -93,6 +93,7 @@ public class StatsWriteQueueTests
         Assert.Same(repository.InitFailure, reported);
         Assert.Empty(repository.Calls);
         Assert.Contains(logger.Entries, e => e.Level == LogLevel.Error);
+        Assert.Equal(1, queue.Abandoned);
     }
 
     [Fact]
@@ -127,6 +128,47 @@ public class StatsWriteQueueTests
         Assert.Single(logger.Entries, e => e.Level == LogLevel.Error);
         Assert.Equal(new[] { "OpenMap de_mirage -> 1", $"Purge {StatsWriteQueue.PurgeBatchSize}" }, repository.Calls);
     }
+
+    [Fact]
+    public async Task ThrowingInitializationHandler_DoesNotKillTheQueue()
+    {
+        var repository = new FakeStatsRepository { InitFailure = new InvalidOperationException("no database") };
+        var logger = new ListLogger();
+        var queue = Queue(repository, logger, failed: _ => throw new InvalidOperationException("handler"));
+        queue.Enqueue(new PurgeCommand(Now));
+        Assert.False(await queue.Initialized);
+        await queue.DisposeAsync();
+        Assert.Equal(2, logger.Entries.Count(e => e.Level == LogLevel.Error));
+        Assert.Equal(1, queue.Abandoned);
+    }
+
+    [Fact]
+    public async Task DisposeAsync_IsIdempotent()
+    {
+        var logger = new ListLogger();
+        var queue = Queue(new FakeStatsRepository(), logger);
+        await queue.DisposeAsync();
+        await queue.DisposeAsync();
+        Assert.Empty(logger.Entries);
+    }
+
+    [Fact]
+    public async Task Dispose_IsBounded_EvenWhenCancellationBlocks()
+    {
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var repository = new FakeStatsRepository { InitBlock = gate.Task };
+        var queue = Queue(repository, new ListLogger(), drainMs: 100);
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        await queue.DisposeAsync();
+        gate.TrySetResult();
+        Assert.True(watch.Elapsed < TimeSpan.FromSeconds(3));
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(-5000)]
+    public void NegativeOrInfiniteDrainTimeout_IsRejected(int ms) =>
+        Assert.Throws<ArgumentOutOfRangeException>(() => new StatsWriteQueue(new FakeStatsRepository(), new ListLogger(), 1, TimeSpan.FromMilliseconds(ms)));
 
     [Fact]
     public async Task Enqueue_AfterDispose_CountsAsAbandoned()
