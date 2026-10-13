@@ -40,5 +40,7 @@ internal static class StatsTestData
         string weapon = "ak47", int hitgroup = 2, bool victimIsBot = false) =>
         new(attacker, victim, victimIsBot, weapon, hitgroup, damage, 0, healthAfter, timeMs, tick);
 
+    public static PlayerRoundStats Of(RoundSummary summary, ulong id) => summary.Players.Single(p => p.SteamId == id);
+
     public static ShotFired Shot(ulong shooter, int timeMs, int tick, string weapon = "ak47") => new(shooter, weapon, timeMs, tick, null, null);
 }
