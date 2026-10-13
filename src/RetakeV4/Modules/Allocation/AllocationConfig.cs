@@ -1,26 +1,8 @@
 using RetakeV4.Configuration;
 using RetakeV4.Domain.Loadouts;
+using RetakeV4.Persistence;
 
 namespace RetakeV4.Modules.Allocation;
-
-public enum DatabaseType
-{
-    Sqlite,
-    MySql,
-    None,
-}
-
-public sealed record DatabaseConfig
-{
-    public DatabaseType Type { get; init; } = DatabaseType.Sqlite;
-
-    public string SqliteFile { get; init; } = "data/retakev4.db";
-
-    public string MySqlConnectionString { get; init; } = string.Empty;
-
-    // Identifies this server's row in retake_catalog, read by the web panel.
-    public string ServerKey { get; init; } = "default";
-}
 
 public sealed record AllocationConfig : ModuleConfig
 {
