@@ -12,6 +12,12 @@ public sealed class SqlStatsRepository : IStatsRepository
 {
     private const int BatchRows = 500;
 
+    // Column sizes of StatsSchema: MySQL strict mode rejects longer values, which would fail the whole round.
+    private const int PlayerNameLength = 128;
+    private const int NameLength = 64;
+    private const int ScopeLength = 80;
+    private const int GrenadeTypeLength = 16;
+
     private static readonly string[] RoundColumns =
     {
         "map_id", "round_number", "site", "round_type", "players_ct", "players_t", "ranked", "winner", "end_reason", "duration_ms",
@@ -78,7 +84,7 @@ public sealed class SqlStatsRepository : IStatsRepository
             await ScalarAsync(connection, transaction, "SELECT id FROM stats_servers WHERE name = @name", ct, ("@name", _options.ServerKey)).ConfigureAwait(false),
             CultureInfo.InvariantCulture);
         var mapId = await InsertAsync(connection, transaction, "stats_maps", new[] { "server_id", "map_name", "started_at" },
-            new object?[] { serverId, mapName, at }, ct).ConfigureAwait(false);
+            new object?[] { serverId, Clip(mapName, NameLength), at }, ct).ConfigureAwait(false);
         await transaction.CommitAsync(ct).ConfigureAwait(false);
         return mapId;
     }
@@ -151,22 +157,22 @@ public sealed class SqlStatsRepository : IStatsRepository
         await BulkInsertAsync(connection, transaction, "stats_round_players", RoundPlayerColumns, round.Players, p => RoundPlayerValues(roundId, p), ct).ConfigureAwait(false);
         await BulkInsertAsync(connection, transaction, "stats_shots", ShotColumns, record.Shots, s => new object?[]
         {
-            roundId, _dialect.SteamParam(s.Shooter), s.Weapon, s.TimeMs, s.Tick, s.Position?.X, s.Position?.Y, s.Position?.Z, s.Angles?.Pitch, s.Angles?.Yaw,
+            roundId, _dialect.SteamParam(s.Shooter), Clip(s.Weapon, NameLength), s.TimeMs, s.Tick, s.Position?.X, s.Position?.Y, s.Position?.Z, s.Angles?.Pitch, s.Angles?.Yaw,
         }, ct).ConfigureAwait(false);
         await BulkInsertAsync(connection, transaction, "stats_damages", DamageColumns, record.Damages, d => new object?[]
         {
-            roundId, Steam(d.Attacker), _dialect.SteamParam(d.Victim), B(d.VictimIsBot), d.Weapon, d.Hitgroup, d.DmgHealth, d.DmgArmor, d.HealthAfter, d.TimeMs, d.Tick,
+            roundId, Steam(d.Attacker), _dialect.SteamParam(d.Victim), B(d.VictimIsBot), Clip(d.Weapon, NameLength), d.Hitgroup, d.DmgHealth, d.DmgArmor, d.HealthAfter, d.TimeMs, d.Tick,
         }, ct).ConfigureAwait(false);
         await BulkInsertAsync(connection, transaction, "stats_kills", KillColumns, record.Kills, k => new object?[]
         {
-            roundId, Steam(k.Attacker), _dialect.SteamParam(k.Victim), B(k.VictimIsBot), Steam(k.Assister), B(k.FlashAssist), k.Weapon, B(k.Headshot),
+            roundId, Steam(k.Attacker), _dialect.SteamParam(k.Victim), B(k.VictimIsBot), Steam(k.Assister), B(k.FlashAssist), Clip(k.Weapon, NameLength), B(k.Headshot),
             k.Penetrated, B(k.NoScope), B(k.ThroughSmoke), B(k.AttackerBlind), B(k.AttackerInAir), k.Distance,
             k.AttackerPosition?.X, k.AttackerPosition?.Y, k.AttackerPosition?.Z, k.VictimPosition?.X, k.VictimPosition?.Y, k.VictimPosition?.Z,
             k.TimeMs, B(IsTeamKill(k, sides)),
         }, ct).ConfigureAwait(false);
         await BulkInsertAsync(connection, transaction, "stats_grenades", GrenadeColumns, round.Grenades, g => new object?[]
         {
-            roundId, _dialect.SteamParam(g.Thrower), g.Type.ToString(), g.ThrownMs, g.DetonatedMs,
+            roundId, _dialect.SteamParam(g.Thrower), Clip(g.Type.ToString(), GrenadeTypeLength), g.ThrownMs, g.DetonatedMs,
             g.ThrowPosition?.X, g.ThrowPosition?.Y, g.ThrowPosition?.Z, g.DetonationPosition?.X, g.DetonationPosition?.Y, g.DetonationPosition?.Z,
             g.Damage, g.EnemiesBlinded, g.TeammatesBlinded, g.BlindSeconds,
         }, ct).ConfigureAwait(false);
@@ -236,6 +242,17 @@ public sealed class SqlStatsRepository : IStatsRepository
         kill.Attacker is { } attacker && attacker != kill.Victim && !kill.VictimIsBot
         && sides.TryGetValue(attacker, out var attackerSide) && sides.TryGetValue(kill.Victim, out var victimSide) && attackerSide == victimSide;
 
+    private static string? Clip(string? value, int max)
+    {
+        if (value is null || value.Length <= max)
+        {
+            return value;
+        }
+        // Never cut a surrogate pair in half.
+        var length = char.IsHighSurrogate(value[max - 1]) ? max - 1 : max;
+        return value[..length];
+    }
+
     private static int B(bool value) => value ? 1 : 0;
 
     private object? Steam(ulong? steamId) => steamId is { } id ? _dialect.SteamParam(id) : null;
@@ -248,7 +265,7 @@ public sealed class SqlStatsRepository : IStatsRepository
         var defuse = record.Defuse;
         return new object?[]
         {
-            mapId, context.RoundNumber, site, context.RoundType,
+            mapId, context.RoundNumber, site, Clip(context.RoundType, NameLength),
             context.Participants.Count(p => p.Side == TeamSide.CT), context.Participants.Count(p => p.Side == TeamSide.T),
             B(record.Ranked), record.Outcome.Winner?.ToString(), record.Outcome.EndReason, record.Outcome.DurationMs,
             B(plant is not null), plant is null ? null : site, plant is null ? null : _dialect.SteamParam(plant.Planter), plant?.TimeMs,
@@ -259,7 +276,7 @@ public sealed class SqlStatsRepository : IStatsRepository
 
     private object?[] RoundPlayerValues(long roundId, PlayerRoundStats p) => new object?[]
     {
-        roundId, _dialect.SteamParam(p.SteamId), p.Side.ToString(), p.PrimaryWeapon, B(p.Survived), B(p.Won), p.Kills, p.Deaths, p.Assists,
+        roundId, _dialect.SteamParam(p.SteamId), p.Side.ToString(), Clip(p.PrimaryWeapon, NameLength), B(p.Survived), B(p.Won), p.Kills, p.Deaths, p.Assists,
         p.FlashAssists, p.TeamKills, p.Damage, p.UtilityDamage, p.HeadshotKills, p.Shots, p.Hits, p.HeadshotHits, B(p.EntryKill),
         B(p.EntryDeath), p.TradeKills, B(p.TradedDeath), B(p.Kast), p.ClutchVs, B(p.ClutchWon), p.EnemiesFlashed, p.TeammatesFlashed,
         p.BlindSecondsInflicted, B(p.Mvp), B(p.Planted), B(p.Defused), B(p.Defused && p.DefusedWithKit), p.Rating, p.EloBefore, p.EloAfter,
@@ -269,7 +286,7 @@ public sealed class SqlStatsRepository : IStatsRepository
         ExecuteAsync(connection, transaction,
             "INSERT INTO stats_players (steam_id, name, first_seen, last_seen, elo) VALUES (@steam, @name, @at, @at, @elo) " +
             _dialect.OnConflict(new[] { "steam_id" }, new[] { "name", "last_seen" }, Array.Empty<string>()),
-            ct, ("@steam", _dialect.SteamParam(steamId)), ("@name", name), ("@at", _dialect.DateParam(at)), ("@elo", _options.EloStart));
+            ct, ("@steam", _dialect.SteamParam(steamId)), ("@name", Clip(name, PlayerNameLength)), ("@at", _dialect.DateParam(at)), ("@elo", _options.EloStart));
 
     private async Task UpsertTotalsAsync(DbConnection connection, DbTransaction transaction, RoundContext context, PlayerRoundStats player, bool ranked, CancellationToken ct)
     {
@@ -285,7 +302,7 @@ public sealed class SqlStatsRepository : IStatsRepository
             command.Transaction = transaction;
             command.CommandText = totalsSql;
             AddParameter(command, "@steam", _dialect.SteamParam(player.SteamId));
-            AddParameter(command, "@scope", scope);
+            AddParameter(command, "@scope", Clip(scope, ScopeLength));
             for (var i = 0; i < counters.Length; i++)
             {
                 AddParameter(command, counterParameters[i], counters[i]);
@@ -299,7 +316,7 @@ public sealed class SqlStatsRepository : IStatsRepository
         foreach (var weapon in player.Weapons)
         {
             var values = StatsCounters.ForWeapon(weapon);
-            await ExecuteAsync(connection, transaction, weaponSql, ct, ("@steam", _dialect.SteamParam(player.SteamId)), ("@weapon", weapon.Weapon),
+            await ExecuteAsync(connection, transaction, weaponSql, ct, ("@steam", _dialect.SteamParam(player.SteamId)), ("@weapon", Clip(weapon.Weapon, NameLength)),
                 ("@w0", values[0]), ("@w1", values[1]), ("@w2", values[2]), ("@w3", values[3]), ("@w4", values[4]), ("@w5", values[5])).ConfigureAwait(false);
         }
     }

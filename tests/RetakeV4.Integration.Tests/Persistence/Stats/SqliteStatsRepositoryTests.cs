@@ -165,6 +165,20 @@ public sealed class SqliteStatsRepositoryTests : IDisposable
     }
 
     [Fact]
+    public async Task LongTexts_AreClippedToTheColumnSize()
+    {
+        var name = new string('n', 200);
+        var longText = new string('w', 100);
+        var repository = await Repository();
+        var mapId = await repository.OpenMapAsync(longText, Now, CancellationToken.None);
+        await repository.WriteRoundAsync(mapId, Round(Now, ctName: name, weapon: longText), CancellationToken.None);
+        Assert.Equal(name[..128], await Scalar($"SELECT name FROM v_stats_players WHERE steam_id = {Ct}"));
+        Assert.Equal(longText[..64], await Scalar("SELECT map_name FROM v_stats_maps"));
+        Assert.Equal(longText[..64], await Scalar("SELECT weapon FROM v_stats_shots"));
+        Assert.Equal(longText[..64], await Scalar($"SELECT weapon FROM v_stats_player_weapons WHERE steam_id = {Ct}"));
+    }
+
+    [Fact]
     public async Task LoadElo_ReturnsKnownPlayersOnly()
     {
         var repository = await Repository();
