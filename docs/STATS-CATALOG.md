@@ -363,7 +363,7 @@ GROUP BY DATE(at), module ORDER BY day DESC, errors DESC;
 
 ## 17. Replays (2D)
 
-A replay is a round whose human trajectories are kept, for the players who own it. The format of `frames`, the radar conversion and a complete viewer example are in [STATS-INTEGRATION.md](STATS-INTEGRATION.md) ("Replays").
+A replay is a round whose human trajectories are kept, for the players who own it. The format of `frames`, the radar conversion and a complete viewer example are in [STATS-INTEGRATION.md](STATS-INTEGRATION.md#replays) ("Replays").
 
 | Stat | Definition | Source | Limits |
 |---|---|---|---|

@@ -65,4 +65,21 @@ public class StatsDocsTests
         var views = Contract("views.v1.json").Keys.Concat(Contract("views.v2.json").Keys).ToList();
         Assert.All(views, view => Assert.Contains($"GRANT SELECT ON retakev4.{view} TO 'stats_reader'@'%';", text, StringComparison.Ordinal));
     }
+
+    // The radar table and the JavaScript RADARS object of the replay recipe must list the same maps and values.
+    [Fact]
+    public void ReplayRecipe_RadarTable_MatchesTheJavaScriptObject()
+    {
+        var text = Doc("STATS-INTEGRATION.md");
+        var table = Regex.Matches(text, @"^\| (de_[a-z0-9_]+) \| (-?[0-9.]+) \| (-?[0-9.]+) \| ([0-9.]+) \|", RegexOptions.Multiline)
+            .ToDictionary(m => m.Groups[1].Value, m => new[] { m.Groups[2].Value, m.Groups[3].Value, m.Groups[4].Value }.Select(ParseNumber).ToArray());
+        var script = Regex.Match(text, @"const RADARS = \{(.*?)\};", RegexOptions.Singleline).Groups[1].Value;
+        var radars = Regex.Matches(script, @"(de_[a-z0-9_]+): \[(-?[0-9.]+), (-?[0-9.]+), ([0-9.]+)\]")
+            .ToDictionary(m => m.Groups[1].Value, m => new[] { m.Groups[2].Value, m.Groups[3].Value, m.Groups[4].Value }.Select(ParseNumber).ToArray());
+        Assert.NotEmpty(table);
+        Assert.Equal(table.Keys.OrderBy(k => k), radars.Keys.OrderBy(k => k));
+        Assert.All(table, row => Assert.Equal(row.Value, radars[row.Key]));
+    }
+
+    private static double ParseNumber(string value) => double.Parse(value, System.Globalization.CultureInfo.InvariantCulture);
 }
