@@ -24,6 +24,7 @@
     "v_stats_player_network": ["steam_id", "name", "country", "sessions", "sessions_with_ping", "ping_avg", "ping_max", "seconds_vip"],
     "v_stats_server_health": ["event_id", "server", "at", "type", "module", "value", "occurrences", "max_ms"],
     "v_stats_presence": ["snapshot_id", "server", "at", "map_name", "humans", "bots", "queued"],
-    "v_stats_player_behaviour": ["steam_id", "name", "contact_rounds", "avg_first_contact_ms", "compared_rounds", "own_first_contact_ms", "team_first_contact_ms", "slowness_index", "behind_smoke_pct", "in_smoke_pct", "avg_engage_order", "bait_rounds", "bait_chances", "bait_rate"]
+    "v_stats_player_behaviour": ["steam_id", "name", "contact_rounds", "avg_first_contact_ms", "compared_rounds", "own_first_contact_ms", "team_first_contact_ms", "slowness_index", "behind_smoke_pct", "in_smoke_pct", "avg_engage_order", "bait_rounds", "bait_chances", "bait_rate"],
+    "v_stats_side_balance": ["server", "map_name", "site", "rounds", "ct_wins", "t_wins", "ct_win_pct", "t_win_pct", "ranked_rounds", "ranked_ct_wins", "ranked_ct_win_pct", "avg_duration_ms", "first_round_at", "last_round_at"]
   }
 }

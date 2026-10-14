@@ -6,8 +6,9 @@ namespace RetakeV4.Persistence.Stats;
 // it runs unchanged on MySQL 8, MariaDB and SQLite. Ratios are computed here, never stored; a ratio over zero is NULL.
 // Events(d) is what the 4.9-a migration step creates and Movement(d) what the 4.9-b step creates: both frozen
 // (StatsSchemaTests pins their SQL), so they read the frozen counter and ratio lists below and of StatsSchema, never
-// StatsCounters. For(d) is the current contract, today equal to Movement(d). A view changed after 4.9-b gets its new
-// definition swapped into BuildViews and is replaced by a later step (StatsSchema: DROP VIEW + CREATE VIEW).
+// StatsCounters. Catalog(d) adds the derived views of the 4.9-c step (StatsDerivedViews). For(d) is the current
+// contract, today equal to Catalog(d). A view changed after 4.9-c gets its new definition swapped into BuildViews and
+// is replaced by a later step (StatsSchema: DROP VIEW + CREATE VIEW).
 public static class StatsViewsV2
 {
     // Frozen with the 4.9-a views (and reused unchanged by 4.9-b).
@@ -51,6 +52,10 @@ public static class StatsViewsV2
 
     private static readonly StatsView[] SqliteMovement = BuildMovement(StatsDialect.Sqlite);
 
+    private static readonly StatsView[] MySqlCatalog = BuildCatalog(StatsDialect.MySql);
+
+    private static readonly StatsView[] SqliteCatalog = BuildCatalog(StatsDialect.Sqlite);
+
     private static readonly StatsView[] MySqlViews = BuildViews(StatsDialect.MySql);
 
     private static readonly StatsView[] SqliteViews = BuildViews(StatsDialect.Sqlite);
@@ -60,6 +65,9 @@ public static class StatsViewsV2
     // Views the 4.9-b step drops and creates again (or creates), in this order.
     public static IReadOnlyList<string> MovementViews { get; } =
         new[] { "v2_stats_players", "v2_stats_player_scopes", "v2_stats_round_players", "v_stats_player_behaviour" };
+
+    // Views the 4.9-c step drops and creates, in this order (StatsDerivedViews.Build).
+    public static IReadOnlyList<string> CatalogViews { get; } = new[] { "v_stats_side_balance" };
 
     public static IReadOnlyList<StatsView> For(StatsDialect dialect)
     {
@@ -79,8 +87,17 @@ public static class StatsViewsV2
         return dialect.IsMySql ? MySqlMovement : SqliteMovement;
     }
 
-    // The current contract: the 4.9-b views, unchanged so far.
-    private static StatsView[] BuildViews(StatsDialect d) => BuildMovement(d);
+    internal static IReadOnlyList<StatsView> Catalog(StatsDialect dialect)
+    {
+        ArgumentNullException.ThrowIfNull(dialect);
+        return dialect.IsMySql ? MySqlCatalog : SqliteCatalog;
+    }
+
+    // The current contract: the 4.9-c views, unchanged so far.
+    private static StatsView[] BuildViews(StatsDialect d) => BuildCatalog(d);
+
+    // The 4.9-b views, then the derived views added by 4.9-c.
+    private static StatsView[] BuildCatalog(StatsDialect d) => BuildMovement(d).Concat(StatsDerivedViews.Build(d)).ToArray();
 
     // Frozen: the 4.9-a views with those changed by 4.9-b swapped in, then the views added by 4.9-b.
     private static StatsView[] BuildMovement(StatsDialect d)

@@ -10,6 +10,7 @@ using RetakeV4.Persistence.Stats;
 
 namespace RetakeV4.Integration.Tests.Persistence.Stats;
 
+[Collection(StatsMySqlCollection.Name)]
 public sealed class StatsSchemaTests : IDisposable
 {
     private static readonly string? MySqlConnectionString = Environment.GetEnvironmentVariable("RETAKEV4_MYSQL_TEST");
@@ -480,5 +481,52 @@ public sealed class StatsSchemaTests : IDisposable
         Assert.Null(await Scalar(connection, "SELECT bait_rate FROM v_stats_player_behaviour WHERE steam_id = 3"));
         Assert.Equal(0L, await Scalar(connection, "SELECT bait_chances FROM v_stats_player_behaviour WHERE steam_id = 3"));
         Assert.Equal(0L, await Scalar(connection, "SELECT compared_rounds FROM v_stats_player_behaviour WHERE steam_id = 4"));
+    }
+
+    [Fact]
+    public void IntCast_PerDialect()
+    {
+        Assert.Equal("CAST(SUM(x) AS SIGNED)", StatsDialect.MySql.IntCast("SUM(x)"));
+        Assert.Equal("CAST(SUM(x) AS INTEGER)", StatsDialect.Sqlite.IntCast("SUM(x)"));
+    }
+
+    // 4.9-c: one DROP VIEW + CREATE VIEW pair per derived view, right after the 4.9-b entries.
+    [Fact]
+    public void CatalogEntries_FollowTheMovementEntries()
+    {
+        foreach (var dialect in new[] { StatsDialect.Sqlite, StatsDialect.MySql })
+        {
+            var catalog = StatsSchema.Migrations(dialect)
+                .Skip(StatsSchema.V2MovementCount(dialect))
+                .Take(StatsSchema.V2CatalogCount(dialect) - StatsSchema.V2MovementCount(dialect))
+                .ToList();
+            Assert.Equal(2 * StatsViewsV2.CatalogViews.Count, catalog.Count);
+            Assert.All(catalog, m => Assert.Null(m.Column));
+            for (var i = 0; i < StatsViewsV2.CatalogViews.Count; i++)
+            {
+                var view = StatsViewsV2.CatalogViews[i];
+                Assert.Equal($"DROP VIEW IF EXISTS {view}", catalog[2 * i].Sql);
+                Assert.StartsWith($"{dialect.CreateView} {view} AS", catalog[(2 * i) + 1].Sql, StringComparison.Ordinal);
+            }
+        }
+    }
+
+    // A 4.9-b database (sub-project 2) gets the derived views without losing rows.
+    [Fact]
+    public async Task V2MovementDatabase_UpgradesToCatalog_KeepingItsRows()
+    {
+        await using var connection = new SqliteConnection($"Data Source={_dir.File("stats.db")}");
+        await connection.OpenAsync();
+        var all = StatsSchema.Migrations(StatsDialect.Sqlite);
+        await SqlMigrator.ApplyAsync(connection, all.Take(StatsSchema.V2MovementCount(StatsDialect.Sqlite)).ToList(), CancellationToken.None, StatsSchema.VersionTable);
+        var seed = new ViewSeed(connection, StatsDialect.Sqlite);
+        var server = await seed.Server("eu-1");
+        var map = await seed.Map(server, "de_mirage", ViewSeed.Utc("2026-10-01 20:00:00"));
+        await seed.Round(map, new RoundSeed(ViewSeed.Utc("2026-10-01 20:01:00"), PlayersCt: 3, PlayersT: 2, Winner: "CT"));
+        Assert.Equal(0L, await Scalar(connection, "SELECT COUNT(*) FROM sqlite_master WHERE type = 'view' AND name = 'v_stats_side_balance'"));
+        await SqlMigrator.ApplyAsync(connection, all, CancellationToken.None, StatsSchema.VersionTable);
+        Assert.Equal((long)all.Count, await Scalar(connection, $"SELECT MAX(version) FROM {StatsSchema.VersionTable}"));
+        Assert.Equal(1L, await Scalar(connection, "SELECT COUNT(*) FROM v_stats_rounds"));
+        Assert.Equal(1L, await Scalar(connection, "SELECT rounds FROM v_stats_side_balance WHERE server = 'eu-1'"));
     }
 }

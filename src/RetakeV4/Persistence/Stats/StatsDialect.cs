@@ -65,6 +65,9 @@ public sealed class StatsDialect
 
     public string FloatCast(string expression) => IsMySql ? $"CAST({expression} AS DOUBLE)" : $"CAST({expression} AS REAL)";
 
+    // Integer aggregates of the derived views: MySQL's SUM returns DECIMAL, which most drivers hand over as a string.
+    public string IntCast(string expression) => IsMySql ? $"CAST({expression} AS SIGNED)" : $"CAST({expression} AS INTEGER)";
+
     public string Text(int length) => IsMySql ? $"VARCHAR({length.ToString(CultureInfo.InvariantCulture)})" : "TEXT";
 
     // Replaced columns take the new value; added columns are summed with the stored one.
