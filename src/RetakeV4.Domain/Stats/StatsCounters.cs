@@ -2,8 +2,9 @@ using RetakeV4.Domain.Common;
 
 namespace RetakeV4.Domain.Stats;
 
-// Additive counters stored per (player, scope). The column order is the order of the values returned by For, of the
-// stats_player_totals columns and of the counter columns in the public views: append new counters at the end only.
+// Additive counters stored per (player, scope). The column order is the order of the values returned by For and of the
+// counter columns in the public views. The v1 tables are frozen in StatsSchema: adding a counter needs an ALTER TABLE
+// migration appended to StatsSchema.Migrations and a new contract/view version.
 public static class StatsCounters
 {
     public static IReadOnlyList<string> Columns { get; } = BuildColumns();

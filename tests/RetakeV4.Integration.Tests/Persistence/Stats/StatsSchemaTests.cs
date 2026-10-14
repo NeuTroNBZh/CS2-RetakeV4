@@ -51,6 +51,14 @@ public sealed class StatsSchemaTests : IDisposable
     public void ContractViews_AreExactlyTheDefinedViews() =>
         Assert.Equal(Contract().Keys.Order(StringComparer.Ordinal), StatsViews.Names.Order(StringComparer.Ordinal));
 
+    // The v1 tables are frozen: a new counter needs an ALTER migration, never an edit of the v1 CREATE TABLE.
+    [Fact]
+    public void FrozenV1Columns_MatchTheCurrentCounters()
+    {
+        Assert.Equal(StatsCounters.Columns, StatsSchema.V1Counters);
+        Assert.Equal(StatsCounters.WeaponColumns, StatsSchema.V1WeaponCounters);
+    }
+
     [Fact]
     public void ContractCounters_FollowStatsCounters()
     {

@@ -180,9 +180,11 @@ public sealed class StatsModule : IRetakeModule
             return;
         }
         var participants = new List<RoundParticipant>();
+        var seen = new HashSet<ulong>();
         foreach (var player in PlayerQueries.Humans())
         {
-            if (HumanId(player) is not { } id || PlayerQueries.SideOf(player) is not { } side)
+            // First wins: a duplicate controller for one SteamID must not reach the analyzer twice.
+            if (HumanId(player) is not { } id || PlayerQueries.SideOf(player) is not { } side || !seen.Add(id))
             {
                 continue;
             }

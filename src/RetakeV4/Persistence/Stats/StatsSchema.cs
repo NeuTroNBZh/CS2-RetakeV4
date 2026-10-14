@@ -6,6 +6,22 @@ public static class StatsSchema
 {
     public const string VersionTable = "stats_schema_version";
 
+    // Frozen counter columns of the v1 stats_player_totals / stats_player_weapons tables. Migrations must not follow the
+    // live StatsCounters lists: a new counter is added by an ALTER TABLE migration appended below.
+    internal static readonly IReadOnlyList<string> V1Counters = new[]
+    {
+        "rounds", "rounds_won", "ranked_rounds", "survived_rounds",
+        "kills", "deaths", "assists", "flash_assists", "team_kills",
+        "damage", "utility_damage", "headshot_kills", "shots", "hits", "headshot_hits",
+        "entry_kills", "entry_deaths", "trade_kills", "traded_deaths", "kast_rounds",
+        "k2", "k3", "k4", "k5",
+        "clutch_1_played", "clutch_1_won", "clutch_2_played", "clutch_2_won", "clutch_3_played", "clutch_3_won",
+        "clutch_4_played", "clutch_4_won", "clutch_5_played", "clutch_5_won",
+        "enemies_flashed", "teammates_flashed", "blind_ms", "mvps", "plants", "defuses", "defuses_with_kit", "rating_milli",
+    };
+
+    internal static readonly IReadOnlyList<string> V1WeaponCounters = new[] { "shots", "hits", "headshot_hits", "kills", "headshot_kills", "damage" };
+
     public static IReadOnlyDictionary<string, (string Name, string Columns)[]> Indexes { get; } = new Dictionary<string, (string Name, string Columns)[]>
     {
         ["stats_maps"] = [("ix_stats_maps_server", "server_id")],
@@ -22,8 +38,8 @@ public static class StatsSchema
     public static IReadOnlyList<string> Migrations(StatsDialect d)
     {
         ArgumentNullException.ThrowIfNull(d);
-        var counters = string.Join(", ", StatsCounters.Columns.Select(c => $"{c} {d.BigInt} NOT NULL DEFAULT 0"));
-        var weapons = string.Join(", ", StatsCounters.WeaponColumns.Select(c => $"{c} {d.BigInt} NOT NULL DEFAULT 0"));
+        var counters = string.Join(", ", V1Counters.Select(c => $"{c} {d.BigInt} NOT NULL DEFAULT 0"));
+        var weapons = string.Join(", ", V1WeaponCounters.Select(c => $"{c} {d.BigInt} NOT NULL DEFAULT 0"));
         var migrations = new List<string>
         {
             $"CREATE TABLE IF NOT EXISTS stats_servers (id {d.IdPrimaryKey}, name {d.Text(64)} NOT NULL UNIQUE, first_seen {d.DateTime} NOT NULL, last_seen {d.DateTime} NOT NULL){d.TableOptions}",
@@ -88,7 +104,8 @@ public static class StatsSchema
                 seconds_ct {d.BigInt} NOT NULL DEFAULT 0, seconds_t {d.BigInt} NOT NULL DEFAULT 0, seconds_spec {d.BigInt} NOT NULL DEFAULT 0,
                 seconds_queue {d.BigInt} NOT NULL DEFAULT 0, sessions {d.BigInt} NOT NULL DEFAULT 0){d.TableOptions}
             """,
-            $"CREATE TABLE IF NOT EXISTS stats_elo_history (steam_id {d.SteamId} NOT NULL, day {d.Text(10)} NOT NULL, elo {d.Int} NOT NULL, rounds {d.Int} NOT NULL, delta_sum {d.Int} NOT NULL, PRIMARY KEY (steam_id, day)){d.TableOptions}",        };
+            $"CREATE TABLE IF NOT EXISTS stats_elo_history (steam_id {d.SteamId} NOT NULL, day {d.Text(10)} NOT NULL, elo {d.Int} NOT NULL, rounds {d.Int} NOT NULL, delta_sum {d.Int} NOT NULL, PRIMARY KEY (steam_id, day)){d.TableOptions}",
+        };
         if (!d.IsMySql)
         {
             migrations.AddRange(Indexes.SelectMany(t => t.Value.Select(i => $"CREATE INDEX IF NOT EXISTS {i.Name} ON {t.Key} ({i.Columns})")));
