@@ -92,9 +92,11 @@ public class StatsCountersTests
                 "clutch_defuses", "damage_taken", "bomb_carry_ms",
             },
             StatsCounters.V2Columns);
-        Assert.Equal(StatsCounters.Columns.Concat(StatsCounters.V2Columns).Concat(StatsCounters.MovementColumns), StatsCounters.AllColumns);
+        Assert.Equal(
+            StatsCounters.Columns.Concat(StatsCounters.V2Columns).Concat(StatsCounters.MovementColumns).Concat(StatsCounters.SpecialKillColumns),
+            StatsCounters.AllColumns);
         Assert.Equal(StatsCounters.AllColumns.Count, StatsCounters.AllColumns.Distinct().Count());
-        Assert.Equal(76, StatsCounters.ForAll(new PlayerRoundStats(1, "a", TeamSide.CT), false).Length);
+        Assert.Equal(81, StatsCounters.ForAll(new PlayerRoundStats(1, "a", TeamSide.CT), false).Length);
     }
 
     [Fact]
@@ -108,7 +110,8 @@ public class StatsCountersTests
         };
         Assert.Equal(new long[] { 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 1, 37, 38 }, StatsCounters.ForV2(player));
         Assert.Equal(
-            StatsCounters.For(player, true).Concat(StatsCounters.ForV2(player)).Concat(StatsCounters.ForMovement(player)),
+            StatsCounters.For(player, true).Concat(StatsCounters.ForV2(player)).Concat(StatsCounters.ForMovement(player))
+                .Concat(StatsCounters.ForSpecialKills(player)),
             StatsCounters.ForAll(player, true));
         Assert.Equal(0, StatsCounters.ForV2(player with { ClutchDefuse = false })[15]);
     }
@@ -141,5 +144,21 @@ public class StatsCountersTests
         var quiet = player with { Movement = movement with { FirstContactMs = null, EngageOrder = null, Bait = false } };
         Assert.Equal(new long[] { 29000, 2, 3, 4, 5, 6, 20, 635, 15000, 7, 8, 0, 0, 0, 0, 1 }, StatsCounters.ForMovement(quiet));
         Assert.Equal(new long[16], StatsCounters.ForMovement(new PlayerRoundStats(1, "a", TeamSide.CT)));
+    }
+
+    [Fact]
+    public void SpecialKillColumns_FollowTheMovementColumns()
+    {
+        Assert.Equal(new[] { "noscope_kills", "wallbang_kills", "smoke_kills", "blind_kills", "air_kills" }, StatsCounters.SpecialKillColumns);
+        Assert.Empty(StatsCounters.SpecialKillColumns.Intersect(StatsCounters.Columns.Concat(StatsCounters.V2Columns).Concat(StatsCounters.MovementColumns)));
+    }
+
+    [Fact]
+    public void ForSpecialKills_MapsEveryCounter()
+    {
+        var player = new PlayerRoundStats(1, "a", TeamSide.CT) { NoscopeKills = 1, WallbangKills = 2, SmokeKills = 3, BlindKills = 4, AirKills = 5 };
+        Assert.Equal(new long[] { 1, 2, 3, 4, 5 }, StatsCounters.ForSpecialKills(player));
+        Assert.Equal(new long[] { 1, 2, 3, 4, 5 }, StatsCounters.ForAll(player, false).TakeLast(5));
+        Assert.Equal(new long[5], StatsCounters.ForSpecialKills(new PlayerRoundStats(1, "a", TeamSide.CT)));
     }
 }

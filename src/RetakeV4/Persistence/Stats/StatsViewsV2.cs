@@ -6,7 +6,8 @@ namespace RetakeV4.Persistence.Stats;
 // it runs unchanged on MySQL 8, MariaDB and SQLite. Ratios are computed here, never stored; a ratio over zero is NULL.
 // Events(d) is what the 4.9-a migration step creates and Movement(d) what the 4.9-b step creates: both frozen
 // (StatsSchemaTests pins their SQL), so they read the frozen counter and ratio lists below and of StatsSchema, never
-// StatsCounters. Catalog(d) adds the derived views of the 4.9-c step (StatsDerivedViews). For(d) is the current
+// StatsCounters. Catalog(d) swaps in the 4.9-c player views (special kill counters) and adds the derived views of
+// the 4.9-c step (StatsDerivedViews). For(d) is the current
 // contract, today equal to Catalog(d). A view changed after 4.9-c gets its new definition swapped into BuildViews and
 // is replaced by a later step (StatsSchema: DROP VIEW + CREATE VIEW).
 public static class StatsViewsV2
@@ -44,6 +45,19 @@ public static class StatsViewsV2
     // The stats_player_totals counters when the 4.9-b step ran.
     private static readonly IReadOnlyList<string> MovementCounters = EventsCounters.Concat(StatsSchema.MovementCounters).ToArray();
 
+    // Frozen with the 4.9-c views: shares of the kills, in %.
+    private static readonly (string Name, string Expression)[] SpecialKillRatios =
+    {
+        ("noscope_kill_pct", "ROUND(100.0 * {0}noscope_kills / NULLIF({0}kills, 0), 3)"),
+        ("wallbang_kill_pct", "ROUND(100.0 * {0}wallbang_kills / NULLIF({0}kills, 0), 3)"),
+        ("smoke_kill_pct", "ROUND(100.0 * {0}smoke_kills / NULLIF({0}kills, 0), 3)"),
+        ("blind_kill_pct", "ROUND(100.0 * {0}blind_kills / NULLIF({0}kills, 0), 3)"),
+        ("air_kill_pct", "ROUND(100.0 * {0}air_kills / NULLIF({0}kills, 0), 3)"),
+    };
+
+    // The stats_player_totals counters when the 4.9-c step ran.
+    private static readonly IReadOnlyList<string> CatalogCounters = MovementCounters.Concat(StatsSchema.SpecialKillCounters).ToArray();
+
     private static readonly StatsView[] MySqlEvents = BuildEvents(StatsDialect.MySql);
 
     private static readonly StatsView[] SqliteEvents = BuildEvents(StatsDialect.Sqlite);
@@ -66,8 +80,13 @@ public static class StatsViewsV2
     public static IReadOnlyList<string> MovementViews { get; } =
         new[] { "v2_stats_players", "v2_stats_player_scopes", "v2_stats_round_players", "v_stats_player_behaviour" };
 
-    // Views the 4.9-c step drops and creates, in this order (StatsDerivedViews.Build).
-    public static IReadOnlyList<string> CatalogViews { get; } = new[] { "v_stats_side_balance", "v_stats_retake_odds", "v_stats_weapon_meta", "v_stats_rivals", "v_stats_duos", "v_stats_server_activity" };
+    // Views the 4.9-c step drops and creates, in this order: the player views changed by 4.9-c (in their Catalog(d)
+    // order), then the derived views (StatsDerivedViews.Build).
+    public static IReadOnlyList<string> CatalogViews { get; } = new[]
+    {
+        "v2_stats_players", "v2_stats_player_scopes", "v2_stats_round_players",
+        "v_stats_side_balance", "v_stats_retake_odds", "v_stats_weapon_meta", "v_stats_rivals", "v_stats_duos", "v_stats_server_activity",
+    };
 
     public static IReadOnlyList<StatsView> For(StatsDialect dialect)
     {
@@ -96,8 +115,60 @@ public static class StatsViewsV2
     // The current contract: the 4.9-c views, unchanged so far.
     private static StatsView[] BuildViews(StatsDialect d) => BuildCatalog(d);
 
-    // The 4.9-b views, then the derived views added by 4.9-c.
-    private static StatsView[] BuildCatalog(StatsDialect d) => BuildMovement(d).Concat(StatsDerivedViews.Build(d)).ToArray();
+    // The 4.9-b views with the player views changed by 4.9-c swapped in, then the derived views added by 4.9-c.
+    private static StatsView[] BuildCatalog(StatsDialect d)
+    {
+        var replaced = new[] { CatalogPlayers(d), CatalogScopes(d), CatalogRoundPlayers() }.ToDictionary(v => v.Name);
+        return BuildMovement(d).Select(v => replaced.GetValueOrDefault(v.Name, v)).Concat(StatsDerivedViews.Build(d)).ToArray();
+    }
+
+    // CatalogPlayers, CatalogScopes and CatalogRoundPlayers are the 4.9-c definitions (read by BuildCatalog): the 4.9-b
+    // ones plus the special kill counters and their shares of the kills.
+
+    private static StatsView CatalogPlayers(StatsDialect d) => new("v2_stats_players", $"""
+        SELECT p.steam_id, p.name, p.country, p.first_seen, p.last_seen, p.elo,
+            COALESCE(pt.seconds_ct, 0) AS seconds_ct, COALESCE(pt.seconds_t, 0) AS seconds_t,
+            COALESCE(pt.seconds_spec, 0) AS seconds_spec, COALESCE(pt.seconds_queue, 0) AS seconds_queue,
+            COALESCE(pt.seconds_ct + pt.seconds_t + pt.seconds_spec + pt.seconds_queue, 0) AS seconds_total,
+            COALESCE(pt.sessions, 0) AS sessions,
+            {StatsViews.CountersOrZero(CatalogCounters, "t.")},
+            {StatsViews.RatioColumns(d, "t.", null)},
+            {RatioColumns(d, "t.", Ratios)},
+            {RatioColumns(d, "t.", MovementRatios)},
+            {RatioColumns(d, "t.", SpecialKillRatios)}
+        FROM stats_players p
+        LEFT JOIN stats_player_totals t ON t.steam_id = p.steam_id AND t.scope = 'all'
+        LEFT JOIN stats_player_playtime pt ON pt.steam_id = p.steam_id
+        """);
+
+    private static StatsView CatalogScopes(StatsDialect d) => new("v2_stats_player_scopes", $"""
+        SELECT t.steam_id, p.name, t.scope,
+            {StatsViews.Counters(CatalogCounters, "t.")},
+            {StatsViews.RatioColumns(d, "t.", null)},
+            {RatioColumns(d, "t.", Ratios)},
+            {RatioColumns(d, "t.", MovementRatios)},
+            {RatioColumns(d, "t.", SpecialKillRatios)}
+        FROM stats_player_totals t
+        JOIN stats_players p ON p.steam_id = t.steam_id
+        """);
+
+    private static StatsView CatalogRoundPlayers() => new("v2_stats_round_players", """
+        SELECT rp.round_id, s.name AS server, m.map_name, r.site, r.round_type, r.started_at,
+            rp.steam_id, rp.side, rp.primary_weapon, rp.survived, rp.won, rp.kills, rp.deaths, rp.assists, rp.flash_assists,
+            rp.team_kills, rp.damage, rp.utility_damage, rp.headshot_kills, rp.shots, rp.hits, rp.headshot_hits,
+            rp.entry_kill, rp.entry_death, rp.trade_kills, rp.traded_death, rp.kast, rp.clutch_vs, rp.clutch_won,
+            rp.enemies_flashed, rp.teammates_flashed, rp.blind_seconds_inflicted, rp.mvp, rp.planted, rp.defused,
+            rp.defused_with_kit, rp.rating, rp.elo_before, rp.elo_after,
+            rp.shots_still, rp.hits_still, rp.shots_moving, rp.hits_moving, rp.shots_scoped, rp.hits_scoped,
+            rp.damage_taken, rp.bomb_carry_ms, rp.health_end, rp.armor_end,
+            rp.alive_ms, rp.walk_pct, rp.run_pct, rp.crouch_pct, rp.still_pct, rp.air_pct, rp.distance_m, rp.afk_ms,
+            rp.in_smoke_pct, rp.behind_smoke_pct, rp.first_contact_ms, rp.engage_order, rp.bait,
+            rp.noscope_kills, rp.wallbang_kills, rp.smoke_kills, rp.blind_kills, rp.air_kills
+        FROM stats_round_players rp
+        JOIN stats_rounds r ON r.id = rp.round_id
+        JOIN stats_maps m ON m.id = r.map_id
+        JOIN stats_servers s ON s.id = m.server_id
+        """);
 
     // Frozen: the 4.9-a views with those changed by 4.9-b swapped in, then the views added by 4.9-b.
     private static StatsView[] BuildMovement(StatsDialect d)

@@ -393,4 +393,14 @@ public sealed class SqliteStatsRepositoryTests : IDisposable
         Assert.Equal(0L, await Scalar(MovementCountersSet(ids)));
         Assert.Equal(1L, await Scalar($"SELECT rounds FROM stats_player_totals WHERE steam_id = {Ct} AND scope = 'all'"));
     }
+
+    [Fact]
+    public async Task WriteRound_SpecialKills_FillTheRoundColumnsAndEveryScope()
+    {
+        var repository = await Repository();
+        var mapId = await repository.OpenMapAsync("de_mirage", Now, CancellationToken.None);
+        await repository.WriteRoundAsync(mapId, RoundSpecialKills(Now, Ct, CtMate, T, TMate), CancellationToken.None);
+        await repository.WriteRoundAsync(mapId, RoundSpecialKills(Now.AddMinutes(1), Ct, CtMate, T, TMate), CancellationToken.None);
+        await AssertSpecialKills(Scalar, Ct, CtMate, T);
+    }
 }

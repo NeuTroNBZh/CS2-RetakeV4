@@ -85,6 +85,7 @@ public static class RoundAnalyzer
                 attacker.HeadshotKills++;
                 weapon.HeadshotKills++;
             }
+            CountSpecialKill(attacker, kill);
             if (kill.Assister is { } assisterId && assisterId != attackerId && players.TryGetValue(assisterId, out var assister)
                 && sides[assisterId] == sides[attackerId])
             {
@@ -102,6 +103,31 @@ public static class RoundAnalyzer
             }
         }
         return deathTimes;
+    }
+
+    // Called only where Kills is counted: the flags of a bot kill, a team kill, a suicide or a duplicated death are ignored.
+    private static void CountSpecialKill(PlayerAccumulator attacker, PlayerKilled kill)
+    {
+        if (kill.NoScope)
+        {
+            attacker.NoscopeKills++;
+        }
+        if (kill.Penetrated > 0)
+        {
+            attacker.WallbangKills++;
+        }
+        if (kill.ThroughSmoke)
+        {
+            attacker.SmokeKills++;
+        }
+        if (kill.AttackerBlind)
+        {
+            attacker.BlindKills++;
+        }
+        if (kill.AttackerInAir)
+        {
+            attacker.AirKills++;
+        }
     }
 
     private static void CountLeavers(IReadOnlyList<PlayerLeftRound> leavers, Dictionary<ulong, PlayerAccumulator> players, Dictionary<ulong, int> deathTimes)

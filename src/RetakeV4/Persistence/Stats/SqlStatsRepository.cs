@@ -38,6 +38,7 @@ public sealed class SqlStatsRepository : IStatsRepository
         "health_end", "armor_end",
         "alive_ms", "walk_pct", "run_pct", "crouch_pct", "still_pct", "air_pct", "distance_m", "afk_ms", "in_smoke_pct",
         "behind_smoke_pct", "first_contact_ms", "engage_order", "bait",
+        "noscope_kills", "wallbang_kills", "smoke_kills", "blind_kills", "air_kills",
     };
 
     private static readonly string[] ShotColumns =
@@ -398,6 +399,7 @@ public sealed class SqlStatsRepository : IStatsRepository
             p.ShotsStill, p.HitsStill, p.ShotsMoving, p.HitsMoving, p.ShotsScoped, p.HitsScoped, p.DamageTaken, p.BombCarryMs, p.HealthEnd, p.ArmorEnd,
             m?.AliveMs, m?.WalkPct, m?.RunPct, m?.CrouchPct, m?.StillPct, m?.AirPct, m?.DistanceMeters, m?.AfkMs,
             m?.InSmokePct, m?.BehindSmokePct, m?.FirstContactMs, m?.EngageOrder, B(m?.BaitFlag),
+            p.NoscopeKills, p.WallbangKills, p.SmokeKills, p.BlindKills, p.AirKills,
         };
     }
 

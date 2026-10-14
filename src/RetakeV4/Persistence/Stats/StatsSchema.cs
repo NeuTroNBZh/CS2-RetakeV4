@@ -43,6 +43,10 @@ public static class StatsSchema
         "behind_smoke_pct", "first_contact_ms", "engage_order", "bait",
     };
 
+    // Frozen special kill columns added to stats_player_totals and stats_round_players by the 4.9-c step, in order
+    // (StatsCounters.SpecialKillColumns).
+    internal static readonly IReadOnlyList<string> SpecialKillCounters = new[] { "noscope_kills", "wallbang_kills", "smoke_kills", "blind_kills", "air_kills" };
+
     public static IReadOnlyDictionary<string, (string Name, string Columns)[]> Indexes { get; } = new Dictionary<string, (string Name, string Columns)[]>
     {
         ["stats_maps"] = [("ix_stats_maps_server", "server_id")],
@@ -239,12 +243,14 @@ public static class StatsSchema
         _ => $"{d.Real} NULL",
     };
 
-    // 4.9-c (Stats v2, sub-project 4): the derived views, each dropped first so that a database created by an
-    // intermediate build gets the final definition (SQLite's CREATE VIEW IF NOT EXISTS never replaces a view). Built from
-    // StatsViewsV2.Catalog, never from the live For: a later change to these views is a new step.
+    // 4.9-c (Stats v2, sub-project 4): the special kill columns, then the player views that show them and the derived
+    // views, each dropped first so that a database created by an intermediate build gets the final definition (SQLite's
+    // CREATE VIEW IF NOT EXISTS never replaces a view). Built from StatsViewsV2.Catalog, never from the live For: a later
+    // change to these views is a new step.
     private static List<SqlMigration> V2Catalog(StatsDialect d)
     {
-        var migrations = new List<SqlMigration>();
+        var migrations = SpecialKillCounters.Select(c => SqlMigration.AddColumn("stats_player_totals", c, $"{d.BigInt} NOT NULL DEFAULT 0")).ToList();
+        migrations.AddRange(SpecialKillCounters.Select(c => SqlMigration.AddColumn("stats_round_players", c, $"{d.Int} NOT NULL DEFAULT 0")));
         foreach (var view in StatsViewsV2.Catalog(d).Where(v => StatsViewsV2.CatalogViews.Contains(v.Name)))
         {
             migrations.Add(new SqlMigration($"DROP VIEW IF EXISTS {view.Name}"));

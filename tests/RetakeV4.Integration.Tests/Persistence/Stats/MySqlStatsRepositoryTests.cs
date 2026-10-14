@@ -5,6 +5,7 @@ using static RetakeV4.Integration.Tests.Persistence.Stats.StatsSamples;
 
 namespace RetakeV4.Integration.Tests.Persistence.Stats;
 
+[Collection(StatsMySqlCollection.Name)]
 public class MySqlStatsRepositoryTests
 {
     private static readonly string? ConnectionString = Environment.GetEnvironmentVariable("RETAKEV4_MYSQL_TEST");
@@ -140,5 +141,32 @@ public class MySqlStatsRepositoryTests
         Assert.True(await Count($"SELECT COUNT(*) FROM stats_player_totals WHERE steam_id IN ({list})") >= 3);
         Assert.Equal(0L, await Count(MovementCountersSet(list)));
         Assert.Equal(1L, await Count($"SELECT rounds FROM stats_player_totals WHERE steam_id = {ids[0]} AND scope = 'all'"));
+    }
+
+    [Fact]
+    public async Task SpecialKills_RoundTrip_WhenAMySqlServerIsConfigured()
+    {
+        if (string.IsNullOrWhiteSpace(ConnectionString))
+        {
+            return;
+        }
+        var repository = StatsRepositories.MySql(ConnectionString, new StatsWriteOptions($"test-{Guid.NewGuid():N}"[..20], 1000, 100));
+        await repository.InitializeAsync(CancellationToken.None);
+        // Fresh ids: the shared test database keeps the totals of earlier runs.
+        var ids = Enumerable.Range(0, 4).Select(_ => 76561190000000000UL + (ulong)Random.Shared.NextInt64(1, 9_000_000_000)).ToArray();
+        var now = DateTimeOffset.UtcNow;
+        var mapId = await repository.OpenMapAsync("de_mirage", now, CancellationToken.None);
+        await repository.WriteRoundAsync(mapId, RoundSpecialKills(now, ids[0], ids[1], ids[2], ids[3]), CancellationToken.None);
+        await repository.WriteRoundAsync(mapId, RoundSpecialKills(now.AddMinutes(1), ids[0], ids[1], ids[2], ids[3]), CancellationToken.None);
+        await using var connection = new MySqlConnection(ConnectionString);
+        await connection.OpenAsync();
+        async Task<object?> Scalar(string sql)
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = sql;
+            var value = await command.ExecuteScalarAsync();
+            return value is DBNull ? null : value;
+        }
+        await AssertSpecialKills(Scalar, ids[0], ids[1], ids[2]);
     }
 }

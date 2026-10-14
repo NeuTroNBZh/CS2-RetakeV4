@@ -112,6 +112,18 @@ public sealed record PlayerRoundStats(ulong SteamId, string Name, TeamSide Side)
 
     public int BombCarryMs { get; init; }
 
+    // Kills counted in Kills that were made without a scope, through at least one wall, through smoke, while blind or in
+    // the air; one kill can count in several.
+    public int NoscopeKills { get; init; }
+
+    public int WallbangKills { get; init; }
+
+    public int SmokeKills { get; init; }
+
+    public int BlindKills { get; init; }
+
+    public int AirKills { get; init; }
+
     // 0 for a dead player or a leaver; null only for a living player without a state read at round_end.
     public int? HealthEnd { get; init; }
 

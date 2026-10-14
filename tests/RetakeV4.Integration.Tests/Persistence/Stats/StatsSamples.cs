@@ -1,3 +1,4 @@
+using System.Globalization;
 using RetakeV4.Domain.Common;
 using RetakeV4.Domain.Geometry;
 using RetakeV4.Domain.Stats;
@@ -9,6 +10,7 @@ internal static class StatsSamples
     public const ulong Ct = 76561198000000001UL;
     public const ulong T = 76561198000000002UL;
     public const ulong CtMate = 76561198000000003UL;
+    public const ulong TMate = 76561198000000004UL;
 
     public static StatsRules Rules { get; } = new(5.0, 1, 1000, new RatingWeights(0.30, 0.35, 0.20, 0.004, 0.15, 0.20), new EloRules(1000, 100, 24, 50));
 
@@ -87,4 +89,66 @@ internal static class StatsSamples
         recorder.Add(new ShotFired(ctB, "m4a1", 2000, 128, null, null));
         return RoundScoring.Process(recorder.Close(new RoundOutcome(TeamSide.CT, 9, 30000))!, rules ?? MovementOn);
     }
+
+    // Site A, ranked. ct kills t with a no-scope wallbang (2 walls) at 100 ms; ctMate kills tMate through smoke, blind and
+    // in the air at 200 ms. Every flag is also set on rows that are not kills: ct on a bot (50 ms), ctMate on t again
+    // (duplicated death event, 150 ms), ct on ctMate (team kill, 250 ms), ct on himself (suicide, 300 ms).
+    public static RoundSummary RoundSpecialKills(DateTimeOffset startedAt, ulong ct, ulong ctMate, ulong t, ulong tMate)
+    {
+        var participants = new[]
+        {
+            new RoundParticipant(ct, "ct", TeamSide.CT, 1000, "awp"),
+            new RoundParticipant(ctMate, "ctmate", TeamSide.CT, 1000, "m4a1"),
+            new RoundParticipant(t, "t", TeamSide.T, 1000, "ak47"),
+            new RoundParticipant(tMate, "tmate", TeamSide.T, 1000, "ak47"),
+        };
+        var recorder = new RoundRecorder(1000, 1);
+        recorder.Open(new RoundContext("de_mirage", 6, BombSite.A, "FullBuy", startedAt, participants));
+        recorder.Add(SpecialKill(ct, 0, 50, 2, true, true, true, true, victimIsBot: true));
+        recorder.Add(SpecialKill(ct, t, 100, 2, true, false, false, false));
+        recorder.Add(SpecialKill(ctMate, t, 150, 2, true, true, true, true));
+        recorder.Add(SpecialKill(ctMate, tMate, 200, 0, false, true, true, true));
+        recorder.Add(SpecialKill(ct, ctMate, 250, 2, true, true, true, true));
+        recorder.Add(SpecialKill(ct, ct, 300, 2, true, true, true, true));
+        return RoundScoring.Process(recorder.Close(new RoundOutcome(TeamSide.CT, 7, 30000))!, Rules);
+    }
+
+    // After two RoundSpecialKills rounds: per-round columns, totals summed in every scope, shares of the kills. Values are
+    // read through Convert so that SQLite and MySQL / MariaDB types both pass.
+    public static async Task AssertSpecialKills(Func<string, Task<object?>> scalar, ulong ct, ulong ctMate, ulong t)
+    {
+        ArgumentNullException.ThrowIfNull(scalar);
+        async Task<long[]> Counters(string from)
+        {
+            var values = new List<long>();
+            foreach (var column in StatsCounters.SpecialKillColumns)
+            {
+                values.Add(Convert.ToInt64(await scalar($"SELECT {column} {from}"), CultureInfo.InvariantCulture));
+            }
+            return values.ToArray();
+        }
+        string FirstRound(ulong id) =>
+            $"FROM v2_stats_round_players WHERE steam_id = {id} AND round_id = (SELECT MIN(round_id) FROM v2_stats_round_players WHERE steam_id = {id})";
+        Assert.Equal(new long[] { 1, 1, 0, 0, 0 }, await Counters(FirstRound(ct)));
+        Assert.Equal(new long[] { 0, 0, 1, 1, 1 }, await Counters(FirstRound(ctMate)));
+        Assert.Equal(new long[5], await Counters(FirstRound(t)));
+        foreach (var scope in new[] { "all", "map:de_mirage", "side:CT", "site:A", "roundtype:FullBuy" })
+        {
+            Assert.Equal(new long[] { 2, 2, 0, 0, 0 }, await Counters($"FROM v2_stats_player_scopes WHERE steam_id = {ct} AND scope = '{scope}'"));
+            Assert.Equal(new long[] { 0, 0, 2, 2, 2 }, await Counters($"FROM v2_stats_player_scopes WHERE steam_id = {ctMate} AND scope = '{scope}'"));
+        }
+        Assert.Equal(new long[] { 2, 2, 0, 0, 0 }, await Counters($"FROM v2_stats_players WHERE steam_id = {ct}"));
+        Assert.Equal(new long[5], await Counters($"FROM v2_stats_players WHERE steam_id = {t}"));
+        Assert.Equal(2L, Convert.ToInt64(await scalar($"SELECT kills FROM v2_stats_players WHERE steam_id = {ct}"), CultureInfo.InvariantCulture));
+        Assert.Equal(2L, Convert.ToInt64(await scalar($"SELECT team_kills FROM v2_stats_players WHERE steam_id = {ct}"), CultureInfo.InvariantCulture));
+        Assert.Equal(100.0, Convert.ToDouble(await scalar($"SELECT noscope_kill_pct FROM v2_stats_players WHERE steam_id = {ct}"), CultureInfo.InvariantCulture));
+        Assert.Equal(100.0, Convert.ToDouble(await scalar($"SELECT wallbang_kill_pct FROM v2_stats_players WHERE steam_id = {ct}"), CultureInfo.InvariantCulture));
+        Assert.Equal(0.0, Convert.ToDouble(await scalar($"SELECT smoke_kill_pct FROM v2_stats_players WHERE steam_id = {ct}"), CultureInfo.InvariantCulture));
+        Assert.Equal(100.0, Convert.ToDouble(await scalar($"SELECT air_kill_pct FROM v2_stats_player_scopes WHERE steam_id = {ctMate} AND scope = 'site:A'"), CultureInfo.InvariantCulture));
+        Assert.Null(await scalar($"SELECT noscope_kill_pct FROM v2_stats_players WHERE steam_id = {t}"));
+    }
+
+    private static PlayerKilled SpecialKill(ulong? attacker, ulong victim, int timeMs, int penetrated, bool noScope, bool smoke, bool blind, bool air,
+        bool victimIsBot = false) =>
+        new(attacker, victim, victimIsBot, null, false, "awp", false, penetrated, noScope, smoke, blind, air, 10f, null, null, timeMs);
 }

@@ -402,7 +402,10 @@ public sealed class StatsSchemaTests : IDisposable
     {
         foreach (var dialect in new[] { StatsDialect.Sqlite, StatsDialect.MySql })
         {
-            var movement = StatsSchema.Migrations(dialect).Skip(StatsSchema.V2EventsCount(dialect)).ToList();
+            var movement = StatsSchema.Migrations(dialect)
+                .Skip(StatsSchema.V2EventsCount(dialect))
+                .Take(StatsSchema.V2MovementCount(dialect) - StatsSchema.V2EventsCount(dialect))
+                .ToList();
             Assert.Equal($"ALTER TABLE stats_player_totals ADD COLUMN alive_ms {dialect.BigInt} NOT NULL DEFAULT 0", movement[0].Sql);
             Assert.Equal(StatsSchema.MovementCounters.Count + StatsSchema.MovementRoundColumns.Count, movement.Count(m => m.Column is not null));
             Assert.True(movement.FindLastIndex(m => m.Column is not null) < movement.FindIndex(m => m.Column is null));
@@ -490,23 +493,31 @@ public sealed class StatsSchemaTests : IDisposable
         Assert.Equal("CAST(SUM(x) AS INTEGER)", StatsDialect.Sqlite.IntCast("SUM(x)"));
     }
 
-    // 4.9-c: one DROP VIEW + CREATE VIEW pair per derived view, right after the 4.9-b entries.
+    // 4.9-c: the special kill columns (totals, then round players), then one DROP VIEW + CREATE VIEW pair per view of
+    // CatalogViews, after the 4.9-b entries, and nothing after them yet.
     [Fact]
     public void CatalogEntries_FollowTheMovementEntries()
     {
         foreach (var dialect in new[] { StatsDialect.Sqlite, StatsDialect.MySql })
         {
-            var catalog = StatsSchema.Migrations(dialect)
-                .Skip(StatsSchema.V2MovementCount(dialect))
-                .Take(StatsSchema.V2CatalogCount(dialect) - StatsSchema.V2MovementCount(dialect))
-                .ToList();
-            Assert.Equal(2 * StatsViewsV2.CatalogViews.Count, catalog.Count);
-            Assert.All(catalog, m => Assert.Null(m.Column));
+            var all = StatsSchema.Migrations(dialect);
+            Assert.Equal(all.Count, StatsSchema.V2CatalogCount(dialect));
+            var catalog = all.Skip(StatsSchema.V2MovementCount(dialect)).ToList();
+            var columns = StatsSchema.SpecialKillCounters.Count;
+            Assert.Equal((2 * columns) + (2 * StatsViewsV2.CatalogViews.Count), catalog.Count);
+            for (var i = 0; i < columns; i++)
+            {
+                var column = StatsSchema.SpecialKillCounters[i];
+                Assert.Equal($"ALTER TABLE stats_player_totals ADD COLUMN {column} {dialect.BigInt} NOT NULL DEFAULT 0", catalog[i].Sql);
+                Assert.Equal($"ALTER TABLE stats_round_players ADD COLUMN {column} {dialect.Int} NOT NULL DEFAULT 0", catalog[columns + i].Sql);
+            }
+            var views = catalog.Skip(2 * columns).ToList();
+            Assert.All(views, m => Assert.Null(m.Column));
             for (var i = 0; i < StatsViewsV2.CatalogViews.Count; i++)
             {
                 var view = StatsViewsV2.CatalogViews[i];
-                Assert.Equal($"DROP VIEW IF EXISTS {view}", catalog[2 * i].Sql);
-                Assert.StartsWith($"{dialect.CreateView} {view} AS", catalog[(2 * i) + 1].Sql, StringComparison.Ordinal);
+                Assert.Equal($"DROP VIEW IF EXISTS {view}", views[2 * i].Sql);
+                Assert.StartsWith($"{dialect.CreateView} {view} AS", views[(2 * i) + 1].Sql, StringComparison.Ordinal);
             }
         }
     }
@@ -537,5 +548,35 @@ public sealed class StatsSchemaTests : IDisposable
         Assert.Equal("SUBSTR(pr.at, 1, 10)", StatsDialect.Sqlite.UtcDay("pr.at"));
         Assert.Equal("HOUR(pr.at)", StatsDialect.MySql.UtcHour("pr.at"));
         Assert.Equal("CAST(SUBSTR(pr.at, 12, 2) AS INTEGER)", StatsDialect.Sqlite.UtcHour("pr.at"));
+    }
+
+    [Fact]
+    public void FrozenSpecialKillCounters_MatchStatsCounters() => Assert.Equal(StatsCounters.SpecialKillColumns, StatsSchema.SpecialKillCounters);
+
+    // A 4.9-b database gets the special kill columns (0 on its rows) and the recreated player views, keeping its rows.
+    [Fact]
+    public async Task V2MovementDatabase_UpgradesToSpecialKills_KeepingItsRows()
+    {
+        await using var connection = new SqliteConnection($"Data Source={_dir.File("stats.db")}");
+        await connection.OpenAsync();
+        var all = StatsSchema.Migrations(StatsDialect.Sqlite);
+        await SqlMigrator.ApplyAsync(connection, all.Take(StatsSchema.V2MovementCount(StatsDialect.Sqlite)).ToList(), CancellationToken.None, StatsSchema.VersionTable);
+        await InsertPlayer(connection, 1);
+        await Execute(connection, "INSERT INTO stats_player_totals (steam_id, scope, rounds, kills, bait_rounds) VALUES (1, 'all', 7, 3, 2)");
+        await InsertRoundPlayer(connection, 1, 1, "CT");
+        Assert.DoesNotContain("noscope_kills", await SqliteColumns(connection, "v2_stats_players"));
+        await SqlMigrator.ApplyAsync(connection, all, CancellationToken.None, StatsSchema.VersionTable);
+        Assert.Equal((long)all.Count, await Scalar(connection, $"SELECT MAX(version) FROM {StatsSchema.VersionTable}"));
+        foreach (var column in StatsSchema.SpecialKillCounters)
+        {
+            Assert.Equal(0L, await Scalar(connection, $"SELECT {column} FROM v2_stats_players WHERE steam_id = 1"));
+            Assert.Equal(0L, await Scalar(connection, $"SELECT {column} FROM v2_stats_player_scopes WHERE steam_id = 1 AND scope = 'all'"));
+            Assert.Equal(0L, await Scalar(connection, $"SELECT {column} FROM stats_round_players WHERE steam_id = 1"));
+            Assert.Contains(column, await SqliteColumns(connection, "v2_stats_round_players"));
+        }
+        Assert.Equal(3L, await Scalar(connection, "SELECT kills FROM v2_stats_players WHERE steam_id = 1"));
+        Assert.Equal(2L, await Scalar(connection, "SELECT bait_rounds FROM v2_stats_players WHERE steam_id = 1"));
+        Assert.Equal(0.0, await Scalar(connection, "SELECT noscope_kill_pct FROM v2_stats_players WHERE steam_id = 1"));
+        Assert.Equal(1L, await Scalar(connection, "SELECT kast FROM stats_round_players WHERE steam_id = 1"));
     }
 }

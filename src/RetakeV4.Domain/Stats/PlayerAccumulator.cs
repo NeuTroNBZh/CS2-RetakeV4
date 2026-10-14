@@ -107,6 +107,16 @@ internal sealed class PlayerAccumulator(RoundParticipant participant)
 
     public int BombCarryMs { get; set; }
 
+    public int NoscopeKills { get; set; }
+
+    public int WallbangKills { get; set; }
+
+    public int SmokeKills { get; set; }
+
+    public int BlindKills { get; set; }
+
+    public int AirKills { get; set; }
+
     public int? HealthEnd { get; set; }
 
     public int? ArmorEnd { get; set; }
@@ -177,6 +187,11 @@ internal sealed class PlayerAccumulator(RoundParticipant participant)
             ClutchDefuse = ClutchDefuse,
             DamageTaken = DamageTaken,
             BombCarryMs = BombCarryMs,
+            NoscopeKills = NoscopeKills,
+            WallbangKills = WallbangKills,
+            SmokeKills = SmokeKills,
+            BlindKills = BlindKills,
+            AirKills = AirKills,
             HealthEnd = HealthEnd,
             ArmorEnd = ArmorEnd,
             Movement = Movement,
