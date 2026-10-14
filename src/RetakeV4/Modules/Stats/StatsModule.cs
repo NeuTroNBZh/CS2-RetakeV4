@@ -21,7 +21,6 @@ namespace RetakeV4.Modules.Stats;
 public sealed class StatsModule : IRetakeModule
 {
     private const float PresenceRefreshSeconds = 5f;
-    private const int RevealPollTicks = 8;
 
     private readonly PlaytimeTracker _playtime = new();
     private readonly Dictionary<int, string?> _primaryBySlot = new();
@@ -136,9 +135,7 @@ public sealed class StatsModule : IRetakeModule
         }
         if (_scoreboardElo)
         {
-            // The game may reset the rank fields: they are written again on every spawn.
-            hooks.OnEvent<EventPlayerSpawn>("stats_scoreboard_spawn", e => ShowElo(e.Userid));
-            hooks.OnTick("stats_scoreboard_reveal", PollScoreboard);
+            hooks.OnTick("stats_scoreboard", PollScoreboard);
         }
         hooks.RepeatTimer("stats_presence", PresenceRefreshSeconds, RefreshPresence);
         // Created last: it starts a background worker, which a throw during hook registration would leak.
@@ -435,14 +432,17 @@ public sealed class StatsModule : IRetakeModule
         try
         {
             var rank = HumanId(player) is { } id ? ScoreboardRank.For(true, elo.IsLoaded(id), elo.Current(id)) : ScoreboardRank.None;
-            if (player.CompetitiveRankType == rank.RankType && player.CompetitiveRanking == rank.Value)
+            var wins = rank == ScoreboardRank.None ? 0 : ScoreboardRank.ShownWins;
+            if (player.CompetitiveRankType == rank.RankType && player.CompetitiveRanking == rank.Value && player.CompetitiveWins == wins)
             {
                 return;
             }
             player.CompetitiveRankType = rank.RankType;
             player.CompetitiveRanking = rank.Value;
+            player.CompetitiveWins = wins;
             Utilities.SetStateChanged(player, "CCSPlayerController", "m_iCompetitiveRankType");
             Utilities.SetStateChanged(player, "CCSPlayerController", "m_iCompetitiveRanking");
+            Utilities.SetStateChanged(player, "CCSPlayerController", "m_iCompetitiveWins");
         }
         catch (Exception ex)
         {
@@ -451,24 +451,35 @@ public sealed class StatsModule : IRetakeModule
         }
     }
 
-    // The client hides the rank column outside round end: a fresh TAB press asks it to show every rank, as matchmaking does.
+    // Every tick: the game resets the rank fields, so they are written again whenever they differ; a fresh TAB press asks
+    // the client to show every rank (it hides the rank column outside round end).
     private void PollScoreboard()
     {
-        if (!_scoreboardElo || !_mapStarted || Server.TickCount % RevealPollTicks != 0)
+        if (!_scoreboardElo || !_mapStarted)
         {
             return;
         }
+        foreach (var player in PlayerQueries.Humans())
+        {
+            if (player.Pawn is not { IsValid: true } pawn || pawn.Value is not { IsValid: true })
+            {
+                continue;
+            }
+            ShowElo(player);
+            if (_scoreboardElo && _reveal.Pressed(player.Slot, (ulong)player.Buttons))
+            {
+                RevealRanks(player);
+            }
+        }
+    }
+
+    private void RevealRanks(CCSPlayerController player)
+    {
         try
         {
-            foreach (var player in PlayerQueries.Humans())
-            {
-                if (player.Pawn is { IsValid: true } pawn && pawn.Value is { IsValid: true } && _reveal.Pressed(player.Slot, (ulong)player.Buttons))
-                {
-                    var message = UserMessage.FromPartialName("ServerRankRevealAll");
-                    message.Recipients.Add(player);
-                    message.Send();
-                }
-            }
+            var message = UserMessage.FromPartialName("ServerRankRevealAll");
+            message.Recipients.Add(player);
+            message.Send();
         }
         catch (Exception ex)
         {

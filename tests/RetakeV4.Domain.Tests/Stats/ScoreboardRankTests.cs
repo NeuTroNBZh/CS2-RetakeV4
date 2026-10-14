@@ -33,4 +33,7 @@ public class ScoreboardRankTests
     [InlineData(false, true, false)]
     public void IsAllowed_OnlyWhenEnabled_AndServerGuidelinesAreOff(bool enabled, bool followsGuidelines, bool expected) =>
         Assert.Equal(expected, ScoreboardRank.IsAllowed(enabled, followsGuidelines));
+
+    [Fact]
+    public void ShownWins_IsTheMinimumForTheClientToShowARating() => Assert.Equal(10, ScoreboardRank.ShownWins);
 }
