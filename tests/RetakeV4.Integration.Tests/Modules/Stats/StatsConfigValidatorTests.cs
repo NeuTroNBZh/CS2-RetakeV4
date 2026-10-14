@@ -33,14 +33,14 @@ public class StatsConfigValidatorTests
         Assert.Equal(30, new StatsConfig().RawRetentionDays);
         Assert.Equal(200, new StatsConfig().QueueCapacity);
         Assert.Equal(5, new StatsConfig().ShutdownFlushSeconds);
-        Assert.True(new StatsConfig().ScoreboardElo);
+        Assert.False(new StatsConfig().ScoreboardElo);
     }
 
     [Fact]
-    public void ScoreboardElo_CanBeDisabled()
+    public void ScoreboardElo_CanBeEnabled()
     {
-        var (config, issues) = Validate(new StatsConfig { ScoreboardElo = false });
-        Assert.False(config.ScoreboardElo);
+        var (config, issues) = Validate(new StatsConfig { ScoreboardElo = true });
+        Assert.True(config.ScoreboardElo);
         Assert.Empty(issues);
     }
 

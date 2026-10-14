@@ -37,6 +37,7 @@ public sealed class StatsModule : IRetakeModule
     // At server start the plugin loads before the engine globals exist (Teams publishes TeamStateChanged on load):
     // players are only queried once a map has started.
     private bool _mapStarted;
+    private bool _scoreboardElo;
 
     public string Name => "Stats";
 
@@ -124,7 +125,13 @@ public sealed class StatsModule : IRetakeModule
         hooks.OnEvent<EventRoundEnd>("stats_round_end", OnRoundEnd);
         hooks.OnEvent<EventPlayerConnectFull>("stats_connect", e => OnConnected(e.Userid));
         hooks.OnEvent<EventPlayerDisconnect>("stats_disconnect", e => OnDisconnected(e.Userid, e.Reason));
-        if (_config.ScoreboardElo)
+        _scoreboardElo = ScoreboardRank.IsAllowed(_config.ScoreboardElo, CoreConfig.FollowCS2ServerGuidelines);
+        if (_config.ScoreboardElo && !_scoreboardElo)
+        {
+            context.Logger.LogWarning(
+                "Stats: ScoreboardElo needs FollowCS2ServerGuidelines set to false in CounterStrikeSharp core.json; the scoreboard is left untouched");
+        }
+        if (_scoreboardElo)
         {
             // The game may reset the rank fields: they are written again on every spawn.
             hooks.OnEvent<EventPlayerSpawn>("stats_scoreboard_spawn", e => ShowElo(e.Userid));
@@ -405,22 +412,31 @@ public sealed class StatsModule : IRetakeModule
         });
     }
 
-    // Writes the scoreboard rank column only when it changes, then flags it for the network.
+    // Writes the scoreboard rank column only when it changes, then flags it for the network. A failure turns the feature
+    // off until the next reload instead of counting against the module's error budget (it must never stop the stats).
     private void ShowElo(CCSPlayerController? player)
     {
-        if (!_config.ScoreboardElo || player is not { IsValid: true } || _elo is not { } elo)
+        if (!_scoreboardElo || player is not { IsValid: true } || _elo is not { } elo)
         {
             return;
         }
-        var rank = HumanId(player) is { } id ? ScoreboardRank.For(true, elo.IsLoaded(id), elo.Current(id)) : ScoreboardRank.None;
-        if (player.CompetitiveRankType == rank.RankType && player.CompetitiveRanking == rank.Value)
+        try
         {
-            return;
+            var rank = HumanId(player) is { } id ? ScoreboardRank.For(true, elo.IsLoaded(id), elo.Current(id)) : ScoreboardRank.None;
+            if (player.CompetitiveRankType == rank.RankType && player.CompetitiveRanking == rank.Value)
+            {
+                return;
+            }
+            player.CompetitiveRankType = rank.RankType;
+            player.CompetitiveRanking = rank.Value;
+            Utilities.SetStateChanged(player, "CCSPlayerController", "m_iCompetitiveRankType");
+            Utilities.SetStateChanged(player, "CCSPlayerController", "m_iCompetitiveRanking");
         }
-        player.CompetitiveRankType = rank.RankType;
-        player.CompetitiveRanking = rank.Value;
-        Utilities.SetStateChanged(player, "CCSPlayerController", "m_iCompetitiveRankType");
-        Utilities.SetStateChanged(player, "CCSPlayerController", "m_iCompetitiveRanking");
+        catch (Exception ex)
+        {
+            _scoreboardElo = false;
+            Context.Logger.LogWarning(ex, "Stats: writing the scoreboard rank failed; ScoreboardElo is off until the next reload");
+        }
     }
 
     private void OnGameThread(string label, EloCache cache, Action<EloCache> action) =>

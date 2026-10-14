@@ -53,8 +53,9 @@ public sealed record StatsConfig : ModuleConfig
 
     public int ShutdownFlushSeconds { get; init; } = 5;
 
-    // Shows each player's ELO in the scoreboard rank column (CS Rating style).
-    public bool ScoreboardElo { get; init; } = true;
+    // Shows each player's ELO in the scoreboard rank column (CS Rating style). Needs FollowCS2ServerGuidelines set to
+    // false in CounterStrikeSharp's core.json, which goes against Valve's server guidelines: off by default.
+    public bool ScoreboardElo { get; init; }
 
     public StatsRules ToRules() => new(
         TradeWindowSeconds,

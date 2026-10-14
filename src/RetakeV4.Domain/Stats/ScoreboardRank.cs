@@ -10,4 +10,8 @@ public readonly record struct ScoreboardRank(sbyte RankType, int Value)
 
     public static ScoreboardRank For(bool enabled, bool loaded, int elo) =>
         enabled && loaded ? new ScoreboardRank(PremierRankType, Math.Max(0, elo)) : None;
+
+    // Valve's server guidelines forbid showing competitive ranks; CounterStrikeSharp enforces them unless the admin turns
+    // FollowCS2ServerGuidelines off. The rank column is written only when the admin opted in on both sides.
+    public static bool IsAllowed(bool enabled, bool followsServerGuidelines) => enabled && !followsServerGuidelines;
 }
