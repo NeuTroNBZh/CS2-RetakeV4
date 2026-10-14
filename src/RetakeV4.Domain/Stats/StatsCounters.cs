@@ -19,6 +19,14 @@ public static class StatsCounters
         "clutch_defuses", "damage_taken", "bomb_carry_ms",
     };
 
+    // Movement aggregates (4.9-b): sums in milliseconds, samples or centimeters, so that every share is exact.
+    public static IReadOnlyList<string> MovementColumns { get; } = new[]
+    {
+        "alive_ms", "walk_samples", "run_samples", "crouch_samples", "still_samples", "air_samples", "alive_samples",
+        "distance_cm", "afk_ms", "in_smoke_samples", "behind_smoke_samples", "first_contact_ms_sum", "first_contact_rounds",
+        "engage_order_sum", "bait_rounds", "bait_chances",
+    };
+
     public static IReadOnlyList<string> AllColumns { get; } = Columns.Concat(V2Columns).ToArray();
 
     public static long[] For(PlayerRoundStats player, bool ranked)
@@ -57,6 +65,22 @@ public static class StatsCounters
             player.ShotsStill, player.HitsStill, player.ShotsMoving, player.HitsMoving, player.ShotsScoped, player.HitsScoped,
             player.Reloads, player.ReloadsFull, player.Pickups, player.Drops, player.Jumps, player.PlantAttempts, player.PlantAborts,
             player.DefuseAttempts, player.DefuseAborts, B(player.ClutchDefuse), player.DamageTaken, player.BombCarryMs,
+        };
+    }
+
+    // Zeros for a round without movement stats (sampling off, no freeze end, or recorded before 4.9).
+    public static long[] ForMovement(PlayerRoundStats player)
+    {
+        ArgumentNullException.ThrowIfNull(player);
+        if (player.Movement is not { } m)
+        {
+            return new long[MovementColumns.Count];
+        }
+        return new long[]
+        {
+            m.AliveMs, m.WalkSamples, m.RunSamples, m.CrouchSamples, m.StillSamples, m.AirSamples, m.AliveSamples,
+            m.DistanceCm, m.AfkMs, m.InSmokeSamples, m.BehindSmokeSamples, m.FirstContactMs ?? 0, B(m.FirstContactMs is not null),
+            m.EngageOrder ?? 0, B(m.Bait), B(m.BaitChance),
         };
     }
 

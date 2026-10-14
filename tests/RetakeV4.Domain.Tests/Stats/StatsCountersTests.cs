@@ -110,4 +110,34 @@ public class StatsCountersTests
         Assert.Equal(StatsCounters.For(player, true).Concat(StatsCounters.ForV2(player)), StatsCounters.ForAll(player, true));
         Assert.Equal(0, StatsCounters.ForV2(player with { ClutchDefuse = false })[15]);
     }
+
+    [Fact]
+    public void MovementColumns_AreTheSpecAggregates()
+    {
+        Assert.Equal(
+            new[]
+            {
+                "alive_ms", "walk_samples", "run_samples", "crouch_samples", "still_samples", "air_samples", "alive_samples",
+                "distance_cm", "afk_ms", "in_smoke_samples", "behind_smoke_samples", "first_contact_ms_sum", "first_contact_rounds",
+                "engage_order_sum", "bait_rounds", "bait_chances",
+            },
+            StatsCounters.MovementColumns);
+        Assert.Empty(StatsCounters.MovementColumns.Intersect(StatsCounters.Columns.Concat(StatsCounters.V2Columns)));
+    }
+
+    [Fact]
+    public void ForMovement_MapsEveryCounter()
+    {
+        var movement = new MovementRoundStats
+        {
+            AliveMs = 29000, WalkSamples = 2, RunSamples = 3, CrouchSamples = 4, StillSamples = 5, AirSamples = 6, AliveSamples = 20,
+            DistanceUnits = 250, AfkMs = 15000, InSmokeSamples = 7, BehindSmokeSamples = 8, FirstContactMs = 500, EngageOrder = 2,
+            BaitChance = true, Bait = true,
+        };
+        var player = new PlayerRoundStats(1, "a", TeamSide.CT) { Movement = movement };
+        Assert.Equal(new long[] { 29000, 2, 3, 4, 5, 6, 20, 635, 15000, 7, 8, 500, 1, 2, 1, 1 }, StatsCounters.ForMovement(player));
+        var quiet = player with { Movement = movement with { FirstContactMs = null, EngageOrder = null, Bait = false } };
+        Assert.Equal(new long[] { 29000, 2, 3, 4, 5, 6, 20, 635, 15000, 7, 8, 0, 0, 0, 0, 1 }, StatsCounters.ForMovement(quiet));
+        Assert.Equal(new long[16], StatsCounters.ForMovement(new PlayerRoundStats(1, "a", TeamSide.CT)));
+    }
 }

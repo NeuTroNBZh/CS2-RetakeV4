@@ -302,6 +302,7 @@ public static class MovementAnalyzer
     // A teammate killed by an enemy participant closer than BaitDistance to a living player is a chance for that player
     // when they answer (damage or kill on the killer within the window) or when the killer and the player both stay alive
     // for the whole window, inside the round; unanswered, that second case is a bait. Other cases are no chance.
+    // Boundaries: the killer and the player must be alive strictly past the window end, the round may end exactly at it, and an answer exactly at the window end counts.
     private static void ApplyBait(RoundRecord record, MovementRules rules, IReadOnlyDictionary<ulong, TeamSide> sides,
         Dictionary<ulong, List<MovementSample>> samples, IReadOnlyDictionary<ulong, int> deathTimes, int roundEnd,
         Dictionary<ulong, MovementRoundStats> result)
