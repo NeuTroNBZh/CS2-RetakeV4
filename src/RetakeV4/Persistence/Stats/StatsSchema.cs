@@ -1,5 +1,3 @@
-using RetakeV4.Domain.Stats;
-
 namespace RetakeV4.Persistence.Stats;
 
 public static class StatsSchema
@@ -22,6 +20,14 @@ public static class StatsSchema
 
     internal static readonly IReadOnlyList<string> V1WeaponCounters = new[] { "shots", "hits", "headshot_hits", "kills", "headshot_kills", "damage" };
 
+    // Frozen counter columns added to stats_player_totals in 4.9 (StatsCounters.V2Columns).
+    internal static readonly IReadOnlyList<string> V2Counters = new[]
+    {
+        "shots_still", "hits_still", "shots_moving", "hits_moving", "shots_scoped", "hits_scoped",
+        "reloads", "reloads_full", "pickups", "drops", "jumps", "plant_attempts", "plant_aborts", "defuse_attempts", "defuse_aborts",
+        "clutch_defuses", "damage_taken", "bomb_carry_ms",
+    };
+
     public static IReadOnlyDictionary<string, (string Name, string Columns)[]> Indexes { get; } = new Dictionary<string, (string Name, string Columns)[]>
     {
         ["stats_maps"] = [("ix_stats_maps_server", "server_id")],
@@ -34,10 +40,30 @@ public static class StatsSchema
         ["stats_grenades"] = [("ix_stats_grenades_round", "round_id")],
     };
 
+    // Indexes of the tables created in 4.9 (kept apart so that the v1 entries never change).
+    public static IReadOnlyDictionary<string, (string Name, string Columns)[]> V2Indexes { get; } = new Dictionary<string, (string Name, string Columns)[]>
+    {
+        ["stats_player_events"] = [("ix_stats_player_events_round", "round_id"), ("ix_stats_player_events_steam", "steam_id, round_id")],
+        ["stats_presence"] = [("ix_stats_presence_at", "at")],
+        ["stats_server_events"] = [("ix_stats_server_events_at", "at"), ("ix_stats_server_events_type", "type, at")],
+    };
+
     // Append-only: SqlMigrator applies entries by index, so an existing entry is never edited, reordered or removed.
-    public static IReadOnlyList<string> Migrations(StatsDialect d)
+    public static IReadOnlyList<SqlMigration> Migrations(StatsDialect d)
     {
         ArgumentNullException.ThrowIfNull(d);
+        return V1(d).Select(sql => new SqlMigration(sql)).Concat(V2(d)).ToList();
+    }
+
+    // Number of 4.8 entries: a 4.8 database has this version.
+    internal static int V1Count(StatsDialect d)
+    {
+        ArgumentNullException.ThrowIfNull(d);
+        return V1(d).Count;
+    }
+
+    private static List<string> V1(StatsDialect d)
+    {
         var counters = string.Join(", ", V1Counters.Select(c => $"{c} {d.BigInt} NOT NULL DEFAULT 0"));
         var weapons = string.Join(", ", V1WeaponCounters.Select(c => $"{c} {d.BigInt} NOT NULL DEFAULT 0"));
         var migrations = new List<string>
@@ -114,8 +140,47 @@ public static class StatsSchema
         return migrations;
     }
 
+    // 4.9 (Stats v2, sub-project 1). Columns of existing tables are added by replayable ALTERs.
+    private static List<SqlMigration> V2(StatsDialect d)
+    {
+        var counter = $"{d.Int} NOT NULL DEFAULT 0";
+        var migrations = new List<SqlMigration>();
+        migrations.AddRange(V2Counters.Select(c => SqlMigration.AddColumn("stats_player_totals", c, $"{d.BigInt} NOT NULL DEFAULT 0")));
+        migrations.AddRange(new[] { "shots_still", "hits_still", "shots_moving", "hits_moving", "shots_scoped", "hits_scoped", "damage_taken", "bomb_carry_ms" }
+            .Select(c => SqlMigration.AddColumn("stats_round_players", c, counter)));
+        migrations.Add(SqlMigration.AddColumn("stats_round_players", "health_end", $"{d.Int} NULL"));
+        migrations.Add(SqlMigration.AddColumn("stats_round_players", "armor_end", $"{d.Int} NULL"));
+        migrations.Add(SqlMigration.AddColumn("stats_shots", "speed", $"{d.Real} NULL"));
+        migrations.AddRange(new[] { "crouched", "scoped", "airborne", "walking", "still" }
+            .Select(c => SqlMigration.AddColumn("stats_shots", c, $"{d.Bool} NULL")));
+        migrations.Add(SqlMigration.AddColumn("stats_sessions", "seconds_vip", $"{d.BigInt} NOT NULL DEFAULT 0"));
+        migrations.Add(SqlMigration.AddColumn("stats_sessions", "ping_avg", $"{d.Int} NULL"));
+        migrations.Add(SqlMigration.AddColumn("stats_sessions", "ping_max", $"{d.Int} NULL"));
+        migrations.Add(SqlMigration.AddColumn("stats_sessions", "country", $"{d.Text(2)} NULL"));
+        migrations.Add(SqlMigration.AddColumn("stats_players", "country", $"{d.Text(2)} NULL"));
+        migrations.Add(new SqlMigration($"""
+            CREATE TABLE IF NOT EXISTS stats_player_events (id {d.IdPrimaryKey}, round_id {d.BigInt} NOT NULL, steam_id {d.SteamId} NOT NULL,
+                type {d.Text(24)} NOT NULL, time_ms {d.Int} NOT NULL, value {d.Text(32)} NULL,
+                pos_x {d.Real} NULL, pos_y {d.Real} NULL, pos_z {d.Real} NULL{Keys(d, "stats_player_events")}){d.TableOptions}
+            """));
+        migrations.Add(new SqlMigration($"""
+            CREATE TABLE IF NOT EXISTS stats_presence (id {d.IdPrimaryKey}, server_id {d.BigInt} NOT NULL, at {d.DateTime} NOT NULL,
+                humans {d.Int} NOT NULL, bots {d.Int} NOT NULL, queued {d.Int} NOT NULL, map_name {d.Text(64)} NOT NULL{Keys(d, "stats_presence")}){d.TableOptions}
+            """));
+        migrations.Add(new SqlMigration($"""
+            CREATE TABLE IF NOT EXISTS stats_server_events (id {d.IdPrimaryKey}, server_id {d.BigInt} NOT NULL, at {d.DateTime} NOT NULL,
+                type {d.Text(24)} NOT NULL, module {d.Text(64)} NULL, value {d.Text(128)} NULL,
+                occurrences {d.Int} NOT NULL, max_ms {d.Int} NULL{Keys(d, "stats_server_events")}){d.TableOptions}
+            """));
+        if (!d.IsMySql)
+        {
+            migrations.AddRange(V2Indexes.SelectMany(t => t.Value.Select(i => new SqlMigration($"CREATE INDEX IF NOT EXISTS {i.Name} ON {t.Key} ({i.Columns})"))));
+        }
+        return migrations;
+    }
+
     // MySQL declares indexes inline so that CREATE TABLE IF NOT EXISTS stays re-runnable; SQLite uses CREATE INDEX IF NOT EXISTS.
     private static string Keys(StatsDialect d, string table) => d.IsMySql
-        ? string.Concat(Indexes[table].Select(i => $", KEY {i.Name} ({i.Columns})"))
+        ? string.Concat((Indexes.TryGetValue(table, out var v1) ? v1 : V2Indexes[table]).Select(i => $", KEY {i.Name} ({i.Columns})"))
         : string.Empty;
 }
