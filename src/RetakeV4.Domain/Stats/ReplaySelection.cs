@@ -56,7 +56,7 @@ public static class ReplaySelection
     // Aces and won clutches count as highlights from this many enemies.
     public const int HighlightMinOpponents = 3;
 
-    // best keeps the strongest scores (a new one must beat the weakest strictly; ties evict the oldest, then the lowest
+    // best keeps the strongest scores (the claim ranks with the held ones and never wins a tie, so it must beat the weakest kept one strictly; ties evict the oldest, then the lowest
     // round id); highlight and saved keep the newest. Below the cap nothing is evicted; a lowered cap trims its surplus at
     // the next insertion. A round the player already owns for this reason is skipped.
     public static ReplayDecision Decide(long roundId, ReplayClaim claim, IReadOnlyList<ReplayOwnership> held, int cap)
@@ -75,7 +75,9 @@ public static class ReplaySelection
         if (claim.Reason == ReplayReason.Best)
         {
             var weakest = held.OrderBy(h => h.Score).ThenBy(h => h.CreatedAt).ThenBy(h => h.RoundId).ToList();
-            return claim.Score > weakest[0].Score
+            // The claim ranks with the held replays and loses every tie: it must land in the top cap, else nothing is trimmed.
+            var stronger = held.Count(h => h.Score >= claim.Score);
+            return stronger < cap
                 ? new ReplayDecision(true, weakest.Take(surplus).Select(h => h.RoundId).ToList())
                 : ReplayDecision.Skip;
         }

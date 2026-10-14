@@ -79,6 +79,26 @@ public class ReplaySelectionTests
         Assert.Equal(new long[] { 1, 2, 3 }, decision.Evict);
     }
 
+    // Lowered cap: the claim must land in the top cap together with the held replays, otherwise nothing is trimmed.
+    [Fact]
+    public void Decide_LoweredCap_ClaimOutsideTheTop_IsSkipped()
+    {
+        var held = new[] { Held(1, 1.0, 0), Held(2, 2.0, 1), Held(3, 3.0, 2), Held(4, 4.0, 3) };
+
+        Assert.Equal(ReplayDecision.Skip, ReplaySelection.Decide(9, new ReplayClaim(Ct1, ReplayReason.Best, 1.5), held, 2));
+    }
+
+    [Fact]
+    public void Decide_LoweredCap_ClaimInTheTop_EvictsEverythingOutside()
+    {
+        var held = new[] { Held(1, 1.0, 0), Held(2, 2.0, 1), Held(3, 3.0, 2), Held(4, 4.0, 3) };
+
+        var decision = ReplaySelection.Decide(9, new ReplayClaim(Ct1, ReplayReason.Best, 3.5), held, 2);
+
+        Assert.True(decision.Keep);
+        Assert.Equal(new long[] { 1, 2, 3 }, decision.Evict);
+    }
+
     [Theory]
     [InlineData(ReplayReason.Highlight)]
     [InlineData(ReplayReason.Saved)]
