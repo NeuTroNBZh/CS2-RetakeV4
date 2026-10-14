@@ -201,6 +201,7 @@ public sealed class MapVoteModule : IRetakeModule
         Context.Logger.LogInformation("Map vote: next map {Map} with {Votes} vote(s)", map, votes);
         Server.ExecuteCommand($"nextlevel {map}");
         Context.Bus.Publish(new MapVoteStateChanged(false, map));
+        Context.Bus.Publish(new MapVoteClosed(map, votes, vote.Tally()));
     }
 
     private static void CloseMenus(ModuleContext context)

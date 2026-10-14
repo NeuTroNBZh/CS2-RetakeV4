@@ -71,7 +71,12 @@ public sealed class ModuleHooks
 
     public void Command(string name, string description, Action<CCSPlayerController?, CommandInfo> handler)
     {
-        CommandInfo.CommandCallback wrapper = (player, info) => _guard.Run(_module, $"cmd:{name}", () => handler(player, info));
+        CommandInfo.CommandCallback wrapper = (player, info) =>
+        {
+            // Usage stats: the command name only, never its arguments. The bus isolates subscriber failures.
+            _bus.Publish(new PluginCommandUsed(_module, name));
+            _guard.Run(_module, $"cmd:{name}", () => handler(player, info));
+        };
         _plugin.AddCommand(name, description, wrapper);
         _registrations.Track(() => _plugin.RemoveCommand(name, wrapper));
     }
