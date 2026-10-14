@@ -378,6 +378,21 @@ public sealed class StatsSchemaTests : IDisposable
         Assert.Equal(expected, Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(sql))));
     }
 
+    // Golden SHA-256 of the 4.9-c entries (sub-project 4), built from StatsSchema.SpecialKillCounters and the frozen
+    // StatsViewsV2.Catalog* and StatsDerivedViews definitions: a later change to one of these views is a new step and
+    // must leave these entries untouched.
+    [Theory]
+    [InlineData("mysql", 28, "95c8ae9393a809db1f7a72914684b133890618d16cde3861c1e3cd9015cb67d6")]
+    [InlineData("sqlite", 28, "742066f096cf5a2a9566ccaee92d5544c84343ee0a4d3468994cceb24a1490b7")]
+    public void V2CatalogEntries_MatchTheSnapshot(string dialect, int count, string expected)
+    {
+        var d = dialect == "mysql" ? StatsDialect.MySql : StatsDialect.Sqlite;
+        var entries = StatsSchema.Migrations(d).Skip(StatsSchema.V2MovementCount(d)).Take(StatsSchema.V2CatalogCount(d) - StatsSchema.V2MovementCount(d)).ToList();
+        Assert.Equal(count, entries.Count);
+        var sql = string.Join("\n-- next --\n", entries.Select(m => m.Sql.ReplaceLineEndings("\n")));
+        Assert.Equal(expected, Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(sql))));
+    }
+
     // Every NOT NULL column of the v1 stats_round_players, zeros except survived, won, kast, rating and ELO.
     private static Task InsertRoundPlayer(DbConnection connection, long roundId, long steamId, string side) => Execute(connection, $"""
         INSERT INTO stats_round_players (round_id, steam_id, side, survived, won, kills, deaths, assists, flash_assists, team_kills,

@@ -28,7 +28,7 @@ public class RoundAnalyzerSpecialKillsTests
             r.Add(Special(T3, Ct3, 500, blind: true, air: true));
             r.Add(Special(Ct1, T1, 1000, noScope: true));
             r.Add(Every(Ct2, T1, 1100));                      // duplicated death event of T1: ignored
-            r.Add(Special(Ct1, T2, 2000, penetrated: 3));     // three walls: one wallbang kill
+            r.Add(Special(Ct1, T2, 2000, penetrated: 1));     // a single wall is enough: one wallbang kill
             r.Add(Special(Ct2, T3, 3000, smoke: true));
         }));
         Assert.Equal(2, Of(s, Ct1).Kills);

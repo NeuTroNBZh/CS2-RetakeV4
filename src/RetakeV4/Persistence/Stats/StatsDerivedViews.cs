@@ -4,6 +4,9 @@ namespace RetakeV4.Persistence.Stats;
 // from the raw views. Portable SQL only (MySQL 8, MariaDB 11.4, SQLite): sub-queries in FROM, no CTE, no window
 // function, every non-aggregated column in GROUP BY (ONLY_FULL_GROUP_BY); integer sums through IntCast (MySQL's SUM is
 // DECIMAL, a string for most drivers), ratios through FloatCast + NULLIF. Bots are never actors.
+// Frozen: StatsSchemaTests.V2CatalogEntries_MatchTheSnapshot pins the 4.9-c SQL built from these definitions. A later
+// change to one of these views is a new definition swapped into StatsViewsV2.BuildViews and a new migration step
+// (DROP VIEW + CREATE VIEW), never an edit here.
 internal static class StatsDerivedViews
 {
     // In the order the 4.9-c step creates them (StatsViewsV2.CatalogViews).

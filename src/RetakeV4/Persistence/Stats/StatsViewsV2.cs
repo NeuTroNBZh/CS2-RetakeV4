@@ -122,8 +122,9 @@ public static class StatsViewsV2
         return BuildMovement(d).Select(v => replaced.GetValueOrDefault(v.Name, v)).Concat(StatsDerivedViews.Build(d)).ToArray();
     }
 
-    // CatalogPlayers, CatalogScopes and CatalogRoundPlayers are the 4.9-c definitions (read by BuildCatalog): the 4.9-b
-    // ones plus the special kill counters and their shares of the kills.
+    // CatalogPlayers, CatalogScopes and CatalogRoundPlayers are the frozen 4.9-c definitions (read by BuildCatalog): the
+    // 4.9-b ones plus the special kill counters and their shares of the kills. StatsSchemaTests.V2CatalogEntries_MatchTheSnapshot
+    // pins their SQL: a later change is a new definition swapped into BuildViews and a new migration step.
 
     private static StatsView CatalogPlayers(StatsDialect d) => new("v2_stats_players", $"""
         SELECT p.steam_id, p.name, p.country, p.first_seen, p.last_seen, p.elo,
