@@ -49,7 +49,7 @@ public sealed class StatsModule : IRetakeModule
     private bool _scoreboardElo;
 
     // Worst costs seen on the current map, logged at the next map start (in-game check of the 2 ms budget).
-    private double _sampleMaxMs;
+    private double _pollMaxMs;
     private double _analysisMaxMs;
 
     public string Name => "Stats";
@@ -246,13 +246,13 @@ public sealed class StatsModule : IRetakeModule
 
     private void ReportTimings()
     {
-        if (_sampleMaxMs > 0 || _analysisMaxMs > 0)
+        if (_pollMaxMs > 0 || _analysisMaxMs > 0)
         {
             Context.Logger.LogInformation(
-                "Stats: on the previous map, a sampling tick took at most {SampleMs:F2} ms and a round analysis {AnalysisMs:F2} ms",
-                _sampleMaxMs, _analysisMaxMs);
+                "Stats: on the previous map, a poll tick took at most {PollMs:F2} ms and a round analysis {AnalysisMs:F2} ms",
+                _pollMaxMs, _analysisMaxMs);
         }
-        _sampleMaxMs = 0;
+        _pollMaxMs = 0;
         _analysisMaxMs = 0;
     }
 
@@ -722,7 +722,7 @@ public sealed class StatsModule : IRetakeModule
         }
         if (sampling)
         {
-            _sampleMaxMs = Math.Max(_sampleMaxMs, Stopwatch.GetElapsedTime(started).TotalMilliseconds);
+            _pollMaxMs = Math.Max(_pollMaxMs, Stopwatch.GetElapsedTime(started).TotalMilliseconds);
         }
     }
 
