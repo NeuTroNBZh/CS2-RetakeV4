@@ -5,7 +5,7 @@ The `Stats` module records every Retake round: shots, damage, kills, grenades, b
 ## Setup
 
 1. In `stats.json` set `Database.Type` to `MySql`, with the same connection string and `ServerKey` as `allocation.json` (`RetakeV4.ConfigCheck` reports a mismatch).
-2. Start the server once: tables and views are created automatically (the MySQL user needs `CREATE`, `CREATE VIEW`, `INDEX`, `INSERT`, `UPDATE`, `DELETE`, `SELECT`). Migrations are idempotent: tables, indexes and views can be re-applied safely, and several servers can start together on one database.
+2. Start the server once: tables and views are created automatically (the MySQL user needs `CREATE`, `CREATE VIEW`, `ALTER`, `DROP`, `INDEX`, `INSERT`, `UPDATE`, `DELETE`, `SELECT`: `ALTER` adds the columns of later versions to existing tables, `DROP` only replaces changed views with `DROP VIEW IF EXISTS`). Migrations are idempotent: tables, indexes and views can be re-applied safely, and several servers can start together on one database.
    The views are created with the default `SQL SECURITY DEFINER`, which is what lets a read-only user granted only on the views read them. The user that runs the plugin must therefore keep `CREATE VIEW` and must not be dropped or renamed later.
 3. For an external website, create a read-only user limited to the views:
 
@@ -24,6 +24,17 @@ GRANT SELECT ON retakev4.v_stats_damages TO 'stats_reader'@'%';
 GRANT SELECT ON retakev4.v_stats_grenades TO 'stats_reader'@'%';
 GRANT SELECT ON retakev4.v_stats_sessions TO 'stats_reader'@'%';
 GRANT SELECT ON retakev4.v_stats_elo_history TO 'stats_reader'@'%';
+-- v2 views (contract/stats/views.v2.json)
+GRANT SELECT ON retakev4.v2_stats_players TO 'stats_reader'@'%';
+GRANT SELECT ON retakev4.v2_stats_player_scopes TO 'stats_reader'@'%';
+GRANT SELECT ON retakev4.v2_stats_round_players TO 'stats_reader'@'%';
+GRANT SELECT ON retakev4.v2_stats_shots TO 'stats_reader'@'%';
+GRANT SELECT ON retakev4.v2_stats_sessions TO 'stats_reader'@'%';
+GRANT SELECT ON retakev4.v_stats_player_events TO 'stats_reader'@'%';
+GRANT SELECT ON retakev4.v_stats_player_network TO 'stats_reader'@'%';
+GRANT SELECT ON retakev4.v_stats_server_health TO 'stats_reader'@'%';
+GRANT SELECT ON retakev4.v_stats_presence TO 'stats_reader'@'%';
+GRANT SELECT ON retakev4.v_stats_player_behaviour TO 'stats_reader'@'%';
 ```
 
 SQLite works too (same tables and views, file `plugins/RetakeV4/data/retakev4.db`), but only the game server can read it.
@@ -166,6 +177,7 @@ Movement is sampled in memory every `SampleEveryTicks` ticks (8 = 8 samples per 
 - **Smokes**: a cloud is a sphere of `SmokeRadius` (72 u) around the detonation point, active until `smokegrenade_expired` or 18 s, whichever comes first. **in_smoke**: the eyes (64 u above the feet, 46 u crouched) are inside a cloud. **behind_smoke**: not in a cloud, and the line from the eyes to the eyes of the nearest living enemy crosses one. The server knows no map geometry: "behind a smoke" means a smoke is on the line to the nearest enemy, wall or not. Bots are never sampled, so against bots `behind_smoke` stays 0.
 - **first_contact_ms**: from the freeze end to the player's first bullet shot (grenades, knives, Zeus excluded), or first damage dealt to or taken from an enemy human. **engage_order**: rank of that time within the side (1 = first; ties share the rank).
 - **Bait**: a teammate is killed by an enemy human closer than `BaitDistance` (394 u, about 10 m) to the living player. It is a bait chance when the player answers (damage or kill on the killer within `BaitWindowSeconds`, 5 s) or when the killer and the player both stay alive for the whole window, inside the round; unanswered, that second case is a bait. `bait_chances` and `bait_rounds` count rounds.
+- **Rounds without movement data** (no freeze end seen, `SampleEveryTicks` = 0, player never sampled, rounds before 4.9) add 0 to every movement counter while `rounds` still counts them. The movement ratios therefore divide by `alive_ms` or `alive_samples`, never by `rounds`. A site computing a per-round average of a movement counter must divide by the rounds with data, not by `rounds`: average the round-level columns of `v2_stats_round_players` where `alive_ms IS NOT NULL`.
 - **Timing**: the module logs once per map (at the map change) the longest poll tick (the whole per-tick input poll: jumps, ELO, movement sampling) and the longest round analysis ("Stats: on the previous map, a poll tick took at most ... ms"); a poll tick should stay under 2 ms.
 
 New `stats.json` keys: `PresenceSnapshotSeconds` (60, 0 = off), `PingSampleSeconds` (30, 0 = off), `LongFrameMs` (50), `GeoDatabaseFile` (`geo/dbip-country-lite.mmdb`), `TrackServerHealth` (true), `TrackUsage` (true), `SampleEveryTicks` (8, 0 = no movement stats), `SmokeRadius` (72), `BaitDistance` (394), `BaitWindowSeconds` (5), `AfkSeconds` (15).
