@@ -1,10 +1,14 @@
 using System.Data.Common;
+using System.Globalization;
 using System.Text.RegularExpressions;
+using MySqlConnector;
 
 namespace RetakeV4.Persistence;
 
 public static partial class SqlMigrator
 {
+    private const int LockTimeoutSeconds = 60;
+
     [GeneratedRegex(@"^[a-z_]{1,64}\z")]
     private static partial Regex SafeTableName();
 
@@ -14,6 +18,24 @@ public static partial class SqlMigrator
         {
             throw new ArgumentException("Version table must be lowercase letters and underscores", nameof(versionTable));
         }
+        // MySQL commits DDL implicitly, so the transaction below cannot keep two servers that start together from
+        // writing the same version row: a named lock serializes migrators of the same database.
+        var locked = connection is MySqlConnection && await AcquireLockAsync(connection, versionTable, ct).ConfigureAwait(false);
+        try
+        {
+            return await ApplyLockedAsync(connection, migrations, versionTable, ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            if (locked)
+            {
+                await ReleaseLockAsync(connection, versionTable).ConfigureAwait(false);
+            }
+        }
+    }
+
+    private static async Task<int> ApplyLockedAsync(DbConnection connection, IReadOnlyList<string> migrations, string versionTable, CancellationToken ct)
+    {
         await ExecuteAsync(connection, null, $"CREATE TABLE IF NOT EXISTS {versionTable} (version INTEGER NOT NULL PRIMARY KEY)", ct).ConfigureAwait(false);
         var current = await CurrentVersionAsync(connection, versionTable, ct).ConfigureAwait(false);
         for (var index = current; index < migrations.Count; index++)
@@ -32,6 +54,39 @@ public static partial class SqlMigrator
             await transaction.CommitAsync(ct).ConfigureAwait(false);
         }
         return migrations.Count;
+    }
+
+    // Named locks are server-wide: the name is derived from the database and the version table (max 64 characters).
+    private const string LockName = "LEFT(SHA2(CONCAT('retakev4/', DATABASE(), '/', @table), 256), 60)";
+
+    private static async Task<bool> AcquireLockAsync(DbConnection connection, string versionTable, CancellationToken ct)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = $"SELECT GET_LOCK({LockName}, @timeout)";
+        AddParameter(command, "@table", versionTable);
+        AddParameter(command, "@timeout", LockTimeoutSeconds);
+        var result = await command.ExecuteScalarAsync(ct).ConfigureAwait(false);
+        if (result is null or DBNull || Convert.ToInt32(result, CultureInfo.InvariantCulture) != 1)
+        {
+            throw new TimeoutException($"Could not take the migration lock for {versionTable} within {LockTimeoutSeconds} s");
+        }
+        return true;
+    }
+
+    private static async Task ReleaseLockAsync(DbConnection connection, string versionTable)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = $"SELECT RELEASE_LOCK({LockName})";
+        AddParameter(command, "@table", versionTable);
+        await command.ExecuteScalarAsync(CancellationToken.None).ConfigureAwait(false);
+    }
+
+    private static void AddParameter(DbCommand command, string name, object value)
+    {
+        var parameter = command.CreateParameter();
+        parameter.ParameterName = name;
+        parameter.Value = value;
+        command.Parameters.Add(parameter);
     }
 
     private static async Task<int> CurrentVersionAsync(DbConnection connection, string versionTable, CancellationToken ct)
