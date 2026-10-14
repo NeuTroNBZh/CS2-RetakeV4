@@ -348,4 +348,32 @@ public sealed class SqliteStatsRepositoryTests : IDisposable
         Assert.Equal(1L, await Scalar("SELECT COUNT(*) FROM stats_servers WHERE name = 'eu-3'"));
         Assert.Equal("2026-10-13 20:00:00.000", await Scalar("SELECT last_seen FROM stats_servers"));
     }
+
+    [Fact]
+    public async Task WriteRound_Movement_FillsTheRoundColumnsAggregatesAndBehaviour()
+    {
+        var repository = await Repository();
+        var mapId = await repository.OpenMapAsync("de_mirage", Now, CancellationToken.None);
+        await repository.WriteRoundAsync(mapId, RoundMovement(Now, Ct, CtMate, T), CancellationToken.None);
+        Assert.Equal(29000L, await Scalar($"SELECT alive_ms FROM v2_stats_round_players WHERE steam_id = {Ct}"));
+        Assert.Equal(100.0, await Scalar($"SELECT run_pct FROM v2_stats_round_players WHERE steam_id = {Ct}"));
+        Assert.Equal(0.0, await Scalar($"SELECT in_smoke_pct FROM v2_stats_round_players WHERE steam_id = {Ct}"));
+        Assert.Equal(6.35, await Scalar($"SELECT distance_m FROM v2_stats_round_players WHERE steam_id = {Ct}"));
+        Assert.Equal(0L, await Scalar($"SELECT afk_ms FROM v2_stats_round_players WHERE steam_id = {Ct}"));
+        Assert.Equal(500L, await Scalar($"SELECT first_contact_ms FROM v2_stats_round_players WHERE steam_id = {Ct}"));
+        Assert.Equal(1L, await Scalar($"SELECT engage_order FROM v2_stats_round_players WHERE steam_id = {Ct}"));
+        Assert.Null(await Scalar($"SELECT bait FROM v2_stats_round_players WHERE steam_id = {Ct}"));
+        Assert.Equal(100.0, await Scalar($"SELECT still_pct FROM v2_stats_round_players WHERE steam_id = {CtMate}"));
+        Assert.Equal(2L, await Scalar($"SELECT engage_order FROM v2_stats_round_players WHERE steam_id = {CtMate}"));
+        Assert.Null(await Scalar($"SELECT first_contact_ms FROM v2_stats_round_players WHERE steam_id = {T}"));
+        Assert.Equal(3L, await Scalar($"SELECT alive_samples FROM v2_stats_players WHERE steam_id = {Ct}"));
+        Assert.Equal(635L, await Scalar($"SELECT distance_cm FROM v2_stats_players WHERE steam_id = {Ct}"));
+        Assert.Equal(100.0, await Scalar($"SELECT run_pct FROM v2_stats_players WHERE steam_id = {Ct}"));
+        Assert.Equal(13.138, await Scalar($"SELECT distance_m_per_min FROM v2_stats_players WHERE steam_id = {Ct}"));
+        Assert.Equal(500.0, await Scalar($"SELECT avg_first_contact_ms FROM v2_stats_players WHERE steam_id = {Ct}"));
+        Assert.Equal(1L, await Scalar($"SELECT first_contact_rounds FROM v2_stats_player_scopes WHERE steam_id = {Ct} AND scope = 'site:A'"));
+        Assert.Equal(0.5, await Scalar($"SELECT slowness_index FROM v_stats_player_behaviour WHERE steam_id = {Ct}"));
+        Assert.Equal(2.0, await Scalar($"SELECT slowness_index FROM v_stats_player_behaviour WHERE steam_id = {CtMate}"));
+        Assert.Null(await Scalar($"SELECT slowness_index FROM v_stats_player_behaviour WHERE steam_id = {T}"));
+    }
 }

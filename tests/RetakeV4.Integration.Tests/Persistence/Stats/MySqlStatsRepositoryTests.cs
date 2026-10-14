@@ -78,4 +78,36 @@ public class MySqlStatsRepositoryTests
         command.Parameters.AddWithValue("@name", key);
         return Convert.ToDateTime(await command.ExecuteScalarAsync(), System.Globalization.CultureInfo.InvariantCulture);
     }
+
+    [Fact]
+    public async Task Movement_RoundTrip_WhenAMySqlServerIsConfigured()
+    {
+        if (string.IsNullOrWhiteSpace(ConnectionString))
+        {
+            return;
+        }
+        var repository = StatsRepositories.MySql(ConnectionString, new StatsWriteOptions($"test-{Guid.NewGuid():N}"[..20], 1000, 100));
+        await repository.InitializeAsync(CancellationToken.None);
+        // Fresh ids: the shared test database keeps the totals of earlier runs.
+        var ids = Enumerable.Range(0, 3).Select(_ => 76561190000000000UL + (ulong)Random.Shared.NextInt64(1, 9_000_000_000)).ToArray();
+        var now = DateTimeOffset.UtcNow;
+        var mapId = await repository.OpenMapAsync("de_mirage", now, CancellationToken.None);
+        await repository.WriteRoundAsync(mapId, RoundMovement(now, ids[0], ids[1], ids[2]), CancellationToken.None);
+        await using var connection = new MySqlConnection(ConnectionString);
+        await connection.OpenAsync();
+        async Task<object?> Scalar(string sql)
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = sql;
+            var value = await command.ExecuteScalarAsync();
+            return value is DBNull ? null : value;
+        }
+        Assert.Equal(6.35, Convert.ToDouble(await Scalar($"SELECT distance_m FROM v2_stats_round_players WHERE steam_id = {ids[0]}"), System.Globalization.CultureInfo.InvariantCulture));
+        Assert.Equal(1L, Convert.ToInt64(await Scalar($"SELECT engage_order FROM v2_stats_round_players WHERE steam_id = {ids[0]}"), System.Globalization.CultureInfo.InvariantCulture));
+        Assert.Null(await Scalar($"SELECT bait FROM v2_stats_round_players WHERE steam_id = {ids[0]}"));
+        Assert.Equal(100.0, Convert.ToDouble(await Scalar($"SELECT run_pct FROM v2_stats_players WHERE steam_id = {ids[0]}"), System.Globalization.CultureInfo.InvariantCulture));
+        Assert.Equal(0.5, Convert.ToDouble(await Scalar($"SELECT slowness_index FROM v_stats_player_behaviour WHERE steam_id = {ids[0]}"), System.Globalization.CultureInfo.InvariantCulture));
+        Assert.Equal(2.0, Convert.ToDouble(await Scalar($"SELECT slowness_index FROM v_stats_player_behaviour WHERE steam_id = {ids[1]}"), System.Globalization.CultureInfo.InvariantCulture));
+        Assert.Null(await Scalar($"SELECT slowness_index FROM v_stats_player_behaviour WHERE steam_id = {ids[2]}"));
+    }
 }

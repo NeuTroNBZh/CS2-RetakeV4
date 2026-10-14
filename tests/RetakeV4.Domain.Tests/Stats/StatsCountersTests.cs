@@ -92,9 +92,9 @@ public class StatsCountersTests
                 "clutch_defuses", "damage_taken", "bomb_carry_ms",
             },
             StatsCounters.V2Columns);
-        Assert.Equal(StatsCounters.Columns.Concat(StatsCounters.V2Columns), StatsCounters.AllColumns);
+        Assert.Equal(StatsCounters.Columns.Concat(StatsCounters.V2Columns).Concat(StatsCounters.MovementColumns), StatsCounters.AllColumns);
         Assert.Equal(StatsCounters.AllColumns.Count, StatsCounters.AllColumns.Distinct().Count());
-        Assert.Equal(60, StatsCounters.ForAll(new PlayerRoundStats(1, "a", TeamSide.CT), false).Length);
+        Assert.Equal(76, StatsCounters.ForAll(new PlayerRoundStats(1, "a", TeamSide.CT), false).Length);
     }
 
     [Fact]
@@ -107,7 +107,9 @@ public class StatsCountersTests
             DefuseAttempts = 34, DefuseAborts = 35, ClutchDefuse = true, DamageTaken = 37, BombCarryMs = 38,
         };
         Assert.Equal(new long[] { 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 1, 37, 38 }, StatsCounters.ForV2(player));
-        Assert.Equal(StatsCounters.For(player, true).Concat(StatsCounters.ForV2(player)), StatsCounters.ForAll(player, true));
+        Assert.Equal(
+            StatsCounters.For(player, true).Concat(StatsCounters.ForV2(player)).Concat(StatsCounters.ForMovement(player)),
+            StatsCounters.ForAll(player, true));
         Assert.Equal(0, StatsCounters.ForV2(player with { ClutchDefuse = false })[15]);
     }
 

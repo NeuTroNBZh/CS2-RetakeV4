@@ -3,7 +3,7 @@ using RetakeV4.Domain.Common;
 namespace RetakeV4.Domain.Stats;
 
 // Additive counters stored per (player, scope). Columns are the v1 counters, frozen with views.v1.json and
-// StatsSchema.V1Counters; V2Columns were added in 4.9 by ALTER migrations (StatsSchema.V2Counters) and appear in the v2
+// StatsSchema.V1Counters; V2Columns (4.9-a) and MovementColumns (4.9-b) were added by ALTER migrations (StatsSchema.V2Counters, StatsSchema.MovementCounters) and appear in the v2
 // views only. The order of each list is the order of the values returned by For / ForV2 and of the view columns.
 // A new counter needs a new list, an ALTER migration appended to StatsSchema.Migrations and a new contract version.
 public static class StatsCounters
@@ -27,7 +27,7 @@ public static class StatsCounters
         "engage_order_sum", "bait_rounds", "bait_chances",
     };
 
-    public static IReadOnlyList<string> AllColumns { get; } = Columns.Concat(V2Columns).ToArray();
+    public static IReadOnlyList<string> AllColumns { get; } = Columns.Concat(V2Columns).Concat(MovementColumns).ToArray();
 
     public static long[] For(PlayerRoundStats player, bool ranked)
     {
@@ -84,7 +84,8 @@ public static class StatsCounters
         };
     }
 
-    public static long[] ForAll(PlayerRoundStats player, bool ranked) => For(player, ranked).Concat(ForV2(player)).ToArray();
+    public static long[] ForAll(PlayerRoundStats player, bool ranked) =>
+        For(player, ranked).Concat(ForV2(player)).Concat(ForMovement(player)).ToArray();
 
     public static long[] ForWeapon(WeaponRoundStats weapon)
     {

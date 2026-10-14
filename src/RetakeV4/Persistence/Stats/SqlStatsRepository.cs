@@ -36,6 +36,8 @@ public sealed class SqlStatsRepository : IStatsRepository
         "planted", "defused", "defused_with_kit", "rating", "elo_before", "elo_after",
         "shots_still", "hits_still", "shots_moving", "hits_moving", "shots_scoped", "hits_scoped", "damage_taken", "bomb_carry_ms",
         "health_end", "armor_end",
+        "alive_ms", "walk_pct", "run_pct", "crouch_pct", "still_pct", "air_pct", "distance_m", "afk_ms", "in_smoke_pct",
+        "behind_smoke_pct", "first_contact_ms", "engage_order", "bait",
     };
 
     private static readonly string[] ShotColumns =
@@ -383,14 +385,21 @@ public sealed class SqlStatsRepository : IStatsRepository
         };
     }
 
-    private object?[] RoundPlayerValues(long roundId, PlayerRoundStats p) => new object?[]
+    // Movement columns stay NULL without movement stats (sampling off, no freeze end).
+    private object?[] RoundPlayerValues(long roundId, PlayerRoundStats p)
     {
-        roundId, _dialect.SteamParam(p.SteamId), p.Side.ToString(), Clip(p.PrimaryWeapon, NameLength), B(p.Survived), B(p.Won), p.Kills, p.Deaths, p.Assists,
-        p.FlashAssists, p.TeamKills, p.Damage, p.UtilityDamage, p.HeadshotKills, p.Shots, p.Hits, p.HeadshotHits, B(p.EntryKill),
-        B(p.EntryDeath), p.TradeKills, B(p.TradedDeath), B(p.Kast), p.ClutchVs, B(p.ClutchWon), p.EnemiesFlashed, p.TeammatesFlashed,
-        p.BlindSecondsInflicted, B(p.Mvp), B(p.Planted), B(p.Defused), B(p.Defused && p.DefusedWithKit), p.Rating, p.EloBefore, p.EloAfter,
-        p.ShotsStill, p.HitsStill, p.ShotsMoving, p.HitsMoving, p.ShotsScoped, p.HitsScoped, p.DamageTaken, p.BombCarryMs, p.HealthEnd, p.ArmorEnd,
-    };
+        var m = p.Movement;
+        return new object?[]
+        {
+            roundId, _dialect.SteamParam(p.SteamId), p.Side.ToString(), Clip(p.PrimaryWeapon, NameLength), B(p.Survived), B(p.Won), p.Kills, p.Deaths, p.Assists,
+            p.FlashAssists, p.TeamKills, p.Damage, p.UtilityDamage, p.HeadshotKills, p.Shots, p.Hits, p.HeadshotHits, B(p.EntryKill),
+            B(p.EntryDeath), p.TradeKills, B(p.TradedDeath), B(p.Kast), p.ClutchVs, B(p.ClutchWon), p.EnemiesFlashed, p.TeammatesFlashed,
+            p.BlindSecondsInflicted, B(p.Mvp), B(p.Planted), B(p.Defused), B(p.Defused && p.DefusedWithKit), p.Rating, p.EloBefore, p.EloAfter,
+            p.ShotsStill, p.HitsStill, p.ShotsMoving, p.HitsMoving, p.ShotsScoped, p.HitsScoped, p.DamageTaken, p.BombCarryMs, p.HealthEnd, p.ArmorEnd,
+            m?.AliveMs, m?.WalkPct, m?.RunPct, m?.CrouchPct, m?.StillPct, m?.AirPct, m?.DistanceMeters, m?.AfkMs,
+            m?.InSmokePct, m?.BehindSmokePct, m?.FirstContactMs, m?.EngageOrder, B(m?.BaitFlag),
+        };
+    }
 
     private Task UpsertPlayerAsync(DbConnection connection, DbTransaction transaction, ulong steamId, string name, DateTimeOffset at, CancellationToken ct) =>
         ExecuteAsync(connection, transaction,

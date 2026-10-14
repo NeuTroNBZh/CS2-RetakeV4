@@ -28,6 +28,21 @@ public static class StatsSchema
         "clutch_defuses", "damage_taken", "bomb_carry_ms",
     };
 
+    // Frozen counter columns added to stats_player_totals by the 4.9-b step (StatsCounters.MovementColumns).
+    internal static readonly IReadOnlyList<string> MovementCounters = new[]
+    {
+        "alive_ms", "walk_samples", "run_samples", "crouch_samples", "still_samples", "air_samples", "alive_samples",
+        "distance_cm", "afk_ms", "in_smoke_samples", "behind_smoke_samples", "first_contact_ms_sum", "first_contact_rounds",
+        "engage_order_sum", "bait_rounds", "bait_chances",
+    };
+
+    // Frozen per-round movement columns added to stats_round_players by the 4.9-b step, in order.
+    internal static readonly IReadOnlyList<string> MovementRoundColumns = new[]
+    {
+        "alive_ms", "walk_pct", "run_pct", "crouch_pct", "still_pct", "air_pct", "distance_m", "afk_ms", "in_smoke_pct",
+        "behind_smoke_pct", "first_contact_ms", "engage_order", "bait",
+    };
+
     public static IReadOnlyDictionary<string, (string Name, string Columns)[]> Indexes { get; } = new Dictionary<string, (string Name, string Columns)[]>
     {
         ["stats_maps"] = [("ix_stats_maps_server", "server_id")],
@@ -52,7 +67,7 @@ public static class StatsSchema
     public static IReadOnlyList<SqlMigration> Migrations(StatsDialect d)
     {
         ArgumentNullException.ThrowIfNull(d);
-        return V1(d).Select(sql => new SqlMigration(sql)).Concat(V2(d)).ToList();
+        return V1(d).Select(sql => new SqlMigration(sql)).Concat(V2(d)).Concat(V2Movement(d)).ToList();
     }
 
     // Number of 4.8 entries: a 4.8 database has this version.
@@ -186,6 +201,29 @@ public static class StatsSchema
         migrations.AddRange(StatsViewsV2.Events(d).Select(v => new SqlMigration($"{d.CreateView} {v.Name} AS {v.Select}")));
         return migrations;
     }
+
+    // 4.9-b (Stats v2, sub-project 2): movement columns, then the v2 views that show them. SQLite's CREATE VIEW IF NOT
+    // EXISTS never replaces a view, so each changed view is dropped first (MySQL's CREATE OR REPLACE would do; DROP keeps
+    // the dialects alike and the step replayable). A later change to these views is a new step, with these definitions
+    // frozen the way StatsViewsV2.Events froze 4.9-a.
+    private static List<SqlMigration> V2Movement(StatsDialect d)
+    {
+        var migrations = MovementCounters.Select(c => SqlMigration.AddColumn("stats_player_totals", c, $"{d.BigInt} NOT NULL DEFAULT 0")).ToList();
+        migrations.AddRange(MovementRoundColumns.Select(c => SqlMigration.AddColumn("stats_round_players", c, MovementRoundType(d, c))));
+        foreach (var view in StatsViewsV2.For(d).Where(v => StatsViewsV2.MovementViews.Contains(v.Name)))
+        {
+            migrations.Add(new SqlMigration($"DROP VIEW IF EXISTS {view.Name}"));
+            migrations.Add(new SqlMigration($"{d.CreateView} {view.Name} AS {view.Select}"));
+        }
+        return migrations;
+    }
+
+    private static string MovementRoundType(StatsDialect d, string column) => column switch
+    {
+        "alive_ms" or "afk_ms" or "first_contact_ms" or "engage_order" => $"{d.Int} NULL",
+        "bait" => $"{d.Bool} NULL",
+        _ => $"{d.Real} NULL",
+    };
 
     // MySQL declares indexes inline so that CREATE TABLE IF NOT EXISTS stays re-runnable; SQLite uses CREATE INDEX IF NOT EXISTS.
     private static string Keys(StatsDialect d, string table) => d.IsMySql

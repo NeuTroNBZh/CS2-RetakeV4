@@ -8,8 +8,11 @@ internal static class StatsSamples
 {
     public const ulong Ct = 76561198000000001UL;
     public const ulong T = 76561198000000002UL;
+    public const ulong CtMate = 76561198000000003UL;
 
     public static StatsRules Rules { get; } = new(5.0, 1, 1000, new RatingWeights(0.30, 0.35, 0.20, 0.004, 0.15, 0.20), new EloRules(1000, 100, 24, 50));
+
+    public static StatsRules MovementOn { get; } = Rules with { Movement = new MovementRules(72f, 394f, 5.0, 15.0) };
 
     // CT kills T with a headshot on site A after one shot; T planted and threw a flash.
     public static RoundSummary Round(DateTimeOffset startedAt, string ctName = "ct", bool ranked = true, int ctElo = 1000, string weapon = "m4a1")
@@ -51,5 +54,30 @@ internal static class StatsSamples
         recorder.Add(new BombDefusedFact(Ct, true, 5000) { RemainingMs = 600 });
         recorder.Add(new PlayerEndState(Ct, 87, 50));
         return RoundScoring.Process(recorder.Close(new RoundOutcome(TeamSide.CT, 7, 30000))!, Rules);
+    }
+
+    // Freeze ends at 1 s; three samples 0.5 s apart. ctA runs 250 u east and shoots at 1.5 s; ctB stands still and shoots
+    // at 2 s; t stands still and never fights. Nobody dies; the round lasts 30 s.
+    public static RoundSummary RoundMovement(DateTimeOffset startedAt, ulong ctA, ulong ctB, ulong t)
+    {
+        var participants = new[]
+        {
+            new RoundParticipant(ctA, "cta", TeamSide.CT, 1000, "m4a1"),
+            new RoundParticipant(ctB, "ctb", TeamSide.CT, 1000, "m4a1"),
+            new RoundParticipant(t, "t", TeamSide.T, 1000, "ak47"),
+        };
+        var recorder = new RoundRecorder(1000, 1);
+        recorder.Open(new RoundContext("de_mirage", 5, BombSite.A, "FullBuy", startedAt, participants));
+        recorder.MarkFreezeEnd(1000);
+        for (var i = 0; i < 3; i++)
+        {
+            var time = 1000 + (i * 500);
+            recorder.Add(new MovementSample(ctA, time, new Vec3(i * 125, 0, 0), 250f, 0f, 0f, MovementFlags.None, 100));
+            recorder.Add(new MovementSample(ctB, time, new Vec3(500, 0, 0), 0f, 0f, 0f, MovementFlags.None, 100));
+            recorder.Add(new MovementSample(t, time, new Vec3(3000, 0, 0), 0f, 180f, 0f, MovementFlags.None, 100));
+        }
+        recorder.Add(new ShotFired(ctA, "m4a1", 1500, 96, null, null));
+        recorder.Add(new ShotFired(ctB, "m4a1", 2000, 128, null, null));
+        return RoundScoring.Process(recorder.Close(new RoundOutcome(TeamSide.CT, 9, 30000))!, MovementOn);
     }
 }

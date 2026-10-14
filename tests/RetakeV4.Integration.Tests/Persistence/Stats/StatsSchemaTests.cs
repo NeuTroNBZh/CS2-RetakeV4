@@ -362,4 +362,109 @@ public sealed class StatsSchemaTests : IDisposable
         var sql = string.Join("\n-- next --\n", entries.Select(m => m.Sql.ReplaceLineEndings("\n")));
         Assert.Equal(expected, Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(sql))));
     }
+
+    // Every NOT NULL column of the v1 stats_round_players, zeros except survived, won, kast, rating and ELO.
+    private static Task InsertRoundPlayer(DbConnection connection, long roundId, long steamId, string side) => Execute(connection, $"""
+        INSERT INTO stats_round_players (round_id, steam_id, side, survived, won, kills, deaths, assists, flash_assists, team_kills,
+            damage, utility_damage, headshot_kills, shots, hits, headshot_hits, entry_kill, entry_death, trade_kills, traded_death,
+            kast, clutch_vs, clutch_won, enemies_flashed, teammates_flashed, blind_seconds_inflicted, mvp, planted, defused,
+            defused_with_kit, rating, elo_before, elo_after)
+        VALUES ({roundId}, {steamId}, '{side}', 1, 1,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            1,
+            0, 0, 0, 0, 0, 0, 0, 0, 0,
+            1.0, 1000, 1000)
+        """);
+
+    private static Task InsertPlayer(DbConnection connection, long steamId) => Execute(connection,
+        $"INSERT INTO stats_players (steam_id, name, first_seen, last_seen, elo) VALUES ({steamId}, 'p{steamId}', '2026-10-01 00:00:00.000', '2026-10-01 00:00:00.000', 1000)");
+
+    [Fact]
+    public void FrozenMovementCounters_MatchStatsCounters() => Assert.Equal(StatsCounters.MovementColumns, StatsSchema.MovementCounters);
+
+    [Fact]
+    public void MovementEntries_FollowTheEventsEntries()
+    {
+        foreach (var dialect in new[] { StatsDialect.Sqlite, StatsDialect.MySql })
+        {
+            var movement = StatsSchema.Migrations(dialect).Skip(StatsSchema.V2EventsCount(dialect)).ToList();
+            Assert.Equal($"ALTER TABLE stats_player_totals ADD COLUMN alive_ms {dialect.BigInt} NOT NULL DEFAULT 0", movement[0].Sql);
+            Assert.Equal(StatsSchema.MovementCounters.Count + StatsSchema.MovementRoundColumns.Count, movement.Count(m => m.Column is not null));
+            Assert.True(movement.FindLastIndex(m => m.Column is not null) < movement.FindIndex(m => m.Column is null));
+            foreach (var view in StatsViewsV2.MovementViews)
+            {
+                var drop = movement.FindIndex(m => m.Sql == $"DROP VIEW IF EXISTS {view}");
+                Assert.True(drop >= 0, view);
+                Assert.StartsWith($"{dialect.CreateView} {view} AS", movement[drop + 1].Sql, StringComparison.Ordinal);
+            }
+        }
+    }
+
+    // A 4.9-a database (sub-project 1 only) gets the movement columns and the recreated views without losing rows.
+    [Fact]
+    public async Task V2EventsDatabase_UpgradesToMovement_KeepingItsRows()
+    {
+        await using var connection = new SqliteConnection($"Data Source={_dir.File("stats.db")}");
+        await connection.OpenAsync();
+        var all = StatsSchema.Migrations(StatsDialect.Sqlite);
+        await SqlMigrator.ApplyAsync(connection, all.Take(StatsSchema.V2EventsCount(StatsDialect.Sqlite)).ToList(), CancellationToken.None, StatsSchema.VersionTable);
+        await InsertPlayer(connection, 1);
+        await Execute(connection, "INSERT INTO stats_player_totals (steam_id, scope, rounds, reloads) VALUES (1, 'all', 7, 2)");
+        await InsertRoundPlayer(connection, 1, 1, "CT");
+        Assert.DoesNotContain("alive_ms", await SqliteColumns(connection, "v2_stats_players"));
+        await SqlMigrator.ApplyAsync(connection, all, CancellationToken.None, StatsSchema.VersionTable);
+        Assert.Equal((long)all.Count, await Scalar(connection, $"SELECT MAX(version) FROM {StatsSchema.VersionTable}"));
+        Assert.Contains("alive_ms", await SqliteColumns(connection, "v2_stats_players"));
+        Assert.Contains("bait_rate", await SqliteColumns(connection, "v2_stats_player_scopes"));
+        Assert.Contains("first_contact_ms", await SqliteColumns(connection, "v2_stats_round_players"));
+        Assert.Equal(2L, await Scalar(connection, "SELECT reloads FROM v2_stats_players WHERE steam_id = 1"));
+        Assert.Equal(0L, await Scalar(connection, "SELECT alive_samples FROM v2_stats_players WHERE steam_id = 1"));
+        Assert.Null(await Scalar(connection, "SELECT walk_pct FROM v2_stats_players WHERE steam_id = 1"));
+        Assert.Null(await Scalar(connection, "SELECT first_contact_ms FROM stats_round_players WHERE steam_id = 1"));
+        Assert.Null(await Scalar(connection, "SELECT bait FROM stats_round_players WHERE steam_id = 1"));
+        Assert.Equal(1L, await Scalar(connection, "SELECT COUNT(*) FROM v_stats_player_behaviour"));
+        Assert.Equal(0L, await Scalar(connection, "SELECT bait_chances FROM v_stats_player_behaviour WHERE steam_id = 1"));
+    }
+
+    // Player 1 vs teammate 2 on rounds 1 and 2; player 3 has no teammate in contact; player 4 never made contact.
+    [Fact]
+    public async Task BehaviourView_ComparesFirstContactWithTeammates_OnTheSameRounds()
+    {
+        await using var connection = await MigratedSqlite();
+        foreach (var id in new long[] { 1, 2, 3, 4 })
+        {
+            await InsertPlayer(connection, id);
+        }
+        foreach (var (round, id, side, contact) in new (long, long, string, int?)[]
+        {
+            (1, 1, "CT", 1000), (1, 2, "CT", 3000), (1, 3, "T", 2000), (2, 1, "CT", 2000), (2, 2, "CT", 2000), (2, 4, "CT", null),
+        })
+        {
+            await InsertRoundPlayer(connection, round, id, side);
+            if (contact is { } ms)
+            {
+                await Execute(connection, $"UPDATE stats_round_players SET first_contact_ms = {ms} WHERE round_id = {round} AND steam_id = {id}");
+            }
+        }
+        await Execute(connection, """
+            INSERT INTO stats_player_totals (steam_id, scope, first_contact_rounds, first_contact_ms_sum, engage_order_sum, bait_rounds,
+                bait_chances, alive_samples, behind_smoke_samples, in_smoke_samples)
+            VALUES (1, 'all', 2, 3000, 2, 1, 4, 200, 50, 10)
+            """);
+        Assert.Equal(2L, await Scalar(connection, "SELECT compared_rounds FROM v_stats_player_behaviour WHERE steam_id = 1"));
+        Assert.Equal(1500.0, await Scalar(connection, "SELECT own_first_contact_ms FROM v_stats_player_behaviour WHERE steam_id = 1"));
+        Assert.Equal(2500.0, await Scalar(connection, "SELECT team_first_contact_ms FROM v_stats_player_behaviour WHERE steam_id = 1"));
+        Assert.Equal(0.6, await Scalar(connection, "SELECT slowness_index FROM v_stats_player_behaviour WHERE steam_id = 1"));
+        Assert.Equal(1.667, await Scalar(connection, "SELECT slowness_index FROM v_stats_player_behaviour WHERE steam_id = 2"));
+        Assert.Equal(1500.0, await Scalar(connection, "SELECT avg_first_contact_ms FROM v_stats_player_behaviour WHERE steam_id = 1"));
+        Assert.Equal(1.0, await Scalar(connection, "SELECT avg_engage_order FROM v_stats_player_behaviour WHERE steam_id = 1"));
+        Assert.Equal(0.25, await Scalar(connection, "SELECT bait_rate FROM v_stats_player_behaviour WHERE steam_id = 1"));
+        Assert.Equal(25.0, await Scalar(connection, "SELECT behind_smoke_pct FROM v_stats_player_behaviour WHERE steam_id = 1"));
+        Assert.Equal(5.0, await Scalar(connection, "SELECT in_smoke_pct FROM v_stats_player_behaviour WHERE steam_id = 1"));
+        Assert.Equal(0L, await Scalar(connection, "SELECT compared_rounds FROM v_stats_player_behaviour WHERE steam_id = 3"));
+        Assert.Null(await Scalar(connection, "SELECT slowness_index FROM v_stats_player_behaviour WHERE steam_id = 3"));
+        Assert.Null(await Scalar(connection, "SELECT bait_rate FROM v_stats_player_behaviour WHERE steam_id = 3"));
+        Assert.Equal(0L, await Scalar(connection, "SELECT bait_chances FROM v_stats_player_behaviour WHERE steam_id = 3"));
+        Assert.Equal(0L, await Scalar(connection, "SELECT compared_rounds FROM v_stats_player_behaviour WHERE steam_id = 4"));
+    }
 }
