@@ -17,6 +17,10 @@ public sealed class SqlStatsRepository : IStatsRepository
     private const int NameLength = 64;
     private const int ScopeLength = 80;
     private const int GrenadeTypeLength = 16;
+    private const int EventTypeLength = 24;
+    private const int EventValueLength = 32;
+    private const int CountryLength = 2;
+    private const int ServerEventValueLength = 128;
 
     private static readonly string[] RoundColumns =
     {
@@ -30,9 +34,17 @@ public sealed class SqlStatsRepository : IStatsRepository
         "damage", "utility_damage", "headshot_kills", "shots", "hits", "headshot_hits", "entry_kill", "entry_death", "trade_kills",
         "traded_death", "kast", "clutch_vs", "clutch_won", "enemies_flashed", "teammates_flashed", "blind_seconds_inflicted", "mvp",
         "planted", "defused", "defused_with_kit", "rating", "elo_before", "elo_after",
+        "shots_still", "hits_still", "shots_moving", "hits_moving", "shots_scoped", "hits_scoped", "damage_taken", "bomb_carry_ms",
+        "health_end", "armor_end",
     };
 
-    private static readonly string[] ShotColumns = { "round_id", "steam_id", "weapon", "time_ms", "tick", "pos_x", "pos_y", "pos_z", "pitch", "yaw" };
+    private static readonly string[] ShotColumns =
+    {
+        "round_id", "steam_id", "weapon", "time_ms", "tick", "pos_x", "pos_y", "pos_z", "pitch", "yaw",
+        "speed", "crouched", "scoped", "airborne", "walking", "still",
+    };
+
+    private static readonly string[] EventColumns = { "round_id", "steam_id", "type", "time_ms", "value", "pos_x", "pos_y", "pos_z" };
 
     private static readonly string[] DamageColumns =
     {
@@ -77,16 +89,21 @@ public sealed class SqlStatsRepository : IStatsRepository
         await using var connection = await _open(ct).ConfigureAwait(false);
         await using var transaction = await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
         var at = _dialect.DateParam(startedAt);
-        await ExecuteAsync(connection, transaction,
-            $"INSERT INTO stats_servers (name, first_seen, last_seen) VALUES (@name, @at, @at) {_dialect.OnConflict(new[] { "name" }, new[] { "last_seen" }, Array.Empty<string>())}",
-            ct, ("@name", _options.ServerKey), ("@at", at)).ConfigureAwait(false);
-        var serverId = Convert.ToInt64(
-            await ScalarAsync(connection, transaction, "SELECT id FROM stats_servers WHERE name = @name", ct, ("@name", _options.ServerKey)).ConfigureAwait(false),
-            CultureInfo.InvariantCulture);
+        var serverId = await EnsureServerAsync(connection, transaction, at, ct).ConfigureAwait(false);
         var mapId = await InsertAsync(connection, transaction, "stats_maps", new[] { "server_id", "map_name", "started_at" },
             new object?[] { serverId, Clip(mapName, NameLength), at }, ct).ConfigureAwait(false);
         await transaction.CommitAsync(ct).ConfigureAwait(false);
         return mapId;
+    }
+
+    private async Task<long> EnsureServerAsync(DbConnection connection, DbTransaction transaction, object at, CancellationToken ct)
+    {
+        await ExecuteAsync(connection, transaction,
+            $"INSERT INTO stats_servers (name, first_seen, last_seen) VALUES (@name, @at, @at) {_dialect.OnConflict(new[] { "name" }, new[] { "last_seen" }, Array.Empty<string>())}",
+            ct, ("@name", _options.ServerKey), ("@at", at)).ConfigureAwait(false);
+        return Convert.ToInt64(
+            await ScalarAsync(connection, transaction, "SELECT id FROM stats_servers WHERE name = @name", ct, ("@name", _options.ServerKey)).ConfigureAwait(false),
+            CultureInfo.InvariantCulture);
     }
 
     public async Task CloseMapAsync(long mapId, DateTimeOffset endedAt, CancellationToken ct)
@@ -107,9 +124,11 @@ public sealed class SqlStatsRepository : IStatsRepository
         return sessionId;
     }
 
-    public async Task CloseSessionAsync(long? sessionId, long mapId, ulong steamId, DateTimeOffset disconnectedAt, int? reason, Playtime playtime, CancellationToken ct)
+    public async Task CloseSessionAsync(long? sessionId, long mapId, ulong steamId, DateTimeOffset disconnectedAt, int? reason, Playtime playtime,
+        SessionActivity activity, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(playtime);
+        ArgumentNullException.ThrowIfNull(activity);
         await using var connection = await _open(ct).ConfigureAwait(false);
         await using var transaction = await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
         var at = _dialect.DateParam(disconnectedAt);
@@ -117,19 +136,26 @@ public sealed class SqlStatsRepository : IStatsRepository
         {
             await ExecuteAsync(connection, transaction, """
                 UPDATE stats_sessions SET disconnected_at = @at, disconnect_reason = @reason,
-                    seconds_ct = @ct, seconds_t = @t, seconds_spec = @spec, seconds_queue = @queue
+                    seconds_ct = @ct, seconds_t = @t, seconds_spec = @spec, seconds_queue = @queue,
+                    seconds_vip = @vip, ping_avg = @ping_avg, ping_max = @ping_max
                 WHERE id = @id
                 """, ct, ("@at", at), ("@reason", reason), ("@ct", playtime.SecondsCt), ("@t", playtime.SecondsT),
-                ("@spec", playtime.SecondsSpectator), ("@queue", playtime.SecondsQueue), ("@id", id)).ConfigureAwait(false);
+                ("@spec", playtime.SecondsSpectator), ("@queue", playtime.SecondsQueue), ("@vip", playtime.SecondsVip),
+                ("@ping_avg", activity.PingAvg), ("@ping_max", activity.PingMax), ("@id", id)).ConfigureAwait(false);
         }
         else
         {
             await InsertAsync(connection, transaction, "stats_sessions",
-                new[] { "steam_id", "map_id", "disconnected_at", "disconnect_reason", "seconds_ct", "seconds_t", "seconds_spec", "seconds_queue" },
+                new[]
+                {
+                    "steam_id", "map_id", "disconnected_at", "disconnect_reason", "seconds_ct", "seconds_t", "seconds_spec", "seconds_queue",
+                    "seconds_vip", "ping_avg", "ping_max",
+                },
                 new object?[]
                 {
                     _dialect.SteamParam(steamId), mapId, at, reason,
                     playtime.SecondsCt, playtime.SecondsT, playtime.SecondsSpectator, playtime.SecondsQueue,
+                    playtime.SecondsVip, activity.PingAvg, activity.PingMax,
                 }, ct).ConfigureAwait(false);
         }
         var columns = new[] { "seconds_ct", "seconds_t", "seconds_spec", "seconds_queue", "sessions" };
@@ -138,6 +164,50 @@ public sealed class SqlStatsRepository : IStatsRepository
             _dialect.OnConflict(new[] { "steam_id" }, Array.Empty<string>(), columns),
             ct, ("@steam", _dialect.SteamParam(steamId)), ("@ct", playtime.SecondsCt), ("@t", playtime.SecondsT),
             ("@spec", playtime.SecondsSpectator), ("@queue", playtime.SecondsQueue)).ConfigureAwait(false);
+        await transaction.CommitAsync(ct).ConfigureAwait(false);
+    }
+
+    public async Task SetCountryAsync(long? sessionId, ulong steamId, string country, CancellationToken ct)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(country);
+        var code = Clip(country, CountryLength);
+        await using var connection = await _open(ct).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
+        await ExecuteAsync(connection, transaction, "UPDATE stats_players SET country = @country WHERE steam_id = @steam", ct,
+            ("@country", code), ("@steam", _dialect.SteamParam(steamId))).ConfigureAwait(false);
+        if (sessionId is { } id)
+        {
+            await ExecuteAsync(connection, transaction, "UPDATE stats_sessions SET country = @country WHERE id = @id", ct,
+                ("@country", code), ("@id", id)).ConfigureAwait(false);
+        }
+        await transaction.CommitAsync(ct).ConfigureAwait(false);
+    }
+
+    public async Task WritePresenceAsync(PresenceSnapshot snapshot, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        await using var connection = await _open(ct).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
+        var at = _dialect.DateParam(snapshot.At);
+        var serverId = await EnsureServerAsync(connection, transaction, at, ct).ConfigureAwait(false);
+        await ExecuteAsync(connection, transaction,
+            "INSERT INTO stats_presence (server_id, at, humans, bots, queued, map_name) VALUES (@server, @at, @humans, @bots, @queued, @map)", ct,
+            ("@server", serverId), ("@at", at), ("@humans", snapshot.Humans), ("@bots", snapshot.Bots), ("@queued", snapshot.Queued),
+            ("@map", Clip(snapshot.MapName, NameLength))).ConfigureAwait(false);
+        await transaction.CommitAsync(ct).ConfigureAwait(false);
+    }
+
+    public async Task WriteServerEventAsync(ServerEvent serverEvent, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(serverEvent);
+        await using var connection = await _open(ct).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
+        var at = _dialect.DateParam(serverEvent.At);
+        var serverId = await EnsureServerAsync(connection, transaction, at, ct).ConfigureAwait(false);
+        await ExecuteAsync(connection, transaction,
+            "INSERT INTO stats_server_events (server_id, at, type, module, value, occurrences, max_ms) VALUES (@server, @at, @type, @module, @value, @occurrences, @max_ms)", ct,
+            ("@server", serverId), ("@at", at), ("@type", Clip(serverEvent.Type, EventTypeLength)), ("@module", Clip(serverEvent.Module, NameLength)),
+            ("@value", Clip(serverEvent.Value, ServerEventValueLength)), ("@occurrences", serverEvent.Occurrences), ("@max_ms", serverEvent.MaxMs)).ConfigureAwait(false);
         await transaction.CommitAsync(ct).ConfigureAwait(false);
     }
 
@@ -158,6 +228,13 @@ public sealed class SqlStatsRepository : IStatsRepository
         await BulkInsertAsync(connection, transaction, "stats_shots", ShotColumns, record.Shots, s => new object?[]
         {
             roundId, _dialect.SteamParam(s.Shooter), Clip(s.Weapon, NameLength), s.TimeMs, s.Tick, s.Position?.X, s.Position?.Y, s.Position?.Z, s.Angles?.Pitch, s.Angles?.Yaw,
+            s.Motion?.Speed, B(s.Motion?.Crouched), B(s.Motion?.Scoped), B(s.Motion?.Airborne), B(s.Motion?.Walking),
+            s.Motion is { } motion && StatsWeapons.IsBullet(s.Weapon) ? (object)B(StatsWeapons.IsStill(s.Weapon, motion)) : null,
+        }, ct).ConfigureAwait(false);
+        await BulkInsertAsync(connection, transaction, "stats_player_events", EventColumns, record.Events, e => new object?[]
+        {
+            roundId, _dialect.SteamParam(e.Player), Clip(PlayerEvents.Name(e.Type), EventTypeLength), e.TimeMs, Clip(e.Value, EventValueLength),
+            e.Position?.X, e.Position?.Y, e.Position?.Z,
         }, ct).ConfigureAwait(false);
         await BulkInsertAsync(connection, transaction, "stats_damages", DamageColumns, record.Damages, d => new object?[]
         {
@@ -212,29 +289,40 @@ public sealed class SqlStatsRepository : IStatsRepository
         return result;
     }
 
-    // Rounds older than the cutoff lose their shots and damages; rounds, kills, grenades and aggregates are kept.
+    // Rounds older than the cutoff lose their shots, damages and player events; presence snapshots and server events
+    // older than the cutoff are deleted. Rounds, kills, grenades, sessions and aggregates are kept.
     public async Task<int> PurgeRawAsync(DateTimeOffset olderThan, int batchSize, CancellationToken ct)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(batchSize, 1);
         await using var connection = await _open(ct).ConfigureAwait(false);
-        var max = await ScalarAsync(connection, null, "SELECT MAX(id) FROM stats_rounds WHERE started_at < @cutoff", ct,
-            ("@cutoff", _dialect.DateParam(olderThan))).ConfigureAwait(false);
-        if (max is null or DBNull)
-        {
-            return 0;
-        }
-        var maxRound = Convert.ToInt64(max, CultureInfo.InvariantCulture);
+        var cutoff = _dialect.DateParam(olderThan);
         var total = 0;
-        foreach (var table in new[] { "stats_shots", "stats_damages" })
+        var max = await ScalarAsync(connection, null, "SELECT MAX(id) FROM stats_rounds WHERE started_at < @cutoff", ct, ("@cutoff", cutoff)).ConfigureAwait(false);
+        if (max is not (null or DBNull))
         {
-            int deleted;
-            do
+            var maxRound = Convert.ToInt64(max, CultureInfo.InvariantCulture);
+            foreach (var table in new[] { "stats_shots", "stats_damages", "stats_player_events" })
             {
-                deleted = await ExecuteAsync(connection, null, _dialect.DeleteBatch(table, batchSize), ct, ("@max_round", maxRound)).ConfigureAwait(false);
-                total += deleted;
+                total += await DeleteAllAsync(connection, _dialect.DeleteBatch(table, batchSize), batchSize, ("@max_round", maxRound), ct).ConfigureAwait(false);
             }
-            while (deleted == batchSize);
         }
+        foreach (var table in new[] { "stats_presence", "stats_server_events" })
+        {
+            total += await DeleteAllAsync(connection, _dialect.DeleteBatchBefore(table, batchSize), batchSize, ("@cutoff", cutoff), ct).ConfigureAwait(false);
+        }
+        return total;
+    }
+
+    private static async Task<int> DeleteAllAsync(DbConnection connection, string sql, int batchSize, (string Name, object? Value) parameter, CancellationToken ct)
+    {
+        var total = 0;
+        int deleted;
+        do
+        {
+            deleted = await ExecuteAsync(connection, null, sql, ct, parameter).ConfigureAwait(false);
+            total += deleted;
+        }
+        while (deleted == batchSize);
         return total;
     }
 
@@ -254,6 +342,8 @@ public sealed class SqlStatsRepository : IStatsRepository
     }
 
     private static int B(bool value) => value ? 1 : 0;
+
+    private static int? B(bool? value) => value is { } flag ? B(flag) : null;
 
     private object? Steam(ulong? steamId) => steamId is { } id ? _dialect.SteamParam(id) : null;
 
@@ -280,6 +370,7 @@ public sealed class SqlStatsRepository : IStatsRepository
         p.FlashAssists, p.TeamKills, p.Damage, p.UtilityDamage, p.HeadshotKills, p.Shots, p.Hits, p.HeadshotHits, B(p.EntryKill),
         B(p.EntryDeath), p.TradeKills, B(p.TradedDeath), B(p.Kast), p.ClutchVs, B(p.ClutchWon), p.EnemiesFlashed, p.TeammatesFlashed,
         p.BlindSecondsInflicted, B(p.Mvp), B(p.Planted), B(p.Defused), B(p.Defused && p.DefusedWithKit), p.Rating, p.EloBefore, p.EloAfter,
+        p.ShotsStill, p.HitsStill, p.ShotsMoving, p.HitsMoving, p.ShotsScoped, p.HitsScoped, p.DamageTaken, p.BombCarryMs, p.HealthEnd, p.ArmorEnd,
     };
 
     private Task UpsertPlayerAsync(DbConnection connection, DbTransaction transaction, ulong steamId, string name, DateTimeOffset at, CancellationToken ct) =>
@@ -290,12 +381,12 @@ public sealed class SqlStatsRepository : IStatsRepository
 
     private async Task UpsertTotalsAsync(DbConnection connection, DbTransaction transaction, RoundContext context, PlayerRoundStats player, bool ranked, CancellationToken ct)
     {
-        var counters = StatsCounters.For(player, ranked);
-        var counterParameters = StatsCounters.Columns.Select((_, i) => $"@c{i.ToString(CultureInfo.InvariantCulture)}").ToList();
+        var counters = StatsCounters.ForAll(player, ranked);
+        var counterParameters = StatsCounters.AllColumns.Select((_, i) => $"@c{i.ToString(CultureInfo.InvariantCulture)}").ToList();
         var totalsSql =
-            $"INSERT INTO stats_player_totals (steam_id, scope, {string.Join(", ", StatsCounters.Columns)}) " +
+            $"INSERT INTO stats_player_totals (steam_id, scope, {string.Join(", ", StatsCounters.AllColumns)}) " +
             $"VALUES (@steam, @scope, {string.Join(", ", counterParameters)}) " +
-            _dialect.OnConflict(new[] { "steam_id", "scope" }, Array.Empty<string>(), StatsCounters.Columns);
+            _dialect.OnConflict(new[] { "steam_id", "scope" }, Array.Empty<string>(), StatsCounters.AllColumns);
         foreach (var scope in StatsCounters.Scopes(context, player.Side))
         {
             await using var command = connection.CreateCommand();

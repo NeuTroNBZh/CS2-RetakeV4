@@ -121,8 +121,8 @@ public sealed class SqliteStatsRepositoryTests : IDisposable
         var repository = await Repository();
         var mapId = await repository.OpenMapAsync("de_mirage", Now, CancellationToken.None);
         var session = await repository.OpenSessionAsync(mapId, Ct, "ct", Now, CancellationToken.None);
-        await repository.CloseSessionAsync(session, mapId, Ct, Now.AddMinutes(10), 2, new Playtime(300, 200, 60, 40), CancellationToken.None);
-        await repository.CloseSessionAsync(null, mapId, Ct, Now.AddMinutes(30), null, new Playtime(10, 0, 0, 0), CancellationToken.None);
+        await repository.CloseSessionAsync(session, mapId, Ct, Now.AddMinutes(10), 2, new Playtime(300, 200, 60, 40), SessionActivity.None, CancellationToken.None);
+        await repository.CloseSessionAsync(null, mapId, Ct, Now.AddMinutes(30), null, new Playtime(10, 0, 0, 0), SessionActivity.None, CancellationToken.None);
         Assert.Equal(2L, await Scalar("SELECT COUNT(*) FROM v_stats_sessions"));
         Assert.Equal(300L, await Scalar($"SELECT seconds_ct FROM v_stats_sessions WHERE session_id = {session}"));
         Assert.Equal(2L, await Scalar($"SELECT disconnect_reason FROM v_stats_sessions WHERE session_id = {session}"));
@@ -188,5 +188,96 @@ public sealed class SqliteStatsRepositoryTests : IDisposable
         var elo = await repository.LoadEloAsync(new[] { Ct, 42UL }, CancellationToken.None);
         Assert.Equal(1012, elo[Ct]);
         Assert.False(elo.ContainsKey(42UL));
+    }
+
+    [Fact]
+    public async Task WriteRound_V2_FillsTheNewColumnsEventsAndAggregates()
+    {
+        var repository = await Repository();
+        var mapId = await repository.OpenMapAsync("de_mirage", Now, CancellationToken.None);
+        await repository.WriteRoundAsync(mapId, RoundV2(Now), CancellationToken.None);
+        Assert.Equal(1L, await Scalar($"SELECT shots_still FROM v2_stats_round_players WHERE steam_id = {Ct}"));
+        Assert.Equal(1L, await Scalar($"SELECT hits_still FROM v2_stats_round_players WHERE steam_id = {Ct}"));
+        Assert.Equal(87L, await Scalar($"SELECT health_end FROM v2_stats_round_players WHERE steam_id = {Ct}"));
+        Assert.Equal(50L, await Scalar($"SELECT armor_end FROM v2_stats_round_players WHERE steam_id = {Ct}"));
+        Assert.Equal(0L, await Scalar($"SELECT health_end FROM v2_stats_round_players WHERE steam_id = {T}"));
+        Assert.Equal(100L, await Scalar($"SELECT damage_taken FROM v2_stats_round_players WHERE steam_id = {T}"));
+        Assert.Equal(20.0, await Scalar("SELECT speed FROM v2_stats_shots"));
+        Assert.Equal(1L, await Scalar("SELECT crouched FROM v2_stats_shots"));
+        Assert.Equal(0L, await Scalar("SELECT scoped FROM v2_stats_shots"));
+        Assert.Equal(1L, await Scalar("SELECT still FROM v2_stats_shots"));
+        Assert.Equal("reload_full_clip", await Scalar($"SELECT type FROM v_stats_player_events WHERE steam_id = {Ct}"));
+        Assert.Equal("m4a1:20/30", await Scalar($"SELECT value FROM v_stats_player_events WHERE steam_id = {Ct}"));
+        Assert.Equal("B", await Scalar($"SELECT site FROM v_stats_player_events WHERE steam_id = {T}"));
+        Assert.Equal(1L, await Scalar($"SELECT reloads_full FROM v2_stats_players WHERE steam_id = {Ct}"));
+        Assert.Equal(1L, await Scalar($"SELECT clutch_defuses FROM v2_stats_players WHERE steam_id = {Ct}"));
+        Assert.Equal(100.0, await Scalar($"SELECT still_accuracy FROM v2_stats_players WHERE steam_id = {Ct}"));
+        Assert.Equal(100L, await Scalar($"SELECT damage_taken FROM v2_stats_players WHERE steam_id = {T}"));
+        Assert.Equal(1L, await Scalar($"SELECT jumps FROM v2_stats_player_scopes WHERE steam_id = {T} AND scope = 'site:B'"));
+    }
+
+    [Fact]
+    public async Task Sessions_RecordNetworkVipAndCountry()
+    {
+        var repository = await Repository();
+        var mapId = await repository.OpenMapAsync("de_mirage", Now, CancellationToken.None);
+        var session = await repository.OpenSessionAsync(mapId, Ct, "ct", Now, CancellationToken.None);
+        await repository.SetCountryAsync(session, Ct, "FR", CancellationToken.None);
+        await repository.CloseSessionAsync(session, mapId, Ct, Now.AddMinutes(10), 0, new Playtime(300, 0, 0, 60) { SecondsVip = 45 },
+            new SessionActivity(42, 80), CancellationToken.None);
+        await repository.CloseSessionAsync(null, mapId, Ct, Now.AddMinutes(30), null, new Playtime(10, 0, 0, 0), new SessionActivity(60, 120), CancellationToken.None);
+        Assert.Equal("FR", await Scalar($"SELECT country FROM v2_stats_sessions WHERE session_id = {session}"));
+        Assert.Equal(45L, await Scalar($"SELECT seconds_vip FROM v2_stats_sessions WHERE session_id = {session}"));
+        Assert.Equal(42L, await Scalar($"SELECT ping_avg FROM v2_stats_sessions WHERE session_id = {session}"));
+        Assert.Equal(80L, await Scalar($"SELECT ping_max FROM v2_stats_sessions WHERE session_id = {session}"));
+        Assert.Equal("FR", await Scalar($"SELECT country FROM v_stats_player_network WHERE steam_id = {Ct}"));
+        Assert.Equal(51.0, await Scalar($"SELECT ping_avg FROM v_stats_player_network WHERE steam_id = {Ct}"));
+        Assert.Equal(120L, await Scalar($"SELECT ping_max FROM v_stats_player_network WHERE steam_id = {Ct}"));
+        Assert.Equal(45L, await Scalar($"SELECT seconds_vip FROM v_stats_player_network WHERE steam_id = {Ct}"));
+        Assert.Equal(2L, await Scalar($"SELECT sessions_with_ping FROM v_stats_player_network WHERE steam_id = {Ct}"));
+    }
+
+    [Fact]
+    public async Task PresenceAndServerEvents_AreWritten_BeforeAnyMap()
+    {
+        var repository = await Repository("eu-2");
+        await repository.WriteServerEventAsync(new ServerEvent(Now, ServerEventTypes.PluginStart, null, "4.8.1"), CancellationToken.None);
+        await repository.WriteServerEventAsync(new ServerEvent(Now, ServerEventTypes.SlowHandler, "Hud", "tick", 3, 120), CancellationToken.None);
+        await repository.WritePresenceAsync(new PresenceSnapshot(Now, "de_nuke", 8, 2, 1), CancellationToken.None);
+        Assert.Equal("eu-2", await Scalar("SELECT server FROM v_stats_server_health WHERE type = 'plugin_start'"));
+        Assert.Equal("4.8.1", await Scalar("SELECT value FROM v_stats_server_health WHERE type = 'plugin_start'"));
+        Assert.Equal(3L, await Scalar("SELECT occurrences FROM v_stats_server_health WHERE type = 'slow_handler'"));
+        Assert.Equal(120L, await Scalar("SELECT max_ms FROM v_stats_server_health WHERE type = 'slow_handler'"));
+        Assert.Equal(8L, await Scalar("SELECT humans FROM v_stats_presence WHERE map_name = 'de_nuke'"));
+        Assert.Equal(1L, await Scalar("SELECT queued FROM v_stats_presence WHERE map_name = 'de_nuke'"));
+        Assert.Equal(1L, await Scalar("SELECT COUNT(*) FROM stats_servers"));
+    }
+
+    [Fact]
+    public async Task Purge_AlsoDropsOldEventsPresenceAndServerEvents()
+    {
+        var repository = await Repository();
+        var mapId = await repository.OpenMapAsync("de_mirage", Now, CancellationToken.None);
+        await repository.WriteRoundAsync(mapId, RoundV2(Now.AddDays(-40)), CancellationToken.None);
+        await repository.WriteRoundAsync(mapId, RoundV2(Now), CancellationToken.None);
+        await repository.WritePresenceAsync(new PresenceSnapshot(Now.AddDays(-40), "de_mirage", 1, 0, 0), CancellationToken.None);
+        await repository.WritePresenceAsync(new PresenceSnapshot(Now, "de_mirage", 1, 0, 0), CancellationToken.None);
+        await repository.WriteServerEventAsync(new ServerEvent(Now.AddDays(-40), ServerEventTypes.Uptime, null, "600"), CancellationToken.None);
+        await repository.WriteServerEventAsync(new ServerEvent(Now, ServerEventTypes.Uptime, null, "600"), CancellationToken.None);
+        // Old round: 1 shot, 1 damage, 2 player events; plus 1 presence snapshot and 1 server event.
+        Assert.Equal(6, await repository.PurgeRawAsync(Now.AddDays(-30), 1, CancellationToken.None));
+        Assert.Equal(2L, await Scalar("SELECT COUNT(*) FROM v_stats_player_events"));
+        Assert.Equal(1L, await Scalar("SELECT COUNT(*) FROM v_stats_presence"));
+        Assert.Equal(1L, await Scalar("SELECT COUNT(*) FROM v_stats_server_health"));
+        Assert.Equal(2L, await Scalar("SELECT COUNT(*) FROM v2_stats_round_players WHERE steam_id = " + Ct));
+        Assert.Equal(0, await repository.PurgeRawAsync(Now.AddDays(-30), 1, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Purge_OfTimeTables_RunsEvenWithoutOldRounds()
+    {
+        var repository = await Repository();
+        await repository.WritePresenceAsync(new PresenceSnapshot(Now.AddDays(-40), "de_mirage", 1, 0, 0), CancellationToken.None);
+        Assert.Equal(1, await repository.PurgeRawAsync(Now.AddDays(-30), 10, CancellationToken.None));
     }
 }

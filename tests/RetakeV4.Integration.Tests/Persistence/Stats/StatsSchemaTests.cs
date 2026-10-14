@@ -280,4 +280,13 @@ public sealed class StatsSchemaTests : IDisposable
         await SqlMigrator.ApplyAsync(connection, migrations, CancellationToken.None, StatsSchema.VersionTable);
         Assert.Equal((long)migrations.Count, Convert.ToInt64(await Scalar(connection, $"SELECT MAX(version) FROM {StatsSchema.VersionTable}")));
     }
+
+    [Fact]
+    public void DeleteBatchBefore_PerDialect()
+    {
+        Assert.Equal("DELETE FROM stats_presence WHERE at < @cutoff LIMIT 500", StatsDialect.MySql.DeleteBatchBefore("stats_presence", 500));
+        Assert.Equal(
+            "DELETE FROM stats_presence WHERE id IN (SELECT id FROM stats_presence WHERE at < @cutoff LIMIT 500)",
+            StatsDialect.Sqlite.DeleteBatchBefore("stats_presence", 500));
+    }
 }

@@ -233,7 +233,7 @@ public sealed class StatsWriteQueue : IAsyncDisposable
             case CloseSessionCommand session:
                 var closeMap = await EnsureMapAsync(null, session.At, ct).ConfigureAwait(false);
                 long? sessionId = _sessions.TryGetValue(session.SteamId, out var id) ? id : null;
-                await _repository.CloseSessionAsync(sessionId, closeMap, session.SteamId, session.At, session.Reason, session.Playtime, ct).ConfigureAwait(false);
+                await _repository.CloseSessionAsync(sessionId, closeMap, session.SteamId, session.At, session.Reason, session.Playtime, session.Activity, ct).ConfigureAwait(false);
                 _sessions.Remove(session.SteamId);
                 break;
             case WriteRoundCommand write:

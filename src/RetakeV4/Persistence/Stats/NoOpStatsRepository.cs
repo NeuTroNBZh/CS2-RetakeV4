@@ -12,8 +12,14 @@ public sealed class NoOpStatsRepository : IStatsRepository
 
     public Task<long> OpenSessionAsync(long mapId, ulong steamId, string name, DateTimeOffset connectedAt, CancellationToken ct) => Task.FromResult(0L);
 
-    public Task CloseSessionAsync(long? sessionId, long mapId, ulong steamId, DateTimeOffset disconnectedAt, int? reason, Playtime playtime, CancellationToken ct) =>
-        Task.CompletedTask;
+    public Task CloseSessionAsync(long? sessionId, long mapId, ulong steamId, DateTimeOffset disconnectedAt, int? reason, Playtime playtime,
+        SessionActivity activity, CancellationToken ct) => Task.CompletedTask;
+
+    public Task SetCountryAsync(long? sessionId, ulong steamId, string country, CancellationToken ct) => Task.CompletedTask;
+
+    public Task WritePresenceAsync(PresenceSnapshot snapshot, CancellationToken ct) => Task.CompletedTask;
+
+    public Task WriteServerEventAsync(ServerEvent serverEvent, CancellationToken ct) => Task.CompletedTask;
 
     public Task<long> WriteRoundAsync(long mapId, RoundSummary round, CancellationToken ct) => Task.FromResult(0L);
 

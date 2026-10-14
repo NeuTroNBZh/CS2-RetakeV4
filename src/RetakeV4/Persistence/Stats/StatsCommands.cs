@@ -11,7 +11,10 @@ public sealed record CloseMapCommand(DateTimeOffset At) : StatsCommand;
 
 public sealed record OpenSessionCommand(ulong SteamId, string Name, DateTimeOffset At) : StatsCommand;
 
-public sealed record CloseSessionCommand(ulong SteamId, DateTimeOffset At, int? Reason, Playtime Playtime) : StatsCommand;
+public sealed record CloseSessionCommand(ulong SteamId, DateTimeOffset At, int? Reason, Playtime Playtime) : StatsCommand
+{
+    public SessionActivity Activity { get; init; } = SessionActivity.None;
+}
 
 public sealed record WriteRoundCommand(RoundSummary Round) : StatsCommand;
 

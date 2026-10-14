@@ -16,7 +16,15 @@ public interface IStatsRepository
     Task<long> OpenSessionAsync(long mapId, ulong steamId, string name, DateTimeOffset connectedAt, CancellationToken ct);
 
     // sessionId is null when the opening was lost (queue overflow): the session row is then created closed.
-    Task CloseSessionAsync(long? sessionId, long mapId, ulong steamId, DateTimeOffset disconnectedAt, int? reason, Playtime playtime, CancellationToken ct);
+    Task CloseSessionAsync(long? sessionId, long mapId, ulong steamId, DateTimeOffset disconnectedAt, int? reason, Playtime playtime,
+        SessionActivity activity, CancellationToken ct);
+
+    // Sets the country of the player and of their open session (sessionId null: the player only).
+    Task SetCountryAsync(long? sessionId, ulong steamId, string country, CancellationToken ct);
+
+    Task WritePresenceAsync(PresenceSnapshot snapshot, CancellationToken ct);
+
+    Task WriteServerEventAsync(ServerEvent serverEvent, CancellationToken ct);
 
     Task<long> WriteRoundAsync(long mapId, RoundSummary round, CancellationToken ct);
 

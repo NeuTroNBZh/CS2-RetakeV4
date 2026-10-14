@@ -63,9 +63,11 @@ internal sealed class FakeStatsRepository : IStatsRepository
         return Task.FromResult(id);
     }
 
-    public Task CloseSessionAsync(long? sessionId, long mapId, ulong steamId, DateTimeOffset disconnectedAt, int? reason, Playtime playtime, CancellationToken ct)
+    public Task CloseSessionAsync(long? sessionId, long mapId, ulong steamId, DateTimeOffset disconnectedAt, int? reason, Playtime playtime,
+        SessionActivity activity, CancellationToken ct)
     {
-        Record($"CloseSession {steamId} session {sessionId?.ToString() ?? "none"} map {mapId}");
+        var ping = activity.PingAvg is { } average ? $" ping {average}" : string.Empty;
+        Record($"CloseSession {steamId} session {sessionId?.ToString() ?? "none"} map {mapId}{ping}");
         return Task.CompletedTask;
     }
 
@@ -82,6 +84,24 @@ internal sealed class FakeStatsRepository : IStatsRepository
         }
         Record($"Round {round.Record.Context.RoundNumber} map {mapId}");
         return Task.FromResult(Next());
+    }
+
+    public Task SetCountryAsync(long? sessionId, ulong steamId, string country, CancellationToken ct)
+    {
+        Record($"Country {steamId} {country} session {sessionId?.ToString() ?? "none"}");
+        return Task.CompletedTask;
+    }
+
+    public Task WritePresenceAsync(PresenceSnapshot snapshot, CancellationToken ct)
+    {
+        Record($"Presence {snapshot.MapName} {snapshot.Humans}/{snapshot.Bots}/{snapshot.Queued}");
+        return Task.CompletedTask;
+    }
+
+    public Task WriteServerEventAsync(ServerEvent serverEvent, CancellationToken ct)
+    {
+        Record($"ServerEvent {serverEvent.Type} {serverEvent.Value} x{serverEvent.Occurrences}");
+        return Task.CompletedTask;
     }
 
     public Task<IReadOnlyDictionary<ulong, int>> LoadEloAsync(IReadOnlyCollection<ulong> steamIds, CancellationToken ct) =>

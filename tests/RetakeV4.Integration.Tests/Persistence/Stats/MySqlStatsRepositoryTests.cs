@@ -22,8 +22,13 @@ public class MySqlStatsRepositoryTests
         var before = (await repository.LoadEloAsync(new[] { Ct }, CancellationToken.None)).GetValueOrDefault(Ct, 1000);
         var mapId = await repository.OpenMapAsync("de_mirage", now, CancellationToken.None);
         await repository.WriteRoundAsync(mapId, Round(now, ctElo: before), CancellationToken.None);
+        await repository.WriteRoundAsync(mapId, RoundV2(now), CancellationToken.None);
         var session = await repository.OpenSessionAsync(mapId, Ct, "ct", now, CancellationToken.None);
-        await repository.CloseSessionAsync(session, mapId, Ct, now.AddMinutes(1), 0, new Playtime(60, 0, 0, 0), CancellationToken.None);
+        await repository.SetCountryAsync(session, Ct, "FR", CancellationToken.None);
+        await repository.CloseSessionAsync(session, mapId, Ct, now.AddMinutes(1), 0, new Playtime(60, 0, 0, 0) { SecondsVip = 5 },
+            new SessionActivity(40, 60), CancellationToken.None);
+        await repository.WritePresenceAsync(new PresenceSnapshot(now, "de_mirage", 2, 0, 0), CancellationToken.None);
+        await repository.WriteServerEventAsync(new ServerEvent(now, ServerEventTypes.Chat, null, "say", 4), CancellationToken.None);
         await repository.CloseMapAsync(mapId, now.AddMinutes(2), CancellationToken.None);
         var after = (await repository.LoadEloAsync(new[] { Ct }, CancellationToken.None))[Ct];
         Assert.NotEqual(before, after);

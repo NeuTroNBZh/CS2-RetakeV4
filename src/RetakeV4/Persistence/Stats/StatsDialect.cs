@@ -88,6 +88,15 @@ public sealed class StatsDialect
             : $"DELETE FROM {table} WHERE id IN (SELECT id FROM {table} WHERE round_id <= @max_round LIMIT {limit})";
     }
 
+    // Time-based purge (presence snapshots, server events), same batching rules as DeleteBatch.
+    public string DeleteBatchBefore(string table, int batchSize)
+    {
+        var limit = batchSize.ToString(CultureInfo.InvariantCulture);
+        return IsMySql
+            ? $"DELETE FROM {table} WHERE at < @cutoff LIMIT {limit}"
+            : $"DELETE FROM {table} WHERE id IN (SELECT id FROM {table} WHERE at < @cutoff LIMIT {limit})";
+    }
+
     public object SteamParam(ulong steamId) => IsMySql ? steamId : unchecked((long)steamId);
 
     public ulong ReadSteam(object value) => IsMySql
