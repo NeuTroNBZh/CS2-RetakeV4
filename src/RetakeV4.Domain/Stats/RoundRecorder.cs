@@ -208,9 +208,10 @@ public sealed class RoundRecorder
         }
         var ranked = context.Participants.Count(p => p.Side == TeamSide.CT) >= _minPlayersPerSide
             && context.Participants.Count(p => p.Side == TeamSide.T) >= _minPlayersPerSide;
-        // The record takes the sample list itself (no copy of ~10 000 structs); the recorder starts a new one.
+        // The record takes the sample list itself (no copy of ~10 000 structs); the recorder starts a new one sized like
+        // this round's, so that it does not regrow through large-object-heap arrays every round.
         var samples = _samples;
-        _samples = new List<MovementSample>();
+        _samples = new List<MovementSample>(Math.Min(samples.Count, MaxSamplesPerRound));
         var record = new RoundRecord(
             context, outcome, ranked,
             _shots.ToList(), _damages.ToList(), _kills.ToList(), _thrown.ToList(), _detonated.ToList(), _blinds.ToList(),
