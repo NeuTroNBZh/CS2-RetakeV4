@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using Microsoft.Data.Sqlite;
@@ -20,8 +21,11 @@ namespace RetakeV4.Modules.Stats;
 public sealed class StatsModule : IRetakeModule
 {
     private const float PresenceRefreshSeconds = 5f;
+    private const float UptimeSeconds = 600f;
 
     private readonly PlaytimeTracker _playtime = new();
+    private readonly SessionActivityTracker _activity = new();
+    private readonly ServerEventAggregator _serverEvents = new();
     private readonly Dictionary<int, string?> _primaryBySlot = new();
     private StatsConfig _config = new();
     private StatsRules? _rules;
@@ -29,9 +33,12 @@ public sealed class StatsModule : IRetakeModule
     private EloCache? _elo;
     private IStatsRepository? _repository;
     private StatsWriteQueue? _writes;
+    private MmdbCountryLookup? _countries;
+    private FrameMonitor? _frames;
     private ModuleContext? _context;
     private TeamState _teams = TeamState.Empty;
     private float _roundStartTime;
+    private long _loadedAt;
     private bool _missingPreparationWarned;
 
     // At server start the plugin loads before the engine globals exist (Teams publishes TeamStateChanged on load):
@@ -58,19 +65,23 @@ public sealed class StatsModule : IRetakeModule
     public void Load(ModuleContext context)
     {
         _context = context;
+        _loadedAt = Stopwatch.GetTimestamp();
         _rules = _config.ToRules();
         _recorder = new RoundRecorder(_rules.MaxShotsPerRound, _rules.MinPlayersPerSide);
         _elo = new EloCache(_rules.Elo.Start, _rules.Elo.Floor);
+        _frames = new FrameMonitor(_config.LongFrameMs);
         _repository = StatsRepositories.Create(_config.Database, context.Plugin.ModuleDirectory,
             new StatsWriteOptions(_config.Database.ServerKey, _rules.Elo.Start, _rules.Elo.Floor));
         if (_config.Database.Type == DatabaseType.Sqlite)
         {
             context.Logger.LogInformation("Stats are stored in SQLite: the web panel and external sites can only read them from MySql");
         }
+        _countries = OpenCountries(context);
         var hooks = context.Hooks;
         hooks.OnBus<MapStarted>(e => OnMapStarted(e.MapName));
         hooks.OnBus<ModulesReady>(e =>
         {
+            RecordStart(e.HotReload);
             if (e.HotReload)
             {
                 RefreshPresence();
@@ -90,7 +101,18 @@ public sealed class StatsModule : IRetakeModule
             _teams = e.State;
             RefreshPresence();
         });
+        hooks.OnEvent<EventRoundFreezeEnd>("stats_freeze_end", _ => _recorder?.MarkFreezeEnd(Now()));
         hooks.OnEvent<EventWeaponFire>("stats_weapon_fire", OnWeaponFire);
+        hooks.OnEvent<EventWeaponReload>("stats_weapon_reload", OnWeaponReload);
+        hooks.OnEvent<EventItemPickup>("stats_item_pickup", e => OnItem(e.Userid, PlayerEventType.Pickup, e.Item));
+        hooks.OnEvent<EventItemRemove>("stats_item_remove", e => OnItem(e.Userid, PlayerEventType.Drop, e.Item));
+        hooks.OnEvent<EventPlayerJump>("stats_player_jump", e => OnPlayerEvent(e.Userid, PlayerEventType.Jump));
+        hooks.OnEvent<EventBombBeginplant>("stats_bomb_beginplant", e => OnPlayerEvent(e.Userid, PlayerEventType.PlantBegin));
+        hooks.OnEvent<EventBombAbortplant>("stats_bomb_abortplant", e => OnPlayerEvent(e.Userid, PlayerEventType.PlantAbort));
+        hooks.OnEvent<EventBombBegindefuse>("stats_bomb_begindefuse", e => OnPlayerEvent(e.Userid, PlayerEventType.DefuseBegin, e.Haskit ? "kit" : null));
+        hooks.OnEvent<EventBombAbortdefuse>("stats_bomb_abortdefuse", e => OnPlayerEvent(e.Userid, PlayerEventType.DefuseAbort));
+        hooks.OnEvent<EventBombPickup>("stats_bomb_pickup", e => OnPlayerEvent(e.Userid, PlayerEventType.BombPickup));
+        hooks.OnEvent<EventBombDropped>("stats_bomb_dropped", e => OnPlayerEvent(e.Userid, PlayerEventType.BombDrop));
         hooks.OnEvent<EventPlayerHurt>("stats_player_hurt", OnPlayerHurt);
         hooks.OnEvent<EventPlayerDeath>("stats_player_death", OnPlayerDeath);
         hooks.OnEvent<EventGrenadeThrown>("stats_grenade_thrown", OnGrenadeThrown);
@@ -111,7 +133,7 @@ public sealed class StatsModule : IRetakeModule
         {
             if (HumanId(e.Userid) is { } defuser)
             {
-                _recorder?.Add(new BombDefusedFact(defuser, HasKit(e.Userid), Now()));
+                _recorder?.Add(new BombDefusedFact(defuser, HasKit(e.Userid), Now()) { RemainingMs = BombRemainingMs() });
             }
         });
         hooks.OnEvent<EventBombExploded>("stats_bomb_exploded", _ => _recorder?.Add(new BombExplodedFact(Now())));
@@ -136,6 +158,33 @@ public sealed class StatsModule : IRetakeModule
             // The game may reset the rank fields: they are written again on every spawn.
             hooks.OnEvent<EventPlayerSpawn>("stats_scoreboard_spawn", e => ShowElo(e.Userid));
         }
+        if (_config.TrackServerHealth)
+        {
+            hooks.OnBus<ModuleFailureReported>(e => _serverEvents.Add(e));
+            hooks.OnBus<SlowHandlerReported>(e => _serverEvents.Add(e));
+            hooks.OnTick("stats_frame", OnFrame);
+            hooks.RepeatTimer("stats_uptime", UptimeSeconds, RecordUptime);
+        }
+        if (_config.TrackUsage)
+        {
+            hooks.OnBus<PluginCommandUsed>(e => _serverEvents.Add(ServerEventTypes.Command, e.Module, e.Command));
+            hooks.OnBus<MapVoteClosed>(OnMapVoteClosed);
+            // Counted only: the message is never read.
+            hooks.CommandListener("say", (player, _) => OnChat(player, "say"), HookMode.Pre);
+            hooks.CommandListener("say_team", (player, _) => OnChat(player, "say_team"), HookMode.Pre);
+        }
+        if (_config.TrackServerHealth || _config.TrackUsage)
+        {
+            hooks.RepeatTimer("stats_server_events", ServerEventAggregator.FlushSeconds, FlushServerEvents);
+        }
+        if (_config.PresenceSnapshotSeconds > 0)
+        {
+            hooks.RepeatTimer("stats_presence_snapshot", _config.PresenceSnapshotSeconds, SnapshotPresence);
+        }
+        if (_config.PingSampleSeconds > 0)
+        {
+            hooks.RepeatTimer("stats_ping", _config.PingSampleSeconds, SamplePing);
+        }
         hooks.RepeatTimer("stats_presence", PresenceRefreshSeconds, RefreshPresence);
         // Created last: it starts a background worker, which a throw during hook registration would leak.
         _writes = new StatsWriteQueue(_repository, context.Logger, _config.QueueCapacity,
@@ -146,14 +195,18 @@ public sealed class StatsModule : IRetakeModule
     {
         _recorder?.Abandon();
         var at = DateTimeOffset.UtcNow;
+        FlushServerEvents();
         foreach (var (player, playtime) in _playtime.CloseAll(Clock()))
         {
-            _writes?.Enqueue(new CloseSessionCommand(player, at, null, playtime));
+            CloseSession(player, at, null, playtime);
         }
         _writes?.DisposeAsync().AsTask().Wait(TimeSpan.FromSeconds(_config.ShutdownFlushSeconds + 2));
         _writes = null;
         _repository = null;
         _recorder = null;
+        _frames = null;
+        _countries?.Dispose();
+        _countries = null;
         _elo?.Clear();
         _elo = null;
         _mapStarted = false;
@@ -167,12 +220,13 @@ public sealed class StatsModule : IRetakeModule
     {
         _mapStarted = true;
         _recorder?.Abandon();
+        _frames?.Reset();
         _primaryBySlot.Clear();
         _missingPreparationWarned = false;
         var at = DateTimeOffset.UtcNow;
         foreach (var (player, playtime) in _playtime.CloseAll(Clock()))
         {
-            _writes?.Enqueue(new CloseSessionCommand(player, at, null, playtime));
+            CloseSession(player, at, null, playtime);
         }
         _writes?.Enqueue(new CloseMapCommand(at));
         _writes?.Enqueue(new OpenMapCommand(mapName, at));
@@ -211,6 +265,14 @@ public sealed class StatsModule : IRetakeModule
         }
         _roundStartTime = Server.CurrentTime;
         recorder.Open(new RoundContext(Server.MapName, preparation.RoundNumber, preparation.Site, preparation.RoundType, DateTimeOffset.UtcNow, participants));
+        // The bomb handed out during the preparation (fast plant) fires no bomb_pickup while the round is open.
+        foreach (var player in PlayerQueries.Humans())
+        {
+            if (HumanId(player) is { } carrier && CarriesBomb(player))
+            {
+                AddEvent(PlayerEvents.Simple(carrier, PlayerEventType.BombPickup, 0, PositionOf(player), "start"));
+            }
+        }
     }
 
     private void OnRoundEnd(EventRoundEnd e)
@@ -232,6 +294,13 @@ public sealed class StatsModule : IRetakeModule
         {
             recorder.Abandon();
             return;
+        }
+        foreach (var player in PlayerQueries.Humans())
+        {
+            if (HumanId(player) is { } id)
+            {
+                recorder.Add(EndStateOf(id, player));
+            }
         }
         var outcome = new RoundOutcome(winner, e.Reason, Now());
         // round_mvp follows round_end: close on the next frame so that the MVP is part of the round.
@@ -261,10 +330,50 @@ public sealed class StatsModule : IRetakeModule
         {
             return;
         }
-        var shot = new ShotFired(shooter, StatsWeapons.Normalize(e.Weapon), Now(), Server.TickCount, PositionOf(e.Userid), AnglesOf(e.Userid));
+        var shot = new ShotFired(shooter, StatsWeapons.Normalize(e.Weapon), Now(), Server.TickCount, PositionOf(e.Userid), AnglesOf(e.Userid))
+        {
+            Motion = MotionOf(e.Userid),
+        };
         if (!recorder.Add(shot) && recorder.ShotsDropped == 1)
         {
             Context.Logger.LogWarning("Stats: more than {Max} shots this round; further shots are not recorded", _rules?.MaxShotsPerRound);
+        }
+    }
+
+    private void OnWeaponReload(EventWeaponReload e)
+    {
+        if (_recorder is not { IsOpen: true } || HumanId(e.Userid) is not { } id || ActiveWeaponOf(e.Userid) is not { } weapon)
+        {
+            return;
+        }
+        AddEvent(PlayerEvents.Reload(id, weapon.Weapon, weapon.Clip, weapon.MaxClip, Now(), PositionOf(e.Userid)));
+    }
+
+    private void OnItem(CCSPlayerController? player, PlayerEventType type, string item)
+    {
+        if (_recorder is { IsOpen: true } && HumanId(player) is { } id)
+        {
+            AddEvent(PlayerEvents.Item(id, type, item, Now(), PositionOf(player)));
+        }
+    }
+
+    private void OnPlayerEvent(CCSPlayerController? player, PlayerEventType type, string? value = null)
+    {
+        if (_recorder is { IsOpen: true } && HumanId(player) is { } id)
+        {
+            AddEvent(PlayerEvents.Simple(id, type, Now(), PositionOf(player), value));
+        }
+    }
+
+    private void AddEvent(PlayerEventFact? fact)
+    {
+        if (fact is null || _recorder is not { IsOpen: true } recorder)
+        {
+            return;
+        }
+        if (!recorder.Add(fact) && recorder.EventsDropped == 1)
+        {
+            Context.Logger.LogWarning("Stats: more than {Max} player events this round; further events are not recorded", _rules?.MaxShotsPerRound);
         }
     }
 
@@ -315,12 +424,15 @@ public sealed class StatsModule : IRetakeModule
 
     private void OnConnected(CCSPlayerController? player)
     {
-        if (HumanId(player) is not { } id || _playtime.IsTracked(id))
+        if (player is null || HumanId(player) is not { } id || _playtime.IsTracked(id))
         {
             return;
         }
-        _playtime.Set(id, PresenceOf(player!), Clock());
-        _writes?.Enqueue(new OpenSessionCommand(id, player!.PlayerName, DateTimeOffset.UtcNow));
+        var (presence, vip) = PresenceOf(player);
+        _playtime.Set(id, presence, Clock(), vip);
+        _activity.Start(id);
+        _writes?.Enqueue(new OpenSessionCommand(id, player.PlayerName, DateTimeOffset.UtcNow));
+        LookUpCountry(id, player.IpAddress);
         LoadElo(id);
     }
 
@@ -333,9 +445,50 @@ public sealed class StatsModule : IRetakeModule
         _recorder?.Add(new PlayerLeftRound(id, Now()));
         if (_playtime.Close(id, Clock()) is { } playtime)
         {
-            _writes?.Enqueue(new CloseSessionCommand(id, DateTimeOffset.UtcNow, reason, playtime));
+            CloseSession(id, DateTimeOffset.UtcNow, reason, playtime);
         }
         _elo?.Forget(id);
+    }
+
+    private void CloseSession(ulong steamId, DateTimeOffset at, int? reason, Playtime playtime) =>
+        _writes?.Enqueue(new CloseSessionCommand(steamId, at, reason, playtime) { Activity = _activity.Close(steamId) });
+
+    // The lookup runs off the game thread; the address only reaches the reader and is never stored or logged.
+    // CountryResolver.Resolve never throws (a disposed reader after an unload gives null). The result comes back through
+    // the guard and is written only by the queue of this module load, after the OpenSessionCommand enqueued on connect.
+    private void LookUpCountry(ulong steamId, string? address)
+    {
+        if (_countries is not { } lookup || _writes is not { } writes)
+        {
+            return;
+        }
+        _ = Task.Run(() =>
+        {
+            if (CountryResolver.Resolve(lookup, address) is not { } country)
+            {
+                return;
+            }
+            Server.NextFrame(() => _context?.Guard.Run(Name, "stats_country", () =>
+            {
+                if (ReferenceEquals(_writes, writes))
+                {
+                    writes.Enqueue(new PlayerCountryCommand(steamId, country));
+                }
+            }));
+        });
+    }
+
+    // The file is relative to configs/plugins/RetakeV4 and must stay inside it (the validator already rejects "..").
+    private MmdbCountryLookup? OpenCountries(ModuleContext context)
+    {
+        var root = Path.GetFullPath(Path.Combine(context.Plugin.ModuleDirectory, "..", "..", "configs", "plugins", "RetakeV4"));
+        var path = Path.GetFullPath(Path.Combine(root, _config.GeoDatabaseFile));
+        if (!path.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+        {
+            context.Logger.LogWarning("Stats: GeoDatabaseFile must stay inside the plugin config folder; player countries are not recorded");
+            return null;
+        }
+        return MmdbCountryLookup.Open(path, context.Logger);
     }
 
     private void RefreshPresence()
@@ -356,7 +509,8 @@ public sealed class StatsModule : IRetakeModule
                 OnConnected(player);
                 continue;
             }
-            _playtime.Set(id, PresenceOf(player), now);
+            var (presence, vip) = PresenceOf(player);
+            _playtime.Set(id, presence, now, vip);
             if (_elo?.IsLoaded(id) == false)
             {
                 LoadElo(id);
@@ -364,18 +518,76 @@ public sealed class StatsModule : IRetakeModule
         }
     }
 
-    private Presence PresenceOf(CCSPlayerController player)
+    private (Presence Presence, bool Vip) PresenceOf(CCSPlayerController player) =>
+        PresenceRules.Classify(_teams, new PlayerId(player.Slot), PlayerQueries.SideOf(player));
+
+    private void SamplePing()
     {
-        if (_teams.IsQueued(new PlayerId(player.Slot)))
+        if (!_mapStarted)
         {
-            return Presence.Queue;
+            return;
         }
-        return PlayerQueries.SideOf(player) switch
+        foreach (var player in PlayerQueries.Humans())
         {
-            TeamSide.CT => Presence.Ct,
-            TeamSide.T => Presence.T,
-            _ => Presence.Spectator,
-        };
+            if (HumanId(player) is { } id)
+            {
+                _activity.AddPing(id, (int)Math.Min(player.Ping, 9999u));
+            }
+        }
+    }
+
+    private void SnapshotPresence()
+    {
+        if (!_mapStarted)
+        {
+            return;
+        }
+        _writes?.Enqueue(new PresenceCommand(new PresenceSnapshot(
+            DateTimeOffset.UtcNow, Server.MapName, PlayerQueries.Humans().Count, BotCount(), _teams.Queue.Count)));
+    }
+
+    private void RecordStart(bool hotReload)
+    {
+        if (_config.TrackServerHealth)
+        {
+            _writes?.Enqueue(new ServerEventCommand(ServerEventFactory.Started(DateTimeOffset.UtcNow, hotReload, Context.Plugin.ModuleVersion)));
+        }
+    }
+
+    private void RecordUptime() =>
+        _writes?.Enqueue(new ServerEventCommand(ServerEventFactory.Uptime(DateTimeOffset.UtcNow, Stopwatch.GetElapsedTime(_loadedAt))));
+
+    private void OnFrame()
+    {
+        if (_frames?.Tick(Stopwatch.GetElapsedTime(0).TotalMilliseconds) is { } ms)
+        {
+            _serverEvents.Add(ServerEventTypes.LongFrame, null, null, ms);
+        }
+    }
+
+    private HookResult OnChat(CCSPlayerController? player, string command)
+    {
+        if (HumanId(player) is not null)
+        {
+            _serverEvents.Add(ServerEventTypes.Chat, null, command);
+        }
+        return HookResult.Continue;
+    }
+
+    private void OnMapVoteClosed(MapVoteClosed e)
+    {
+        foreach (var row in ServerEventFactory.MapVoteRows(DateTimeOffset.UtcNow, e))
+        {
+            _writes?.Enqueue(new ServerEventCommand(row));
+        }
+    }
+
+    private void FlushServerEvents()
+    {
+        foreach (var serverEvent in _serverEvents.Flush(DateTimeOffset.UtcNow))
+        {
+            _writes?.Enqueue(new ServerEventCommand(serverEvent));
+        }
     }
 
     // Reads wait for the schema, run off the game thread, and come back through the guard. The token ties the result to

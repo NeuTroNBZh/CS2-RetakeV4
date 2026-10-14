@@ -1,13 +1,18 @@
+using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Modules.Utils;
 using RetakeV4.Domain.Common;
 using RetakeV4.Domain.Geometry;
+using RetakeV4.Domain.Stats;
 
 namespace RetakeV4.Modules.Stats;
 
 // Engine reads shared by the Stats handlers. Bots and HLTV are never actors (null SteamId).
 internal static class StatsEventMapper
 {
+    // FL_ONGROUND: bit 0 of the pawn flags.
+    private const uint OnGround = 1;
+
     public static ulong? HumanId(CCSPlayerController? player) =>
         player is { IsValid: true, IsBot: false, IsHLTV: false } && player.SteamID != 0 ? player.SteamID : null;
 
@@ -28,4 +33,45 @@ internal static class StatsEventMapper
         CsTeam.CounterTerrorist => TeamSide.CT,
         _ => null,
     };
+
+    // Pawn state at weapon_fire: horizontal speed, crouched, scoped, in the air, walking.
+    public static ShotMotion? MotionOf(CCSPlayerController? player)
+    {
+        if (player is not { IsValid: true } || player.PlayerPawn.Value is not { IsValid: true } pawn)
+        {
+            return null;
+        }
+        var velocity = pawn.AbsVelocity;
+        var crouched = pawn.MovementServices is { } movement && new CCSPlayer_MovementServices(movement.Handle).Ducked;
+        return new ShotMotion(ShotMotion.Horizontal(velocity.X, velocity.Y), crouched, pawn.IsScoped, (pawn.Flags & OnGround) == 0, pawn.IsWalking);
+    }
+
+    // Designer name, rounds left and magazine size of the active weapon (weapon_reload carries no weapon).
+    public static (string Weapon, int Clip, int MaxClip)? ActiveWeaponOf(CCSPlayerController? player)
+    {
+        if (player is not { IsValid: true } || player.PlayerPawn.Value is not { IsValid: true, WeaponServices: { } weapons }
+            || weapons.ActiveWeapon.Value is not { IsValid: true } weapon)
+        {
+            return null;
+        }
+        return (weapon.DesignerName, weapon.Clip1, weapon.VData?.MaxClip1 ?? 0);
+    }
+
+    public static bool CarriesBomb(CCSPlayerController? player) =>
+        player is { IsValid: true } && player.PlayerPawn.Value is { IsValid: true, WeaponServices: { } weapons }
+        && weapons.MyWeapons.Any(w => w.Value is { IsValid: true, DesignerName: "weapon_c4" });
+
+    public static PlayerEndState EndStateOf(ulong steamId, CCSPlayerController player) =>
+        player.PawnIsAlive && player.PlayerPawn.Value is { IsValid: true } pawn
+            ? new PlayerEndState(steamId, pawn.Health, pawn.ArmorValue)
+            : new PlayerEndState(steamId, 0, 0);
+
+    // Time left on the planted bomb, read at bomb_defused (the entity stays until the round ends).
+    public static int? BombRemainingMs()
+    {
+        var bomb = Utilities.FindAllEntitiesByDesignerName<CPlantedC4>("planted_c4").FirstOrDefault(b => b.IsValid);
+        return bomb is null ? null : BombClock.RemainingMs(bomb.C4Blow, Server.CurrentTime);
+    }
+
+    public static int BotCount() => Utilities.GetPlayers().Count(p => p is { IsValid: true, IsBot: true, IsHLTV: false });
 }
