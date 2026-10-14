@@ -13,7 +13,17 @@ public enum GrenadeType
 
 // Times are milliseconds since the round started; ticks are server ticks. Bots are never actors: their SteamId is 0 and
 // they only appear as victims flagged VictimIsBot. Weapons are normalized (StatsWeapons.Normalize).
-public sealed record ShotFired(ulong Shooter, string Weapon, int TimeMs, int Tick, Vec3? Position, ViewAngles? Angles);
+public sealed record ShotFired(ulong Shooter, string Weapon, int TimeMs, int Tick, Vec3? Position, ViewAngles? Angles)
+{
+    // Pawn state when the shot left; null when the pawn could not be read.
+    public ShotMotion? Motion { get; init; }
+}
+
+// Speed is horizontal, in units per second.
+public sealed record ShotMotion(float Speed, bool Crouched, bool Scoped, bool Airborne, bool Walking)
+{
+    public static float Horizontal(float x, float y) => MathF.Sqrt((x * x) + (y * y));
+}
 
 public sealed record DamageDealt(
     ulong? Attacker, ulong Victim, bool VictimIsBot, string Weapon, int Hitgroup, int DmgHealth, int DmgArmor, int HealthAfter, int TimeMs, int Tick);

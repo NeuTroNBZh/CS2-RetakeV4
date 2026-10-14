@@ -42,4 +42,36 @@ public class StatsWeaponsTests
 
     [Fact]
     public void GrenadeOf_Gun_IsNull() => Assert.Null(StatsWeapons.GrenadeOf("weapon_ak47"));
+
+    [Theory]
+    [InlineData("weapon_ak47", false, 215)]
+    [InlineData("m4a1_silencer", false, 225)]
+    [InlineData("awp", false, 200)]
+    [InlineData("awp", true, 100)]
+    [InlineData("aug", true, 150)]
+    [InlineData("ssg08", true, 230)]
+    [InlineData("negev", false, 150)]
+    [InlineData("deagle", false, 230)]
+    [InlineData("glock", false, 240)]
+    [InlineData("unknown_gun", false, 250)]
+    public void MaxSpeed_ComesFromTheWeaponTable(string weapon, bool scoped, int expected) =>
+        Assert.Equal(expected, StatsWeapons.MaxSpeed(weapon, scoped));
+
+    [Theory]
+    [InlineData("ak47", 73f, false, false, true)]
+    [InlineData("ak47", 74f, false, false, false)]
+    [InlineData("awp", 33f, true, false, true)]
+    [InlineData("awp", 35f, true, false, false)]
+    [InlineData("awp", 67f, false, false, true)]
+    [InlineData("unknown_gun", 84f, false, false, true)]
+    [InlineData("ak47", 0f, false, true, false)]
+    public void IsStill_UpTo34PercentOfMaxSpeed_OnTheGround(string weapon, float speed, bool scoped, bool airborne, bool expected) =>
+        Assert.Equal(expected, StatsWeapons.IsStill(weapon, new ShotMotion(speed, false, scoped, airborne, false)));
+
+    [Fact]
+    public void Horizontal_IgnoresTheVerticalSpeed() => Assert.Equal(5f, ShotMotion.Horizontal(3f, 4f));
+
+    [Fact]
+    public void EveryTableWeapon_IsABulletWeapon() =>
+        Assert.All(StatsWeapons.SpeedTableWeapons, weapon => Assert.True(StatsWeapons.IsBullet(weapon)));
 }
