@@ -1,11 +1,15 @@
 using System.Globalization;
+using System.Text.RegularExpressions;
 using RetakeV4.Configuration;
 
 namespace RetakeV4.Modules.Stats;
 
-public sealed class StatsConfigValidator : IConfigValidator<StatsConfig>
+public sealed partial class StatsConfigValidator : IConfigValidator<StatsConfig>
 {
     private const double MaxWeight = 10;
+
+    [GeneratedRegex(@"^[A-Za-z0-9_\-]+(/[A-Za-z0-9_\-]+)*\.mmdb\z")]
+    private static partial Regex SafeGeoFile();
 
     public ValidationResult<StatsConfig> Validate(StatsConfig config, StatsConfig defaults, string file)
     {
@@ -24,6 +28,10 @@ public sealed class StatsConfigValidator : IConfigValidator<StatsConfig>
             ShutdownFlushSeconds = Range(config.ShutdownFlushSeconds, 0, 60, defaults.ShutdownFlushSeconds, file, nameof(StatsConfig.ShutdownFlushSeconds), issues),
             Rating = ValidRating(rating, defaults.Rating, file, issues),
             Elo = ValidElo(elo, defaults.Elo, file, issues),
+            PresenceSnapshotSeconds = OffOrRange(config.PresenceSnapshotSeconds, 10, 3600, defaults.PresenceSnapshotSeconds, file, nameof(StatsConfig.PresenceSnapshotSeconds), issues),
+            PingSampleSeconds = OffOrRange(config.PingSampleSeconds, 5, 600, defaults.PingSampleSeconds, file, nameof(StatsConfig.PingSampleSeconds), issues),
+            LongFrameMs = Range(config.LongFrameMs, 20, 5000, defaults.LongFrameMs, file, nameof(StatsConfig.LongFrameMs), issues),
+            GeoDatabaseFile = GeoFile(config.GeoDatabaseFile, defaults.GeoDatabaseFile, file, issues),
         };
         return new ValidationResult<StatsConfig>(validated, issues);
     }
@@ -48,6 +56,26 @@ public sealed class StatsConfigValidator : IConfigValidator<StatsConfig>
             K = Range(elo.K, 1, 200, defaults.K, file, "Elo.K", issues),
             PlayerAdvantage = Range(elo.PlayerAdvantage, 0, 400, defaults.PlayerAdvantage, file, "Elo.PlayerAdvantage", issues),
         };
+    }
+
+    private static int OffOrRange(int value, int min, int max, int fallback, string file, string key, List<ConfigIssue> issues)
+    {
+        if (value == 0 || (value >= min && value <= max))
+        {
+            return value;
+        }
+        issues.Add(new ConfigIssue(file, key, string.Create(CultureInfo.InvariantCulture, $"must be 0 (off) or between {min} and {max}; using default")));
+        return fallback;
+    }
+
+    private static string GeoFile(string? value, string fallback, string file, List<ConfigIssue> issues)
+    {
+        if (value is not null && SafeGeoFile().IsMatch(value))
+        {
+            return value;
+        }
+        issues.Add(new ConfigIssue(file, nameof(StatsConfig.GeoDatabaseFile), "must be a relative .mmdb path (letters, digits, _ - /); using default"));
+        return fallback;
     }
 
     private static double Weight(double value, double fallback, string file, string name, List<ConfigIssue> issues) =>

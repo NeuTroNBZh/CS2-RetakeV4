@@ -57,6 +57,24 @@ public sealed record StatsConfig : ModuleConfig
     // false in CounterStrikeSharp's core.json, which goes against Valve's server guidelines: off by default.
     public bool ScoreboardElo { get; init; }
 
+    // Seconds between two stats_presence rows (humans, bots, queue); 0 = off.
+    public int PresenceSnapshotSeconds { get; init; } = 60;
+
+    // Seconds between two ping samples of each human (average and max per session); 0 = off.
+    public int PingSampleSeconds { get; init; } = 30;
+
+    // A server frame at least this long is recorded as a long_frame server event.
+    public int LongFrameMs { get; init; } = 50;
+
+    // DB-IP Lite country database (CC BY 4.0), relative to configs/plugins/RetakeV4. Missing file: country stays NULL.
+    public string GeoDatabaseFile { get; init; } = "geo/dbip-country-lite.mmdb";
+
+    // plugin_start, hot_reload, module_error, module_disabled, slow_handler, long_frame, uptime.
+    public bool TrackServerHealth { get; init; } = true;
+
+    // map_vote, map_vote_result, command (name only), chat (count only).
+    public bool TrackUsage { get; init; } = true;
+
     public StatsRules ToRules() => new(
         TradeWindowSeconds,
         MinPlayersPerSide,
