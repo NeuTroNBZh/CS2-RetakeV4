@@ -56,7 +56,11 @@ public static class CountryResolver
         }
         if (address.AddressFamily == AddressFamily.InterNetworkV6)
         {
-            return !(address.IsIPv6LinkLocal || address.IsIPv6SiteLocal || address.IsIPv6UniqueLocal || address.IsIPv6Multicast);
+            var v6 = address.GetAddressBytes();
+            var embedsIpv4 = v6.Take(12).All(x => x == 0)
+                || (v6[0] == 0x00 && v6[1] == 0x64 && v6[2] == 0xff && v6[3] == 0x9b && v6.Skip(4).Take(8).All(x => x == 0))
+                || (v6[0] == 0x20 && v6[1] == 0x02);
+            return !(embedsIpv4 || address.IsIPv6LinkLocal || address.IsIPv6SiteLocal || address.IsIPv6UniqueLocal || address.IsIPv6Multicast);
         }
         var b = address.GetAddressBytes();
         return !(b[0] == 0 || b[0] == 10 || b[0] >= 224

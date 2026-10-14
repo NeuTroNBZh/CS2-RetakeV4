@@ -65,4 +65,23 @@ public class PlaytimeTrackerTests
         Assert.Equal(30, playtime.SecondsVip);
         Assert.Equal(60, playtime.SecondsCt);
     }
+
+    [Fact]
+    public void VipFlag_IsIgnoredOutsideTheQueue()
+    {
+        var tracker = new PlaytimeTracker();
+        tracker.Set(1, Presence.Ct, 0, vip: true);
+        Assert.Equal(0, tracker.Close(1, 50)!.SecondsVip);
+    }
+
+    [Fact]
+    public void CloseAll_IncludesVipTime()
+    {
+        var tracker = new PlaytimeTracker();
+        tracker.Set(1, Presence.Queue, 0, vip: true);
+        tracker.Set(2, Presence.Queue, 0);
+        var closed = tracker.CloseAll(20);
+        Assert.Equal(20, closed.Single(c => c.Player == 1).Playtime.SecondsVip);
+        Assert.Equal(0, closed.Single(c => c.Player == 2).Playtime.SecondsVip);
+    }
 }

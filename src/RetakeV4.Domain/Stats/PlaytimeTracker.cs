@@ -15,7 +15,7 @@ public sealed record Playtime(long SecondsCt, long SecondsT, long SecondsSpectat
 {
     public long Total => SecondsCt + SecondsT + SecondsSpectator + SecondsQueue;
 
-    // Part of the play time spent queued with a priority above 0 (VIP); included in SecondsQueue.
+    // Part of the play time spent queued with a priority above 0 (VIP); included in SecondsQueue (only counted while queued).
     public long SecondsVip { get; init; }
 }
 
@@ -91,7 +91,7 @@ public sealed class PlaytimeTracker
     {
         var elapsed = Math.Max(0, nowSeconds - entry.Since);
         entry.Seconds[(int)entry.Presence] += elapsed;
-        if (entry.Vip)
+        if (entry.Vip && entry.Presence == Presence.Queue)
         {
             entry.VipSeconds += elapsed;
         }
