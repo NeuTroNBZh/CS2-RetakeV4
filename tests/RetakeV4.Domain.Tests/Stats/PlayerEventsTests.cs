@@ -68,4 +68,15 @@ public class PlayerEventsTests
     [InlineData(40f, 41f, 0)]
     [InlineData(45f, 5f, 40000)]
     public void BombClock_GivesTheTimeLeft(float blow, float now, int expected) => Assert.Equal(expected, BombClock.RemainingMs(blow, now));
+
+    // A NaN would otherwise become 0 ms left, i.e. a clutch defuse.
+    [Theory]
+    [InlineData(float.NaN, 40f)]
+    [InlineData(40f, float.NaN)]
+    [InlineData(float.PositiveInfinity, 40f)]
+    [InlineData(40f, float.NegativeInfinity)]
+    public void BombClock_WithoutFiniteTimes_IsUnknown(float blow, float now) => Assert.Null(BombClock.RemainingMs(blow, now));
+
+    [Fact]
+    public void BombClock_IsCappedAtIntMax() => Assert.Equal(int.MaxValue, BombClock.RemainingMs(float.MaxValue, 0f));
 }

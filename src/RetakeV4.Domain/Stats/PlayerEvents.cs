@@ -73,6 +73,14 @@ public static class PlayerEvents
 
 public static class BombClock
 {
-    // Milliseconds left before the planted bomb explodes, never negative. Times are engine seconds.
-    public static int RemainingMs(float blowTime, float now) => (int)Math.Max(0, Math.Round((blowTime - now) * 1000.0));
+    // Milliseconds left before the planted bomb explodes, never negative. Times are engine seconds. Null when a time is
+    // not finite (an unread or garbage C4Blow): unknown, never 0 ms (which would make a clutch defuse).
+    public static int? RemainingMs(float blowTime, float now)
+    {
+        if (!float.IsFinite(blowTime) || !float.IsFinite(now))
+        {
+            return null;
+        }
+        return (int)Math.Clamp(Math.Round(((double)blowTime - now) * 1000.0), 0, int.MaxValue);
+    }
 }

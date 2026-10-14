@@ -281,7 +281,8 @@ public static class RoundAnalyzer
         }
     }
 
-    // Pickups before the freeze ends are the spawn equipment; drops from the player's death on are the death drop.
+    // Pickups before the freeze ends are the spawn equipment (without a freeze end: those at time 0, the loadout given at
+    // the round start); drops from the player's death on are the death drop.
     private static void CountEvents(RoundRecord record, Dictionary<ulong, PlayerAccumulator> players, Dictionary<ulong, int> deathTimes)
     {
         var freezeEnd = record.FreezeEndMs ?? 0;
@@ -301,7 +302,7 @@ public static class RoundAnalyzer
                     player.ReloadsFull++;
                     break;
                 case PlayerEventType.Pickup:
-                    if (playerEvent.TimeMs >= freezeEnd)
+                    if (record.FreezeEndMs is null ? playerEvent.TimeMs > 0 : playerEvent.TimeMs >= freezeEnd)
                     {
                         player.Pickups++;
                     }

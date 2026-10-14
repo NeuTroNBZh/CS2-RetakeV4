@@ -54,6 +54,9 @@ public class StatsWeaponsTests
     [InlineData("deagle", false, 230)]
     [InlineData("glock", false, 240)]
     [InlineData("unknown_gun", false, 250)]
+    [InlineData("m4a1_silencer_off", false, 225)]
+    [InlineData("weapon_usp_silencer_off", false, 240)]
+    [InlineData("_off", false, 250)]
     public void MaxSpeed_ComesFromTheWeaponTable(string weapon, bool scoped, int expected) =>
         Assert.Equal(expected, StatsWeapons.MaxSpeed(weapon, scoped));
 

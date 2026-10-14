@@ -90,10 +90,16 @@ public class RoundAnalyzerEventsTests
         Assert.Equal(1, Of(s, Ct1).Drops);
     }
 
+    // Without a freeze end, the loadout given at the round start (time 0) is still not a pickup.
     [Fact]
-    public void WithoutFreezeEnd_EveryPickupCounts()
+    public void WithoutFreezeEnd_PickupsAtTimeZeroAreNotCounted()
     {
-        var s = Analyze(Record(TwoVsTwo(), TeamSide.T, r => r.Add(Ev(Ct1, PlayerEventType.Pickup, 0, "ak47"))));
+        var s = Analyze(Record(TwoVsTwo(), TeamSide.T, r =>
+        {
+            r.Add(Ev(Ct1, PlayerEventType.Pickup, 0, "ak47"));
+            r.Add(Ev(Ct1, PlayerEventType.Pickup, 0, "deagle"));
+            r.Add(Ev(Ct1, PlayerEventType.Pickup, 1, "awp"));
+        }));
         Assert.Equal(1, Of(s, Ct1).Pickups);
     }
 
@@ -184,5 +190,21 @@ public class RoundAnalyzerEventsTests
         Assert.Equal(0, Of(s, Ct2).ArmorEnd);
         Assert.Null(Of(s, T2).HealthEnd);
         Assert.Null(Of(s, T2).ArmorEnd);
+    }
+
+    // A leaver ends like a dead player, even when a state was read for them.
+    [Fact]
+    public void EndStates_LeaversHaveZero()
+    {
+        var s = Analyze(Record(TwoVsTwo(), TeamSide.CT, r =>
+        {
+            r.Add(new PlayerLeftRound(T1, 1500));
+            r.Add(new PlayerLeftRound(T2, 2000));
+            r.Add(new PlayerEndState(T2, 100, 100));
+        }));
+        Assert.Equal(0, Of(s, T1).HealthEnd);
+        Assert.Equal(0, Of(s, T1).ArmorEnd);
+        Assert.Equal(0, Of(s, T2).HealthEnd);
+        Assert.Equal(0, Of(s, T2).ArmorEnd);
     }
 }

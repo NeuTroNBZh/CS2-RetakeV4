@@ -10,6 +10,8 @@ public static class StatsWeapons
     // Knife speed: used for weapons missing from the table.
     public const int DefaultMaxSpeed = 250;
 
+    private const string UnsilencedSuffix = "_off";
+
     private static readonly HashSet<string> NotBullets = new(StringComparer.Ordinal)
     {
         "hegrenade", "flashbang", "smokegrenade", "molotov", "incgrenade", "decoy", "inferno", "taser", "c4", "world",
@@ -84,8 +86,16 @@ public static class StatsWeapons
         _ => null,
     };
 
-    public static int MaxSpeed(string weapon, bool scoped) =>
-        MaxSpeeds.TryGetValue(Normalize(weapon), out var speeds) ? (scoped ? speeds.Scoped : speeds.Speed) : DefaultMaxSpeed;
+    // The unsilenced variants (m4a1_silencer_off, usp_silencer_off) share the speed of their weapon.
+    public static int MaxSpeed(string weapon, bool scoped)
+    {
+        var name = Normalize(weapon);
+        if (name.EndsWith(UnsilencedSuffix, StringComparison.Ordinal))
+        {
+            name = name[..^UnsilencedSuffix.Length];
+        }
+        return MaxSpeeds.TryGetValue(name, out var speeds) ? (scoped ? speeds.Scoped : speeds.Speed) : DefaultMaxSpeed;
+    }
 
     // On the ground and at no more than 34 % of the weapon's max speed; a shot in the air is a moving shot.
     public static bool IsStill(string weapon, ShotMotion motion)
