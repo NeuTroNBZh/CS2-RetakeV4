@@ -197,17 +197,24 @@ public sealed class SqlStatsRepository : IStatsRepository
         await transaction.CommitAsync(ct).ConfigureAwait(false);
     }
 
-    public async Task WriteServerEventAsync(ServerEvent serverEvent, CancellationToken ct)
+    public async Task WriteServerEventsAsync(IReadOnlyList<ServerEvent> serverEvents, CancellationToken ct)
     {
-        ArgumentNullException.ThrowIfNull(serverEvent);
+        ArgumentNullException.ThrowIfNull(serverEvents);
+        if (serverEvents.Count == 0)
+        {
+            return;
+        }
         await using var connection = await _open(ct).ConfigureAwait(false);
         await using var transaction = await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
-        var at = _dialect.DateParam(serverEvent.At);
-        var serverId = await EnsureServerAsync(connection, transaction, at, ct).ConfigureAwait(false);
-        await ExecuteAsync(connection, transaction,
-            "INSERT INTO stats_server_events (server_id, at, type, module, value, occurrences, max_ms) VALUES (@server, @at, @type, @module, @value, @occurrences, @max_ms)", ct,
-            ("@server", serverId), ("@at", at), ("@type", Clip(serverEvent.Type, EventTypeLength)), ("@module", Clip(serverEvent.Module, NameLength)),
-            ("@value", Clip(serverEvent.Value, ServerEventValueLength)), ("@occurrences", serverEvent.Occurrences), ("@max_ms", serverEvent.MaxMs)).ConfigureAwait(false);
+        var serverId = await EnsureServerAsync(connection, transaction, _dialect.DateParam(serverEvents[0].At), ct).ConfigureAwait(false);
+        foreach (var serverEvent in serverEvents)
+        {
+            await ExecuteAsync(connection, transaction,
+                "INSERT INTO stats_server_events (server_id, at, type, module, value, occurrences, max_ms) VALUES (@server, @at, @type, @module, @value, @occurrences, @max_ms)", ct,
+                ("@server", serverId), ("@at", _dialect.DateParam(serverEvent.At)), ("@type", Clip(serverEvent.Type, EventTypeLength)),
+                ("@module", Clip(serverEvent.Module, NameLength)), ("@value", Clip(serverEvent.Value, ServerEventValueLength)),
+                ("@occurrences", serverEvent.Occurrences), ("@max_ms", serverEvent.MaxMs)).ConfigureAwait(false);
+        }
         await transaction.CommitAsync(ct).ConfigureAwait(false);
     }
 

@@ -3,7 +3,8 @@ using Microsoft.Extensions.Logging;
 
 namespace RetakeV4.Persistence.Stats;
 
-// Single background writer. Bounded: when full, the oldest pending command is dropped. Initialization (schema) is retried
+// Single background writer. Bounded: when full, the oldest pending command is dropped. Telemetry yields first: it is skipped
+// (never queued) once half of the capacity is pending, so that it never pushes rounds out. Initialization (schema) is retried
 // with backoff until it succeeds or the queue stops; commands keep queuing meanwhile. A failed write is retried with
 // backoff and keeps its place; disposal drains for a while, then abandons what is left.
 public sealed class StatsWriteQueue : IAsyncDisposable
@@ -21,12 +22,15 @@ public sealed class StatsWriteQueue : IAsyncDisposable
     private readonly TaskCompletionSource<bool> _initialized = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly Dictionary<ulong, long> _sessions = new();
     private readonly Task _worker;
+    private readonly int _telemetryLimit;
     private long? _mapId;
     private string? _mapName;
     private int _dropped;
     private int _abandoned;
     private int _disposed;
     private int _failedCommands;
+    private int _telemetrySkipped;
+    private int _skippingTelemetry;
 
     public StatsWriteQueue(
         IStatsRepository repository, ILogger logger, int capacity, TimeSpan drainTimeout,
@@ -45,6 +49,7 @@ public sealed class StatsWriteQueue : IAsyncDisposable
         _drainTimeout = drainTimeout;
         _backoff = backoff ?? DefaultBackoff;
         _maxAttempts = maxAttempts;
+        _telemetryLimit = Math.Max(1, capacity / 2);
         _channel = Channel.CreateBounded<StatsCommand>(
             new BoundedChannelOptions(capacity) { FullMode = BoundedChannelFullMode.DropOldest, SingleReader = true },
             OnDropped);
@@ -62,11 +67,18 @@ public sealed class StatsWriteQueue : IAsyncDisposable
     // Commands dropped after maxAttempts failed attempts (a poison command must not stall the queue).
     public int Failed => Volatile.Read(ref _failedCommands);
 
+    // Telemetry commands not queued because half of the capacity was pending.
+    public int TelemetrySkipped => Volatile.Read(ref _telemetrySkipped);
+
     public static TimeSpan DefaultBackoff(int attempt) => TimeSpan.FromSeconds(Math.Min(60, Math.Pow(2, Math.Max(0, attempt - 1))));
 
     public void Enqueue(StatsCommand command)
     {
         ArgumentNullException.ThrowIfNull(command);
+        if (command is ServerEventsCommand { Events.Count: 0 } || (command is TelemetryCommand && !AcceptsTelemetry(command)))
+        {
+            return;
+        }
         if (!_channel.Writer.TryWrite(command))
         {
             Interlocked.Increment(ref _abandoned);
@@ -100,6 +112,22 @@ public sealed class StatsWriteQueue : IAsyncDisposable
         {
             _logger.LogWarning("Stats write queue stopped: {Count} pending writes were abandoned", Abandoned);
         }
+    }
+
+    // One warning per burst: the flag is cleared by the next telemetry command that fits.
+    private bool AcceptsTelemetry(StatsCommand command)
+    {
+        if (_channel.Reader.Count < _telemetryLimit)
+        {
+            Interlocked.Exchange(ref _skippingTelemetry, 0);
+            return true;
+        }
+        Interlocked.Increment(ref _telemetrySkipped);
+        if (Interlocked.Exchange(ref _skippingTelemetry, 1) == 0)
+        {
+            _logger.LogWarning("Stats write queue is backed up: telemetry ({Command}) is skipped until it drains", command.GetType().Name);
+        }
+        return false;
     }
 
     private void OnDropped(StatsCommand command)
@@ -248,8 +276,8 @@ public sealed class StatsWriteQueue : IAsyncDisposable
             case PresenceCommand presence:
                 await _repository.WritePresenceAsync(presence.Snapshot, ct).ConfigureAwait(false);
                 break;
-            case ServerEventCommand serverEvent:
-                await _repository.WriteServerEventAsync(serverEvent.Event, ct).ConfigureAwait(false);
+            case ServerEventsCommand serverEvents:
+                await _repository.WriteServerEventsAsync(serverEvents.Events, ct).ConfigureAwait(false);
                 break;
             case PurgeCommand purge:
                 await _repository.PurgeRawAsync(purge.OlderThan, PurgeBatchSize, ct).ConfigureAwait(false);

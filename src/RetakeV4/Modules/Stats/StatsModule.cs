@@ -550,12 +550,12 @@ public sealed class StatsModule : IRetakeModule
     {
         if (_config.TrackServerHealth)
         {
-            _writes?.Enqueue(new ServerEventCommand(ServerEventFactory.Started(DateTimeOffset.UtcNow, hotReload, Context.Plugin.ModuleVersion)));
+            _writes?.Enqueue(new ServerEventsCommand(new[] { ServerEventFactory.Started(DateTimeOffset.UtcNow, hotReload, Context.Plugin.ModuleVersion) }));
         }
     }
 
     private void RecordUptime() =>
-        _writes?.Enqueue(new ServerEventCommand(ServerEventFactory.Uptime(DateTimeOffset.UtcNow, Stopwatch.GetElapsedTime(_loadedAt))));
+        _writes?.Enqueue(new ServerEventsCommand(new[] { ServerEventFactory.Uptime(DateTimeOffset.UtcNow, Stopwatch.GetElapsedTime(_loadedAt)) }));
 
     private void OnFrame()
     {
@@ -574,19 +574,15 @@ public sealed class StatsModule : IRetakeModule
         return HookResult.Continue;
     }
 
-    private void OnMapVoteClosed(MapVoteClosed e)
-    {
-        foreach (var row in ServerEventFactory.MapVoteRows(DateTimeOffset.UtcNow, e))
-        {
-            _writes?.Enqueue(new ServerEventCommand(row));
-        }
-    }
+    private void OnMapVoteClosed(MapVoteClosed e) =>
+        _writes?.Enqueue(new ServerEventsCommand(ServerEventFactory.MapVoteRows(DateTimeOffset.UtcNow, e)));
 
     private void FlushServerEvents()
     {
-        foreach (var serverEvent in _serverEvents.Flush(DateTimeOffset.UtcNow))
+        var events = _serverEvents.Flush(DateTimeOffset.UtcNow);
+        if (events.Count > 0)
         {
-            _writes?.Enqueue(new ServerEventCommand(serverEvent));
+            _writes?.Enqueue(new ServerEventsCommand(events));
         }
     }
 

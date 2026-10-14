@@ -98,9 +98,9 @@ internal sealed class FakeStatsRepository : IStatsRepository
         return Task.CompletedTask;
     }
 
-    public Task WriteServerEventAsync(ServerEvent serverEvent, CancellationToken ct)
+    public Task WriteServerEventsAsync(IReadOnlyList<ServerEvent> serverEvents, CancellationToken ct)
     {
-        Record($"ServerEvent {serverEvent.Type} {serverEvent.Value} x{serverEvent.Occurrences}");
+        Record("ServerEvents " + string.Join(", ", serverEvents.Select(e => $"{e.Type} {e.Value} x{e.Occurrences}")));
         return Task.CompletedTask;
     }
 

@@ -157,7 +157,9 @@ New `stats.json` keys: `PresenceSnapshotSeconds` (60, 0 = off), `PingSampleSecon
 
 ## Reliability
 
-Nothing is written on the game thread. Writes go through a bounded queue (`QueueCapacity`): when it is full, the oldest round is dropped.
+Nothing is written on the game thread. Writes go through a bounded queue (`QueueCapacity`): when it is full, the oldest pending write is dropped.
+
+- Telemetry yields first: presence snapshots and server events (health, usage, uptime, map votes) are skipped, never queued, while half of `QueueCapacity` or more is pending. A database outage therefore never pushes rounds, sessions or maps out of the queue because of telemetry; one warning is logged per skip burst. The server events of one flush (one minute of aggregated rows, or one map vote) are one write, in one transaction.
 
 - Database unreachable at startup: table creation is retried with the same backoff (1 s, doubling up to 60 s) until it succeeds; one error is logged, then warnings. Rounds keep queuing meanwhile and are written once the database is up.
 - During a database outage each pending write is retried for about 4 minutes (10 attempts, 1 s doubling up to 60 s), then dropped with an error log.

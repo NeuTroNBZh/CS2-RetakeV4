@@ -24,7 +24,8 @@ public interface IStatsRepository
 
     Task WritePresenceAsync(PresenceSnapshot snapshot, CancellationToken ct);
 
-    Task WriteServerEventAsync(ServerEvent serverEvent, CancellationToken ct);
+    // All rows in one transaction; an empty list writes nothing.
+    Task WriteServerEventsAsync(IReadOnlyList<ServerEvent> serverEvents, CancellationToken ct);
 
     Task<long> WriteRoundAsync(long mapId, RoundSummary round, CancellationToken ct);
 

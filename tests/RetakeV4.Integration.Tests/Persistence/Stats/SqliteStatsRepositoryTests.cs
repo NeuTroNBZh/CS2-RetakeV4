@@ -241,8 +241,10 @@ public sealed class SqliteStatsRepositoryTests : IDisposable
     public async Task PresenceAndServerEvents_AreWritten_BeforeAnyMap()
     {
         var repository = await Repository("eu-2");
-        await repository.WriteServerEventAsync(new ServerEvent(Now, ServerEventTypes.PluginStart, null, "4.8.1"), CancellationToken.None);
-        await repository.WriteServerEventAsync(new ServerEvent(Now, ServerEventTypes.SlowHandler, "Hud", "tick", 3, 120), CancellationToken.None);
+        await repository.WriteServerEventsAsync(new[]
+        {
+            new ServerEvent(Now, ServerEventTypes.PluginStart, null, "4.8.1"), new ServerEvent(Now, ServerEventTypes.SlowHandler, "Hud", "tick", 3, 120),
+        }, CancellationToken.None);
         await repository.WritePresenceAsync(new PresenceSnapshot(Now, "de_nuke", 8, 2, 1), CancellationToken.None);
         Assert.Equal("eu-2", await Scalar("SELECT server FROM v_stats_server_health WHERE type = 'plugin_start'"));
         Assert.Equal("4.8.1", await Scalar("SELECT value FROM v_stats_server_health WHERE type = 'plugin_start'"));
@@ -262,8 +264,8 @@ public sealed class SqliteStatsRepositoryTests : IDisposable
         await repository.WriteRoundAsync(mapId, RoundV2(Now), CancellationToken.None);
         await repository.WritePresenceAsync(new PresenceSnapshot(Now.AddDays(-40), "de_mirage", 1, 0, 0), CancellationToken.None);
         await repository.WritePresenceAsync(new PresenceSnapshot(Now, "de_mirage", 1, 0, 0), CancellationToken.None);
-        await repository.WriteServerEventAsync(new ServerEvent(Now.AddDays(-40), ServerEventTypes.Uptime, null, "600"), CancellationToken.None);
-        await repository.WriteServerEventAsync(new ServerEvent(Now, ServerEventTypes.Uptime, null, "600"), CancellationToken.None);
+        await repository.WriteServerEventsAsync(new[] { new ServerEvent(Now.AddDays(-40), ServerEventTypes.Uptime, null, "600") }, CancellationToken.None);
+        await repository.WriteServerEventsAsync(new[] { new ServerEvent(Now, ServerEventTypes.Uptime, null, "600") }, CancellationToken.None);
         // Old round: 1 shot, 1 damage, 2 player events; plus 1 presence snapshot and 1 server event.
         Assert.Equal(6, await repository.PurgeRawAsync(Now.AddDays(-30), 1, CancellationToken.None));
         Assert.Equal(2L, await Scalar("SELECT COUNT(*) FROM v_stats_player_events"));
@@ -279,5 +281,32 @@ public sealed class SqliteStatsRepositoryTests : IDisposable
         var repository = await Repository();
         await repository.WritePresenceAsync(new PresenceSnapshot(Now.AddDays(-40), "de_mirage", 1, 0, 0), CancellationToken.None);
         Assert.Equal(1, await repository.PurgeRawAsync(Now.AddDays(-30), 10, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task ServerEventsBatch_WritesEveryRow_Clipped()
+    {
+        var repository = await Repository();
+        var longValue = new string('v', 200);
+        await repository.WriteServerEventsAsync(new[]
+        {
+            new ServerEvent(Now, ServerEventTypes.Chat, null, "say", 4),
+            new ServerEvent(Now, ServerEventTypes.Command, new string('m', 100), longValue),
+            new ServerEvent(Now, new string('t', 40), null, null),
+        }, CancellationToken.None);
+        Assert.Equal(3L, await Scalar("SELECT COUNT(*) FROM stats_server_events"));
+        Assert.Equal(4L, await Scalar("SELECT occurrences FROM stats_server_events WHERE type = 'chat'"));
+        Assert.Equal(longValue[..128], await Scalar("SELECT value FROM stats_server_events WHERE type = 'command'"));
+        Assert.Equal(new string('m', 64), await Scalar("SELECT module FROM stats_server_events WHERE type = 'command'"));
+        Assert.Equal(new string('t', 24), await Scalar("SELECT type FROM stats_server_events WHERE value IS NULL"));
+    }
+
+    [Fact]
+    public async Task EmptyServerEventsBatch_WritesNothing()
+    {
+        var repository = await Repository();
+        await repository.WriteServerEventsAsync(Array.Empty<ServerEvent>(), CancellationToken.None);
+        Assert.Equal(0L, await Scalar("SELECT COUNT(*) FROM stats_server_events"));
+        Assert.Equal(0L, await Scalar("SELECT COUNT(*) FROM stats_servers"));
     }
 }

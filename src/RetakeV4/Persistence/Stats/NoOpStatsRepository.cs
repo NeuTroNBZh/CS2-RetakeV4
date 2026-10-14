@@ -19,7 +19,7 @@ public sealed class NoOpStatsRepository : IStatsRepository
 
     public Task WritePresenceAsync(PresenceSnapshot snapshot, CancellationToken ct) => Task.CompletedTask;
 
-    public Task WriteServerEventAsync(ServerEvent serverEvent, CancellationToken ct) => Task.CompletedTask;
+    public Task WriteServerEventsAsync(IReadOnlyList<ServerEvent> serverEvents, CancellationToken ct) => Task.CompletedTask;
 
     public Task<long> WriteRoundAsync(long mapId, RoundSummary round, CancellationToken ct) => Task.FromResult(0L);
 

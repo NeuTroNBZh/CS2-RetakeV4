@@ -28,7 +28,7 @@ public class MySqlStatsRepositoryTests
         await repository.CloseSessionAsync(session, mapId, Ct, now.AddMinutes(1), 0, new Playtime(60, 0, 0, 0) { SecondsVip = 5 },
             new SessionActivity(40, 60), CancellationToken.None);
         await repository.WritePresenceAsync(new PresenceSnapshot(now, "de_mirage", 2, 0, 0), CancellationToken.None);
-        await repository.WriteServerEventAsync(new ServerEvent(now, ServerEventTypes.Chat, null, "say", 4), CancellationToken.None);
+        await repository.WriteServerEventsAsync(new[] { new ServerEvent(now, ServerEventTypes.Chat, null, "say", 4), new ServerEvent(now, ServerEventTypes.Uptime, null, "600") }, CancellationToken.None);
         await repository.CloseMapAsync(mapId, now.AddMinutes(2), CancellationToken.None);
         var after = (await repository.LoadEloAsync(new[] { Ct }, CancellationToken.None))[Ct];
         Assert.NotEqual(before, after);

@@ -25,6 +25,11 @@ public sealed record PurgeCommand(DateTimeOffset OlderThan) : StatsCommand;
 // so a country sent before the session is opened is silently lost.
 public sealed record PlayerCountryCommand(ulong SteamId, string Country) : StatsCommand;
 
-public sealed record PresenceCommand(PresenceSnapshot Snapshot) : StatsCommand;
+// Telemetry (presence, server health, uptime) yields to the game data: StatsWriteQueue skips it, instead of queuing it,
+// once the queue is half full, so that a database outage never pushes rounds or sessions out of the bounded queue.
+public abstract record TelemetryCommand : StatsCommand;
 
-public sealed record ServerEventCommand(ServerEvent Event) : StatsCommand;
+public sealed record PresenceCommand(PresenceSnapshot Snapshot) : TelemetryCommand;
+
+// Every row of one flush (aggregated events, a map vote) in one command and one transaction.
+public sealed record ServerEventsCommand(IReadOnlyList<ServerEvent> Events) : TelemetryCommand;
