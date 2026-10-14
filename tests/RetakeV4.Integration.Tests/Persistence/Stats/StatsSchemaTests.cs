@@ -348,4 +348,18 @@ public sealed class StatsSchemaTests : IDisposable
                 column.Split('_'), token => token.Equals("ip", StringComparison.OrdinalIgnoreCase) || token.Equals("address", StringComparison.OrdinalIgnoreCase)));
         }
     }
+
+    // Golden SHA-256 of the 4.9-a entries (sub-project 1). They are applied by index on databases already upgraded, so
+    // they must never change; a later change to a v2 view is a new step (DROP VIEW + CREATE VIEW).
+    [Theory]
+    [InlineData("mysql", 51, "ac693523dee83b29be6ecc9270fc3d2e450c7d4505d1d7f6e6913946a310d6a9")]
+    [InlineData("sqlite", 56, "8250fe10bdc052ede23356cdb89aa89e582feba74e7d121b414c9e4e3b0a3d34")]
+    public void V2EventsEntries_MatchTheSnapshot(string dialect, int count, string expected)
+    {
+        var d = dialect == "mysql" ? StatsDialect.MySql : StatsDialect.Sqlite;
+        var entries = StatsSchema.Migrations(d).Skip(StatsSchema.V1Count(d)).Take(StatsSchema.V2EventsCount(d) - StatsSchema.V1Count(d)).ToList();
+        Assert.Equal(count, entries.Count);
+        var sql = string.Join("\n-- next --\n", entries.Select(m => m.Sql.ReplaceLineEndings("\n")));
+        Assert.Equal(expected, Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(sql))));
+    }
 }

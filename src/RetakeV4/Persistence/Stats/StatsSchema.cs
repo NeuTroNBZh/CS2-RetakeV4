@@ -62,6 +62,13 @@ public static class StatsSchema
         return V1(d).Count;
     }
 
+    // Number of entries up to the end of 4.9-a (sub-project 1): a database of that stage has this version.
+    internal static int V2EventsCount(StatsDialect d)
+    {
+        ArgumentNullException.ThrowIfNull(d);
+        return V1(d).Count + V2(d).Count;
+    }
+
     private static List<string> V1(StatsDialect d)
     {
         var counters = string.Join(", ", V1Counters.Select(c => $"{c} {d.BigInt} NOT NULL DEFAULT 0"));
@@ -176,7 +183,7 @@ public static class StatsSchema
         {
             migrations.AddRange(V2Indexes.SelectMany(t => t.Value.Select(i => new SqlMigration($"CREATE INDEX IF NOT EXISTS {i.Name} ON {t.Key} ({i.Columns})"))));
         }
-        migrations.AddRange(StatsViewsV2.For(d).Select(v => new SqlMigration($"{d.CreateView} {v.Name} AS {v.Select}")));
+        migrations.AddRange(StatsViewsV2.Events(d).Select(v => new SqlMigration($"{d.CreateView} {v.Name} AS {v.Select}")));
         return migrations;
     }
 

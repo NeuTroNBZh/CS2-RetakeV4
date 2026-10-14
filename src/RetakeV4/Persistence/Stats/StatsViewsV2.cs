@@ -5,6 +5,8 @@ namespace RetakeV4.Persistence.Stats;
 
 // The v2 read contract (contract/stats/views.v2.json): new views only, the v1 views never change. Portable SQL only:
 // it runs unchanged on MySQL 8, MariaDB and SQLite. Ratios are computed here, never stored; a ratio over zero is NULL.
+// Events(d) is what the 4.9-a migration step creates: frozen (StatsSchemaTests pins its SQL), so it reads the frozen
+// counter lists of StatsSchema, never StatsCounters. For(d) is the current contract.
 public static class StatsViewsV2
 {
     private static readonly (string Name, string Expression)[] Ratios =
@@ -15,6 +17,13 @@ public static class StatsViewsV2
         ("still_shot_pct", "ROUND(100.0 * {0}shots_still / NULLIF({0}shots_still + {0}shots_moving, 0), 3)"),
         ("dtr", "ROUND(1.0 * {0}damage_taken / NULLIF({0}rounds, 0), 3)"),
     };
+
+    // The stats_player_totals counters when the 4.9-a step ran.
+    private static readonly IReadOnlyList<string> EventsCounters = StatsSchema.V1Counters.Concat(StatsSchema.V2Counters).ToArray();
+
+    private static readonly StatsView[] MySqlEvents = BuildEvents(StatsDialect.MySql);
+
+    private static readonly StatsView[] SqliteEvents = BuildEvents(StatsDialect.Sqlite);
 
     private static readonly StatsView[] MySqlViews = BuildViews(StatsDialect.MySql);
 
@@ -28,7 +37,15 @@ public static class StatsViewsV2
         return dialect.IsMySql ? MySqlViews : SqliteViews;
     }
 
-    private static StatsView[] BuildViews(StatsDialect d) => new[]
+    internal static IReadOnlyList<StatsView> Events(StatsDialect dialect)
+    {
+        ArgumentNullException.ThrowIfNull(dialect);
+        return dialect.IsMySql ? MySqlEvents : SqliteEvents;
+    }
+
+    private static StatsView[] BuildViews(StatsDialect d) => BuildEvents(d);
+
+    private static StatsView[] BuildEvents(StatsDialect d) => new[]
     {
         new StatsView("v2_stats_players", $"""
             SELECT p.steam_id, p.name, p.country, p.first_seen, p.last_seen, p.elo,
@@ -36,18 +53,18 @@ public static class StatsViewsV2
                 COALESCE(pt.seconds_spec, 0) AS seconds_spec, COALESCE(pt.seconds_queue, 0) AS seconds_queue,
                 COALESCE(pt.seconds_ct + pt.seconds_t + pt.seconds_spec + pt.seconds_queue, 0) AS seconds_total,
                 COALESCE(pt.sessions, 0) AS sessions,
-                {StatsViews.CountersOrZero(StatsCounters.AllColumns, "t.")},
+                {StatsViews.CountersOrZero(EventsCounters, "t.")},
                 {StatsViews.RatioColumns(d, "t.", null)},
-                {RatioColumns(d, "t.")}
+                {RatioColumns(d, "t.", Ratios)}
             FROM stats_players p
             LEFT JOIN stats_player_totals t ON t.steam_id = p.steam_id AND t.scope = 'all'
             LEFT JOIN stats_player_playtime pt ON pt.steam_id = p.steam_id
             """),
         new StatsView("v2_stats_player_scopes", $"""
             SELECT t.steam_id, p.name, t.scope,
-                {StatsViews.Counters(StatsCounters.AllColumns, "t.")},
+                {StatsViews.Counters(EventsCounters, "t.")},
                 {StatsViews.RatioColumns(d, "t.", null)},
-                {RatioColumns(d, "t.")}
+                {RatioColumns(d, "t.", Ratios)}
             FROM stats_player_totals t
             JOIN stats_players p ON p.steam_id = t.steam_id
             """),
@@ -105,6 +122,6 @@ public static class StatsViewsV2
             """),
     };
 
-    private static string RatioColumns(StatsDialect d, string alias) => string.Join(", ",
-        Ratios.Select(r => $"{d.FloatCast(string.Format(CultureInfo.InvariantCulture, r.Expression, alias))} AS {r.Name}"));
+    private static string RatioColumns(StatsDialect d, string alias, (string Name, string Expression)[] ratios) => string.Join(", ",
+        ratios.Select(r => $"{d.FloatCast(string.Format(CultureInfo.InvariantCulture, r.Expression, alias))} AS {r.Name}"));
 }
