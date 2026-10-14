@@ -36,6 +36,7 @@ public static class MovementAnalyzer
             var aliveEnd = deathTimes.TryGetValue(id, out var died) ? Math.Clamp(died, freezeEnd, roundEnd) : roundEnd;
             result[id] = Basic(own, aliveEnd - freezeEnd, ShotTimes(record, id), afkMs);
         }
+        ApplySmokes(record, rules, sides, samples, result);
         return result;
     }
 
@@ -155,6 +156,101 @@ public static class MovementAnalyzer
     {
         var span = last.TimeMs - start.TimeMs;
         return span >= afkMs ? span : 0;
+    }
+
+    // In a smoke: the eyes are inside an active cloud. Behind a smoke: not in one, and the line from the eyes to the eyes
+    // of the nearest living enemy crosses an active cloud. Every human is sampled in the same tick, so samples with the
+    // same time are a snapshot of the living players; bots are never sampled.
+    private static void ApplySmokes(RoundRecord record, MovementRules rules, IReadOnlyDictionary<ulong, TeamSide> sides,
+        Dictionary<ulong, List<MovementSample>> samples, Dictionary<ulong, MovementRoundStats> result)
+    {
+        if (record.Smokes.Count == 0)
+        {
+            return;
+        }
+        var snapshots = samples.Values.SelectMany(s => s).GroupBy(s => s.TimeMs).ToDictionary(g => g.Key, g => g.ToList());
+        var active = new List<SmokeCloud>();
+        foreach (var (id, own) in samples)
+        {
+            var inSmoke = 0;
+            var behind = 0;
+            foreach (var sample in own)
+            {
+                ActiveAt(record.Smokes, sample.TimeMs, active);
+                if (active.Count == 0)
+                {
+                    continue;
+                }
+                var eyes = sample.Eyes;
+                if (Inside(active, eyes, rules.SmokeRadius))
+                {
+                    inSmoke++;
+                }
+                else if (NearestEnemy(sample, sides, snapshots[sample.TimeMs]) is { } enemy && Crosses(active, eyes, enemy.Eyes, rules.SmokeRadius))
+                {
+                    behind++;
+                }
+            }
+            result[id] = result[id] with { InSmokeSamples = inSmoke, BehindSmokeSamples = behind };
+        }
+    }
+
+    // A cloud is active from its detonation until its expiry or SmokeLifetimeMs, whichever comes first.
+    private static void ActiveAt(IReadOnlyList<SmokeCloud> smokes, int timeMs, List<SmokeCloud> active)
+    {
+        active.Clear();
+        foreach (var smoke in smokes)
+        {
+            var end = Math.Min(smoke.EndMs ?? int.MaxValue, smoke.StartMs + SmokeLifetimeMs);
+            if (timeMs >= smoke.StartMs && timeMs < end)
+            {
+                active.Add(smoke);
+            }
+        }
+    }
+
+    private static bool Inside(List<SmokeCloud> active, Vec3 point, float radius)
+    {
+        foreach (var smoke in active)
+        {
+            if ((point - smoke.Center).Length <= radius)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static bool Crosses(List<SmokeCloud> active, Vec3 from, Vec3 to, float radius)
+    {
+        foreach (var smoke in active)
+        {
+            if (Segments.DistanceToSegment(smoke.Center, from, to) <= radius)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static MovementSample? NearestEnemy(MovementSample sample, IReadOnlyDictionary<ulong, TeamSide> sides, List<MovementSample> snapshot)
+    {
+        MovementSample? nearest = null;
+        var best = float.MaxValue;
+        foreach (var other in snapshot)
+        {
+            if (sides[other.Player] == sides[sample.Player])
+            {
+                continue;
+            }
+            var distance = (other.Position - sample.Position).Length;
+            if (distance < best)
+            {
+                best = distance;
+                nearest = other;
+            }
+        }
+        return nearest;
     }
 
     private static float Horizontal(Vec3 v) => MathF.Sqrt((v.X * v.X) + (v.Y * v.Y));

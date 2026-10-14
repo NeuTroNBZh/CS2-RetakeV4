@@ -175,4 +175,89 @@ public class MovementAnalyzerTests
         Assert.Equal(0, M(s, Ct1).AfkMs);
         Assert.Equal(16875 + 18000, M(s, Ct2).AfkMs);
     }
+
+    // Only CT samples: no enemy is ever sampled, so nothing is behind a smoke.
+    [Fact]
+    public void InSmoke_UsesTheEyes_AndTheRadius()
+    {
+        var s = Analyze(Record(TwoVsTwo(), TeamSide.CT, r =>
+        {
+            r.MarkFreezeEnd(1000);
+            r.AddSmoke(1, 2000, new Vec3(0, 0, 0));
+            r.Add(S(Ct1, 1875, 0, 0, -64));
+            r.Add(S(Ct1, 2000, 72, 0, -64));
+            r.Add(S(Ct1, 2125, 72, 0, -46, flags: MovementFlags.Crouched));
+            r.Add(S(Ct2, 2000, 73, 0, -64));
+            r.Add(S(Ct2, 2125, 0, 0, 8));
+        }));
+        Assert.Equal(2, M(s, Ct1).InSmokeSamples);
+        Assert.Equal(66.67, M(s, Ct1).InSmokePct);
+        Assert.Equal(1, M(s, Ct2).InSmokeSamples);
+        Assert.Equal(0, M(s, Ct1).BehindSmokeSamples);
+        Assert.Equal(0, M(s, Ct2).BehindSmokeSamples);
+        Assert.Null(M(s, T1).InSmokePct);
+    }
+
+    [Fact]
+    public void Smoke_IsActiveUntilExpiredOrEighteenSeconds()
+    {
+        var s = Analyze(Record(ThreeVsTwo(), TeamSide.CT, r =>
+        {
+            r.MarkFreezeEnd(1000);
+            r.AddSmoke(1, 2000, new Vec3(0, 0, 0));
+            r.AddSmoke(2, 2000, new Vec3(1000, 0, 0));
+            r.AddSmoke(3, 2000, new Vec3(2000, 0, 0));
+            r.EndSmoke(1, 5000);
+            r.EndSmoke(3, 30000);
+            r.Add(S(Ct1, 4875, 0, 0, -64));
+            r.Add(S(Ct1, 5000, 0, 0, -64));
+            r.Add(S(Ct2, 19875, 1000, 0, -64));
+            r.Add(S(Ct2, 20000, 1000, 0, -64));
+            r.Add(S(Ct3, 19875, 2000, 0, -64));
+            r.Add(S(Ct3, 20000, 2000, 0, -64));
+        }));
+        Assert.Equal(1, M(s, Ct1).InSmokeSamples);
+        Assert.Equal(1, M(s, Ct2).InSmokeSamples);
+        Assert.Equal(1, M(s, Ct3).InSmokeSamples);
+    }
+
+    [Fact]
+    public void BehindSmoke_IsASmokeOnTheLineToTheEnemy()
+    {
+        var s = Analyze(Record(TwoVsTwo(), TeamSide.CT, r =>
+        {
+            r.MarkFreezeEnd(1000);
+            r.AddSmoke(1, 2000, new Vec3(0, 0, 0));
+            r.Add(S(Ct1, 3000, -300, 0, -64));
+            r.Add(S(T1, 3000, 300, 0, -64));
+            r.Add(S(Ct1, 3125, -300, 72, -64));
+            r.Add(S(T1, 3125, 300, 72, -64));
+            r.Add(S(Ct1, 3250, -300, 73, -64));
+            r.Add(S(T1, 3250, 300, 73, -64));
+        }));
+        Assert.Equal(2, M(s, Ct1).BehindSmokeSamples);
+        Assert.Equal(66.67, M(s, Ct1).BehindSmokePct);
+        Assert.Equal(2, M(s, T1).BehindSmokeSamples);
+        Assert.Equal(0, M(s, Ct1).InSmokeSamples);
+    }
+
+    [Fact]
+    public void BehindSmoke_LooksAtTheNearestEnemy_AndNotFromInsideASmoke()
+    {
+        var s = Analyze(Record(TwoVsTwo(), TeamSide.CT, r =>
+        {
+            r.MarkFreezeEnd(1000);
+            r.AddSmoke(1, 2000, new Vec3(0, 0, 0));
+            r.Add(S(Ct1, 3000, -300, 0, -64));
+            r.Add(S(T1, 3000, 300, 0, -64));
+            r.Add(S(T2, 3000, -300, 200, -64));
+            r.Add(S(Ct2, 3125, 0, 0, -64));
+            r.Add(S(T1, 3125, 300, 0, -64));
+        }));
+        Assert.Equal(0, M(s, Ct1).BehindSmokeSamples);
+        Assert.Equal(2, M(s, T1).BehindSmokeSamples);
+        Assert.Equal(0, M(s, T2).BehindSmokeSamples);
+        Assert.Equal(1, M(s, Ct2).InSmokeSamples);
+        Assert.Equal(0, M(s, Ct2).BehindSmokeSamples);
+    }
 }
