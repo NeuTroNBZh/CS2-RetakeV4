@@ -19,3 +19,12 @@ public sealed record CloseSessionCommand(ulong SteamId, DateTimeOffset At, int? 
 public sealed record WriteRoundCommand(RoundSummary Round) : StatsCommand;
 
 public sealed record PurgeCommand(DateTimeOffset OlderThan) : StatsCommand;
+
+// The country is resolved off the game thread before this command exists: the IP address never reaches the queue.
+// Ordering requirement: enqueue OpenSessionCommand first. The repository only updates an existing stats_players row,
+// so a country sent before the session is opened is silently lost.
+public sealed record PlayerCountryCommand(ulong SteamId, string Country) : StatsCommand;
+
+public sealed record PresenceCommand(PresenceSnapshot Snapshot) : StatsCommand;
+
+public sealed record ServerEventCommand(ServerEvent Event) : StatsCommand;

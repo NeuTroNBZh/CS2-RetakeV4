@@ -241,6 +241,16 @@ public sealed class StatsWriteQueue : IAsyncDisposable
                 var roundMap = await EnsureMapAsync(context.MapName, context.StartedAt, ct).ConfigureAwait(false);
                 await _repository.WriteRoundAsync(roundMap, write.Round, ct).ConfigureAwait(false);
                 break;
+            case PlayerCountryCommand country:
+                long? countrySession = _sessions.TryGetValue(country.SteamId, out var countryId) ? countryId : null;
+                await _repository.SetCountryAsync(countrySession, country.SteamId, country.Country, ct).ConfigureAwait(false);
+                break;
+            case PresenceCommand presence:
+                await _repository.WritePresenceAsync(presence.Snapshot, ct).ConfigureAwait(false);
+                break;
+            case ServerEventCommand serverEvent:
+                await _repository.WriteServerEventAsync(serverEvent.Event, ct).ConfigureAwait(false);
+                break;
             case PurgeCommand purge:
                 await _repository.PurgeRawAsync(purge.OlderThan, PurgeBatchSize, ct).ConfigureAwait(false);
                 break;

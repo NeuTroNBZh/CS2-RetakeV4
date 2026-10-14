@@ -194,4 +194,26 @@ public class StatsWriteQueueTests
     [InlineData(30, 60)]
     public void DefaultBackoff_DoublesUpToAMinute(int attempt, int seconds) =>
         Assert.Equal(TimeSpan.FromSeconds(seconds), StatsWriteQueue.DefaultBackoff(attempt));
+
+    [Fact]
+    public async Task CountryPresenceAndServerEvents_ReachTheRepository()
+    {
+        var repository = new FakeStatsRepository();
+        var queue = Queue(repository, new ListLogger());
+        queue.Enqueue(new OpenMapCommand("de_mirage", Now));
+        queue.Enqueue(new OpenSessionCommand(7, "p", Now));
+        queue.Enqueue(new PlayerCountryCommand(7, "FR"));
+        queue.Enqueue(new PlayerCountryCommand(8, "DE"));
+        queue.Enqueue(new PresenceCommand(new PresenceSnapshot(Now, "de_mirage", 3, 1, 0)));
+        queue.Enqueue(new ServerEventCommand(new ServerEvent(Now, ServerEventTypes.Chat, null, "say", 4)));
+        queue.Enqueue(new CloseSessionCommand(7, Now, 1, new Playtime(1, 0, 0, 0)) { Activity = new SessionActivity(40, 60) });
+        await queue.DisposeAsync();
+        Assert.Equal(
+            new[]
+            {
+                "OpenMap de_mirage -> 1", "OpenSession 7 map 1 -> 2", "Country 7 FR session 2", "Country 8 DE session none",
+                "Presence de_mirage 3/1/0", "ServerEvent chat say x4", "CloseSession 7 session 2 map 1 ping 40",
+            },
+            repository.Calls);
+    }
 }
