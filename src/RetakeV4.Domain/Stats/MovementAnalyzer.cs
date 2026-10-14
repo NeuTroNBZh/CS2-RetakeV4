@@ -198,7 +198,7 @@ public static class MovementAnalyzer
     }
 
     // A cloud is active from its detonation until its expiry or SmokeLifetimeMs, whichever comes first.
-    private static void ActiveAt(IReadOnlyList<SmokeCloud> smokes, int timeMs, List<SmokeCloud> active)
+    internal static void ActiveAt(IReadOnlyList<SmokeCloud> smokes, int timeMs, List<SmokeCloud> active)
     {
         active.Clear();
         foreach (var smoke in smokes)
@@ -211,7 +211,7 @@ public static class MovementAnalyzer
         }
     }
 
-    private static bool Inside(List<SmokeCloud> active, Vec3 point, float radius)
+    internal static bool Inside(List<SmokeCloud> active, Vec3 point, float radius)
     {
         foreach (var smoke in active)
         {

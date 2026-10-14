@@ -7,6 +7,18 @@ internal static class BombCarry
     public static Dictionary<ulong, int> Compute(RoundRecord record, IReadOnlyDictionary<ulong, int> deathTimes)
     {
         var result = new Dictionary<ulong, int>();
+        foreach (var interval in Intervals(record, deathTimes))
+        {
+            result[interval.Player] = result.GetValueOrDefault(interval.Player) + (interval.EndMs - interval.StartMs);
+        }
+        return result;
+    }
+
+    // One interval per carry, in time order; EndMs >= StartMs (a carry stopped before it started lasts 0 ms). The replay
+    // encoder passes no death times: a dead player has no sample to flag.
+    public static List<CarryInterval> Intervals(RoundRecord record, IReadOnlyDictionary<ulong, int> deathTimes)
+    {
+        var result = new List<CarryInterval>();
         ulong? carrier = null;
         var since = 0;
         foreach (var playerEvent in record.Events
@@ -42,8 +54,10 @@ internal static class BombCarry
             {
                 end = Math.Min(end, died);
             }
-            result[holder] = result.GetValueOrDefault(holder) + Math.Max(0, end - since);
+            result.Add(new CarryInterval(holder, since, Math.Max(since, end)));
             carrier = null;
         }
     }
 }
+
+internal readonly record struct CarryInterval(ulong Player, int StartMs, int EndMs);
