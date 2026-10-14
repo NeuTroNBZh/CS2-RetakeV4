@@ -376,4 +376,21 @@ public sealed class SqliteStatsRepositoryTests : IDisposable
         Assert.Equal(2.0, await Scalar($"SELECT slowness_index FROM v_stats_player_behaviour WHERE steam_id = {CtMate}"));
         Assert.Null(await Scalar($"SELECT slowness_index FROM v_stats_player_behaviour WHERE steam_id = {T}"));
     }
+
+    // Movement off (StatsRules.Movement = null): the 13 round columns stay NULL, the 16 counters stay 0, rounds still count.
+    [Fact]
+    public async Task WriteRound_MovementOff_LeavesTheRoundColumnsNullAndTheCountersZero()
+    {
+        Assert.Equal(13, StatsSchema.MovementRoundColumns.Count);
+        Assert.Equal(16, StatsSchema.MovementCounters.Count);
+        var repository = await Repository();
+        var mapId = await repository.OpenMapAsync("de_mirage", Now, CancellationToken.None);
+        await repository.WriteRoundAsync(mapId, RoundMovement(Now, Ct, CtMate, T, Rules), CancellationToken.None);
+        var ids = $"{Ct}, {CtMate}, {T}";
+        Assert.Equal(3L, await Scalar($"SELECT COUNT(*) FROM stats_round_players WHERE steam_id IN ({ids})"));
+        Assert.Equal(0L, await Scalar(MovementRoundColumnsSet(ids)));
+        Assert.True((long)(await Scalar($"SELECT COUNT(*) FROM stats_player_totals WHERE steam_id IN ({ids})"))! >= 3);
+        Assert.Equal(0L, await Scalar(MovementCountersSet(ids)));
+        Assert.Equal(1L, await Scalar($"SELECT rounds FROM stats_player_totals WHERE steam_id = {Ct} AND scope = 'all'"));
+    }
 }

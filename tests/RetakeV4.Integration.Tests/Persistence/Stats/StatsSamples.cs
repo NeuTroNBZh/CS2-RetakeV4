@@ -14,6 +14,13 @@ internal static class StatsSamples
 
     public static StatsRules MovementOn { get; } = Rules with { Movement = new MovementRules(72f, 394f, 5.0, 15.0) };
 
+    // Rows of the given players with at least one movement round column set, or one movement counter not 0 (any scope).
+    public static string MovementRoundColumnsSet(string steamIds) =>
+        $"SELECT COUNT(*) FROM stats_round_players WHERE steam_id IN ({steamIds}) AND ({string.Join(" OR ", RetakeV4.Persistence.Stats.StatsSchema.MovementRoundColumns.Select(c => $"{c} IS NOT NULL"))})";
+
+    public static string MovementCountersSet(string steamIds) =>
+        $"SELECT COUNT(*) FROM stats_player_totals WHERE steam_id IN ({steamIds}) AND ({string.Join(" OR ", RetakeV4.Persistence.Stats.StatsSchema.MovementCounters.Select(c => $"{c} <> 0"))})";
+
     // CT kills T with a headshot on site A after one shot; T planted and threw a flash.
     public static RoundSummary Round(DateTimeOffset startedAt, string ctName = "ct", bool ranked = true, int ctElo = 1000, string weapon = "m4a1")
     {
@@ -57,8 +64,8 @@ internal static class StatsSamples
     }
 
     // Freeze ends at 1 s; three samples 0.5 s apart. ctA runs 250 u east and shoots at 1.5 s; ctB stands still and shoots
-    // at 2 s; t stands still and never fights. Nobody dies; the round lasts 30 s.
-    public static RoundSummary RoundMovement(DateTimeOffset startedAt, ulong ctA, ulong ctB, ulong t)
+    // at 2 s; t stands still and never fights. Nobody dies; the round lasts 30 s. Scored with MovementOn unless rules are given.
+    public static RoundSummary RoundMovement(DateTimeOffset startedAt, ulong ctA, ulong ctB, ulong t, StatsRules? rules = null)
     {
         var participants = new[]
         {
@@ -78,6 +85,6 @@ internal static class StatsSamples
         }
         recorder.Add(new ShotFired(ctA, "m4a1", 1500, 96, null, null));
         recorder.Add(new ShotFired(ctB, "m4a1", 2000, 128, null, null));
-        return RoundScoring.Process(recorder.Close(new RoundOutcome(TeamSide.CT, 9, 30000))!, MovementOn);
+        return RoundScoring.Process(recorder.Close(new RoundOutcome(TeamSide.CT, 9, 30000))!, rules ?? MovementOn);
     }
 }
