@@ -72,6 +72,51 @@ public sealed record PlayerRoundStats(ulong SteamId, string Name, TeamSide Side)
 
     public int EloAfter { get; init; }
 
+    // Bullet shots split by the shooter's motion (StatsWeapons.IsStill); shots without a readable pawn are in neither.
+    public int ShotsStill { get; init; }
+
+    public int HitsStill { get; init; }
+
+    public int ShotsMoving { get; init; }
+
+    public int HitsMoving { get; init; }
+
+    public int ShotsScoped { get; init; }
+
+    public int HitsScoped { get; init; }
+
+    public int Reloads { get; init; }
+
+    // Reloads started with at least half of the magazine left (also counted in Reloads).
+    public int ReloadsFull { get; init; }
+
+    public int Pickups { get; init; }
+
+    public int Drops { get; init; }
+
+    public int Jumps { get; init; }
+
+    public int PlantAttempts { get; init; }
+
+    public int PlantAborts { get; init; }
+
+    public int DefuseAttempts { get; init; }
+
+    public int DefuseAborts { get; init; }
+
+    // Defused with less than RoundAnalyzer.ClutchDefuseMs left on the bomb.
+    public bool ClutchDefuse { get; init; }
+
+    // Health lost this round, from any source (enemies, teammates, world, bots).
+    public int DamageTaken { get; init; }
+
+    public int BombCarryMs { get; init; }
+
+    // Null when the player left without a state read at round_end; 0 for a dead player.
+    public int? HealthEnd { get; init; }
+
+    public int? ArmorEnd { get; init; }
+
     public IReadOnlyList<WeaponRoundStats> Weapons { get; init; } = Array.Empty<WeaponRoundStats>();
 }
 

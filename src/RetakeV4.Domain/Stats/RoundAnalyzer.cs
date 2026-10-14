@@ -8,6 +8,9 @@ public static class RoundAnalyzer
 {
     private const int StartHealth = 100;
 
+    // A defuse with less than this left on the bomb is a clutch defuse.
+    public const int ClutchDefuseMs = 1000;
+
     public static RoundSummary Analyze(RoundRecord record, StatsRules rules)
     {
         ArgumentNullException.ThrowIfNull(record);
@@ -22,6 +25,9 @@ public static class RoundAnalyzer
         CountShots(record, players);
         CountFlashes(record.Blinds, sides, players);
         CountObjectives(record, players);
+        CountEvents(record, players, deathTimes);
+        CountBombCarry(record, players, deathTimes);
+        ApplyEndStates(record, players, deathTimes);
         MarkClutches(sides, players, deathTimes);
         var winner = record.Outcome.Winner;
         return new RoundSummary(
@@ -150,6 +156,7 @@ public static class RoundAnalyzer
             var before = health.GetValueOrDefault(hurt.Victim, StartHealth);
             var dealt = Math.Clamp(hurt.DmgHealth, 0, before);
             health[hurt.Victim] = Math.Clamp(hurt.HealthAfter, 0, StartHealth);
+            players[hurt.Victim].DamageTaken += dealt;
             if (hurt.Attacker is not { } attackerId || !players.TryGetValue(attackerId, out var attacker) || sides[attackerId] == victimSide)
             {
                 continue;
@@ -163,15 +170,36 @@ public static class RoundAnalyzer
         }
     }
 
-    // A hit is one (attacker, tick) pair: the pellets of one shotgun shot land in the same tick and count once.
+    // A hit is one (attacker, tick) pair: the pellets of one shotgun shot land in the same tick and count once. A hit
+    // takes the motion of the shot fired by the same player in the same tick.
     private static void CountShots(RoundRecord record, Dictionary<ulong, PlayerAccumulator> players)
     {
+        var motions = new Dictionary<(ulong, int), (bool Still, bool Scoped)>();
         foreach (var shot in record.Shots)
         {
-            if (players.TryGetValue(shot.Shooter, out var shooter) && StatsWeapons.IsBullet(shot.Weapon))
+            if (!players.TryGetValue(shot.Shooter, out var shooter) || !StatsWeapons.IsBullet(shot.Weapon))
             {
-                shooter.Shots++;
-                shooter.Weapon(shot.Weapon).Shots++;
+                continue;
+            }
+            shooter.Shots++;
+            shooter.Weapon(shot.Weapon).Shots++;
+            if (shot.Motion is not { } motion)
+            {
+                continue;
+            }
+            var still = StatsWeapons.IsStill(shot.Weapon, motion);
+            motions.TryAdd((shot.Shooter, shot.Tick), (still, motion.Scoped));
+            if (still)
+            {
+                shooter.ShotsStill++;
+            }
+            else
+            {
+                shooter.ShotsMoving++;
+            }
+            if (motion.Scoped)
+            {
+                shooter.ShotsScoped++;
             }
         }
         var hits = new HashSet<(ulong, int)>();
@@ -187,6 +215,21 @@ public static class RoundAnalyzer
             {
                 attacker.Hits++;
                 attacker.Weapon(hurt.Weapon).Hits++;
+                if (motions.TryGetValue((attackerId, hurt.Tick), out var shot))
+                {
+                    if (shot.Still)
+                    {
+                        attacker.HitsStill++;
+                    }
+                    else
+                    {
+                        attacker.HitsMoving++;
+                    }
+                    if (shot.Scoped)
+                    {
+                        attacker.HitsScoped++;
+                    }
+                }
             }
             if (hurt.Hitgroup == StatsWeapons.HeadHitgroup && headHits.Add((attackerId, hurt.Tick)))
             {
@@ -227,12 +270,96 @@ public static class RoundAnalyzer
         {
             defuser.Defused = true;
             defuser.DefusedWithKit = defuse.WithKit;
+            defuser.ClutchDefuse = defuse.RemainingMs is { } left && left < ClutchDefuseMs;
         }
         foreach (var mvp in record.Mvps)
         {
             if (players.TryGetValue(mvp.Player, out var player))
             {
                 player.Mvp = true;
+            }
+        }
+    }
+
+    // Pickups before the freeze ends are the spawn equipment; drops from the player's death on are the death drop.
+    private static void CountEvents(RoundRecord record, Dictionary<ulong, PlayerAccumulator> players, Dictionary<ulong, int> deathTimes)
+    {
+        var freezeEnd = record.FreezeEndMs ?? 0;
+        foreach (var playerEvent in record.Events)
+        {
+            if (!players.TryGetValue(playerEvent.Player, out var player))
+            {
+                continue;
+            }
+            switch (playerEvent.Type)
+            {
+                case PlayerEventType.Reload:
+                    player.Reloads++;
+                    break;
+                case PlayerEventType.ReloadFullClip:
+                    player.Reloads++;
+                    player.ReloadsFull++;
+                    break;
+                case PlayerEventType.Pickup:
+                    if (playerEvent.TimeMs >= freezeEnd)
+                    {
+                        player.Pickups++;
+                    }
+                    break;
+                case PlayerEventType.Drop:
+                    if (playerEvent.TimeMs >= freezeEnd && !DeadBy(deathTimes, playerEvent.Player, playerEvent.TimeMs))
+                    {
+                        player.Drops++;
+                    }
+                    break;
+                case PlayerEventType.Jump:
+                    player.Jumps++;
+                    break;
+                case PlayerEventType.PlantBegin:
+                    player.PlantAttempts++;
+                    break;
+                case PlayerEventType.PlantAbort:
+                    player.PlantAborts++;
+                    break;
+                case PlayerEventType.DefuseBegin:
+                    player.DefuseAttempts++;
+                    break;
+                case PlayerEventType.DefuseAbort:
+                    player.DefuseAborts++;
+                    break;
+            }
+        }
+    }
+
+    private static bool DeadBy(Dictionary<ulong, int> deathTimes, ulong player, int timeMs) =>
+        deathTimes.TryGetValue(player, out var died) && timeMs >= died;
+
+    private static void CountBombCarry(RoundRecord record, Dictionary<ulong, PlayerAccumulator> players, Dictionary<ulong, int> deathTimes)
+    {
+        foreach (var (player, carriedMs) in BombCarry.Compute(record, deathTimes))
+        {
+            if (players.TryGetValue(player, out var carrier))
+            {
+                carrier.BombCarryMs = carriedMs;
+            }
+        }
+    }
+
+    // A dead (or departed) player ends with 0 and 0; a living one with the last state read at round_end, if any.
+    private static void ApplyEndStates(RoundRecord record, Dictionary<ulong, PlayerAccumulator> players, Dictionary<ulong, int> deathTimes)
+    {
+        var states = record.EndStates.GroupBy(s => s.Player).ToDictionary(g => g.Key, g => g.Last());
+        foreach (var (id, player) in players)
+        {
+            if (deathTimes.ContainsKey(id))
+            {
+                player.HealthEnd = 0;
+                player.ArmorEnd = 0;
+            }
+            else if (states.TryGetValue(id, out var state))
+            {
+                player.HealthEnd = Math.Max(0, state.Health);
+                player.ArmorEnd = Math.Max(0, state.Armor);
             }
         }
     }

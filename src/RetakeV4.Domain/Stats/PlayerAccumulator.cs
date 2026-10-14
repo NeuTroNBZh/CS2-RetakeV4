@@ -71,6 +71,46 @@ internal sealed class PlayerAccumulator(RoundParticipant participant)
 
     public bool DefusedWithKit { get; set; }
 
+    public int ShotsStill { get; set; }
+
+    public int HitsStill { get; set; }
+
+    public int ShotsMoving { get; set; }
+
+    public int HitsMoving { get; set; }
+
+    public int ShotsScoped { get; set; }
+
+    public int HitsScoped { get; set; }
+
+    public int Reloads { get; set; }
+
+    public int ReloadsFull { get; set; }
+
+    public int Pickups { get; set; }
+
+    public int Drops { get; set; }
+
+    public int Jumps { get; set; }
+
+    public int PlantAttempts { get; set; }
+
+    public int PlantAborts { get; set; }
+
+    public int DefuseAttempts { get; set; }
+
+    public int DefuseAborts { get; set; }
+
+    public bool ClutchDefuse { get; set; }
+
+    public int DamageTaken { get; set; }
+
+    public int BombCarryMs { get; set; }
+
+    public int? HealthEnd { get; set; }
+
+    public int? ArmorEnd { get; set; }
+
     public WeaponAccumulator Weapon(string weapon)
     {
         var key = StatsWeapons.Normalize(weapon);
@@ -117,6 +157,26 @@ internal sealed class PlayerAccumulator(RoundParticipant participant)
             DefusedWithKit = DefusedWithKit,
             EloBefore = participant.EloBefore,
             EloAfter = participant.EloBefore,
+            ShotsStill = ShotsStill,
+            HitsStill = HitsStill,
+            ShotsMoving = ShotsMoving,
+            HitsMoving = HitsMoving,
+            ShotsScoped = ShotsScoped,
+            HitsScoped = HitsScoped,
+            Reloads = Reloads,
+            ReloadsFull = ReloadsFull,
+            Pickups = Pickups,
+            Drops = Drops,
+            Jumps = Jumps,
+            PlantAttempts = PlantAttempts,
+            PlantAborts = PlantAborts,
+            DefuseAttempts = DefuseAttempts,
+            DefuseAborts = DefuseAborts,
+            ClutchDefuse = ClutchDefuse,
+            DamageTaken = DamageTaken,
+            BombCarryMs = BombCarryMs,
+            HealthEnd = HealthEnd,
+            ArmorEnd = ArmorEnd,
             Weapons = _weapons.Values.OrderBy(w => w.Weapon, StringComparer.Ordinal).Select(w => w.Build()).ToList(),
         };
     }
