@@ -11,7 +11,10 @@ internal sealed class FakeStatsRepository : IStatsRepository
 
     public Task InitBlock { get; set; } = Task.CompletedTask;
 
-    public Exception? InitFailure { get; set; }
+    // Number of InitializeAsync calls that throw before one succeeds (int.MaxValue: the database never comes up).
+    public int InitFailuresLeft { get; set; }
+
+    public int InitCalls { get; private set; }
 
     public int RoundFailuresLeft { get; set; }
 
@@ -29,9 +32,14 @@ internal sealed class FakeStatsRepository : IStatsRepository
     public async Task InitializeAsync(CancellationToken ct)
     {
         await InitBlock.WaitAsync(ct);
-        if (InitFailure is not null)
+        lock (_lock)
         {
-            throw InitFailure;
+            InitCalls++;
+            if (InitFailuresLeft > 0)
+            {
+                InitFailuresLeft--;
+                throw new InvalidOperationException("no database");
+            }
         }
     }
 

@@ -3,7 +3,8 @@ using Microsoft.Extensions.Logging;
 
 namespace RetakeV4.Persistence.Stats;
 
-// Single background writer. Bounded: when full, the oldest pending command is dropped. A failed write is retried with
+// Single background writer. Bounded: when full, the oldest pending command is dropped. Initialization (schema) is retried
+// with backoff until it succeeds or the queue stops; commands keep queuing meanwhile. A failed write is retried with
 // backoff and keeps its place; disposal drains for a while, then abandons what is left.
 public sealed class StatsWriteQueue : IAsyncDisposable
 {
@@ -16,14 +17,12 @@ public sealed class StatsWriteQueue : IAsyncDisposable
     private readonly TimeSpan _drainTimeout;
     private readonly Func<int, TimeSpan> _backoff;
     private readonly int _maxAttempts;
-    private readonly Action<Exception>? _initializationFailed;
     private readonly CancellationTokenSource _stop = new();
     private readonly TaskCompletionSource<bool> _initialized = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly Dictionary<ulong, long> _sessions = new();
     private readonly Task _worker;
     private long? _mapId;
     private string? _mapName;
-    private bool _failed;
     private int _dropped;
     private int _abandoned;
     private int _disposed;
@@ -31,8 +30,7 @@ public sealed class StatsWriteQueue : IAsyncDisposable
 
     public StatsWriteQueue(
         IStatsRepository repository, ILogger logger, int capacity, TimeSpan drainTimeout,
-        Action<Exception>? initializationFailed = null, Func<int, TimeSpan>? backoff = null,
-        int maxAttempts = DefaultMaxAttempts)
+        Func<int, TimeSpan>? backoff = null, int maxAttempts = DefaultMaxAttempts)
     {
         ArgumentNullException.ThrowIfNull(repository);
         ArgumentNullException.ThrowIfNull(logger);
@@ -45,7 +43,6 @@ public sealed class StatsWriteQueue : IAsyncDisposable
         _repository = repository;
         _logger = logger;
         _drainTimeout = drainTimeout;
-        _initializationFailed = initializationFailed;
         _backoff = backoff ?? DefaultBackoff;
         _maxAttempts = maxAttempts;
         _channel = Channel.CreateBounded<StatsCommand>(
@@ -55,6 +52,7 @@ public sealed class StatsWriteQueue : IAsyncDisposable
     }
 
     // Readers (ELO loading) wait for this before their first query, so that they never run before the schema exists.
+    // True once the schema is ready; false only when the queue stopped before that.
     public Task<bool> Initialized => _initialized.Task;
 
     public int Dropped => Volatile.Read(ref _dropped);
@@ -112,40 +110,62 @@ public sealed class StatsWriteQueue : IAsyncDisposable
 
     private async Task RunAsync()
     {
-        try
-        {
-            await _repository.InitializeAsync(_stop.Token).ConfigureAwait(false);
-            _initialized.TrySetResult(true);
-        }
-        catch (Exception ex)
-        {
-            _failed = true;
-            try
-            {
-                if (!_stop.IsCancellationRequested)
-                {
-                    _logger.LogError(ex, "Stats database could not be initialized; stats are not recorded");
-                    _initializationFailed?.Invoke(ex);
-                }
-            }
-            catch (Exception handlerEx)
-            {
-                _logger.LogError(handlerEx, "Stats initialization-failure handler threw");
-            }
-            finally
-            {
-                _initialized.TrySetResult(false);
-            }
-        }
+        var initialized = await InitializeWithRetryAsync().ConfigureAwait(false);
+        _initialized.TrySetResult(initialized);
         await foreach (var command in _channel.Reader.ReadAllAsync().ConfigureAwait(false))
         {
-            if (_failed)
+            if (initialized)
             {
-                Interlocked.Increment(ref _abandoned);
+                await ApplyWithRetryAsync(command).ConfigureAwait(false);
             }
             else
             {
-                await ApplyWithRetryAsync(command).ConfigureAwait(false);
+                Interlocked.Increment(ref _abandoned);
+            }
+        }
+    }
+
+    // A database unreachable at startup (or a concurrent schema migration by another server) must not switch stats off
+    // for the whole uptime: retry until it works or the queue is stopped.
+    private async Task<bool> InitializeWithRetryAsync()
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            if (_stop.IsCancellationRequested)
+            {
+                return false;
+            }
+            try
+            {
+                await _repository.InitializeAsync(_stop.Token).ConfigureAwait(false);
+                if (attempt > 1)
+                {
+                    _logger.LogInformation("Stats database initialized after {Attempts} attempts", attempt);
+                }
+                return true;
+            }
+            catch (OperationCanceledException) when (_stop.IsCancellationRequested)
+            {
+                return false;
+            }
+            catch (Exception ex)
+            {
+                if (attempt == 1)
+                {
+                    _logger.LogError(ex, "Stats database could not be initialized; stats are queued and initialization is retried");
+                }
+                else
+                {
+                    _logger.LogWarning(ex, "Stats database initialization failed again (attempt {Attempt}); retrying", attempt);
+                }
+                try
+                {
+                    await Task.Delay(_backoff(attempt), _stop.Token).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    return false;
+                }
             }
         }
     }

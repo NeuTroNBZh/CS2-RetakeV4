@@ -125,7 +125,7 @@ public sealed class StatsModule : IRetakeModule
         hooks.RepeatTimer("stats_presence", PresenceRefreshSeconds, RefreshPresence);
         // Created last: it starts a background worker, which a throw during hook registration would leak.
         _writes = new StatsWriteQueue(_repository, context.Logger, _config.QueueCapacity,
-            TimeSpan.FromSeconds(_config.ShutdownFlushSeconds), OnInitializationFailed);
+            TimeSpan.FromSeconds(_config.ShutdownFlushSeconds));
     }
 
     public void Unload()
@@ -149,13 +149,6 @@ public sealed class StatsModule : IRetakeModule
     }
 
     private int Now() => (int)Math.Round((Server.CurrentTime - _roundStartTime) * 1000);
-
-    private void OnInitializationFailed(Exception exception) =>
-        Server.NextFrame(() => _context?.Guard.Run(Name, "stats_disable", () =>
-        {
-            _context?.Logger.LogError("Stats module disabled: its database could not be initialized");
-            _context?.Guard.Disable(Name);
-        }));
 
     private void OnMapStarted(string mapName)
     {

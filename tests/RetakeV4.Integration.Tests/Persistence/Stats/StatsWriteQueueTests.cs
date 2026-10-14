@@ -15,8 +15,8 @@ public class StatsWriteQueueTests
         return summary with { Record = summary.Record with { Context = context } };
     }
 
-    private static StatsWriteQueue Queue(FakeStatsRepository repository, ListLogger logger, int capacity = 100, Action<Exception>? failed = null, int drainMs = 2000, int maxAttempts = StatsWriteQueue.DefaultMaxAttempts) =>
-        new(repository, logger, capacity, TimeSpan.FromMilliseconds(drainMs), failed, _ => TimeSpan.FromMilliseconds(5), maxAttempts);
+    private static StatsWriteQueue Queue(FakeStatsRepository repository, ListLogger logger, int capacity = 100, int drainMs = 2000, int maxAttempts = StatsWriteQueue.DefaultMaxAttempts) =>
+        new(repository, logger, capacity, TimeSpan.FromMilliseconds(drainMs), _ => TimeSpan.FromMilliseconds(5), maxAttempts);
 
     [Fact]
     public async Task Commands_RunInOrder_WithMapAndSessionIds()
@@ -81,19 +81,39 @@ public class StatsWriteQueueTests
     }
 
     [Fact]
-    public async Task InitializationFailure_IsReported_AndCommandsAreDiscarded()
+    public async Task InitializationFailure_IsRetried_ThenQueuedCommandsAreWrittenInOrder()
     {
-        var repository = new FakeStatsRepository { InitFailure = new InvalidOperationException("no database") };
+        var repository = new FakeStatsRepository { InitFailuresLeft = 2 };
         var logger = new ListLogger();
-        Exception? reported = null;
-        var queue = Queue(repository, logger, failed: ex => reported = ex);
+        var queue = Queue(repository, logger);
+        queue.Enqueue(new OpenMapCommand("de_mirage", Now));
         queue.Enqueue(new WriteRoundCommand(Round(1)));
-        Assert.False(await queue.Initialized);
+        queue.Enqueue(new WriteRoundCommand(Round(2)));
+        Assert.True(await queue.Initialized.WaitAsync(TimeSpan.FromSeconds(5)));
         await queue.DisposeAsync();
-        Assert.Same(repository.InitFailure, reported);
+        Assert.Equal(3, repository.InitCalls);
+        Assert.Equal(new[] { "OpenMap de_mirage -> 1", "Round 1 map 1", "Round 2 map 1" }, repository.Calls);
+        Assert.Single(logger.Entries, e => e.Level == LogLevel.Error);
+        Assert.Single(logger.Entries, e => e.Level == LogLevel.Warning);
+        Assert.Equal(0, queue.Abandoned);
+    }
+
+    [Fact]
+    public async Task Dispose_WhileInitializationKeepsFailing_IsBounded_AndAbandonsTheCommands()
+    {
+        var repository = new FakeStatsRepository { InitFailuresLeft = int.MaxValue };
+        var logger = new ListLogger();
+        var queue = Queue(repository, logger, drainMs: 200);
+        queue.Enqueue(new OpenMapCommand("de_mirage", Now));
+        queue.Enqueue(new WriteRoundCommand(Round(1)));
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        await queue.DisposeAsync();
+        Assert.True(watch.Elapsed < TimeSpan.FromSeconds(3));
+        Assert.False(await queue.Initialized.WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.True(repository.InitCalls > 1);
         Assert.Empty(repository.Calls);
-        Assert.Contains(logger.Entries, e => e.Level == LogLevel.Error);
-        Assert.Equal(1, queue.Abandoned);
+        Assert.Equal(2, queue.Abandoned);
+        Assert.Single(logger.Entries, e => e.Level == LogLevel.Error);
     }
 
     [Fact]
@@ -127,19 +147,6 @@ public class StatsWriteQueueTests
         Assert.Equal(2, logger.Entries.Count(e => e.Level == LogLevel.Warning));
         Assert.Single(logger.Entries, e => e.Level == LogLevel.Error);
         Assert.Equal(new[] { "OpenMap de_mirage -> 1", $"Purge {StatsWriteQueue.PurgeBatchSize}" }, repository.Calls);
-    }
-
-    [Fact]
-    public async Task ThrowingInitializationHandler_DoesNotKillTheQueue()
-    {
-        var repository = new FakeStatsRepository { InitFailure = new InvalidOperationException("no database") };
-        var logger = new ListLogger();
-        var queue = Queue(repository, logger, failed: _ => throw new InvalidOperationException("handler"));
-        queue.Enqueue(new PurgeCommand(Now));
-        Assert.False(await queue.Initialized);
-        await queue.DisposeAsync();
-        Assert.Equal(2, logger.Entries.Count(e => e.Level == LogLevel.Error));
-        Assert.Equal(1, queue.Abandoned);
     }
 
     [Fact]
