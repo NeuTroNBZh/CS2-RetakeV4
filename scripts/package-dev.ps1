@@ -27,7 +27,7 @@ foreach ($file in @("RetakeV4.dll", "RetakeV4.Domain.dll")) {
 }
 Copy-Item (Join-Path $bin "lang") $pluginDir -Recurse
 Copy-Item (Join-Path $bin "spawns") $pluginDir -Recurse
-foreach ($dependency in @("Microsoft.Data.Sqlite.dll", "SQLitePCLRaw.core.dll", "SQLitePCLRaw.batteries_v2.dll", "SQLitePCLRaw.provider.e_sqlite3.dll", "MySqlConnector.dll")) {
+foreach ($dependency in @("Microsoft.Data.Sqlite.dll", "SQLitePCLRaw.core.dll", "SQLitePCLRaw.batteries_v2.dll", "SQLitePCLRaw.provider.e_sqlite3.dll", "MySqlConnector.dll", "MaxMind.Db.dll")) {
     $source = Join-Path $bin $dependency
     if (-not (Test-Path $source)) { throw "Missing dependency: $dependency" }
     Copy-Item $source $pluginDir

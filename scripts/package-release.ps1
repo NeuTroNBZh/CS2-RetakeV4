@@ -25,6 +25,7 @@ $fullEntries = [System.IO.Compression.ZipFile]::OpenRead($full).Entries.FullName
 if ($noConfigEntries | Where-Object { $_ -like "addons/counterstrikesharp/configs/*" }) { throw "The no-configs zip contains configs" }
 if (-not ($fullEntries -contains "addons/counterstrikesharp/configs/plugins/RetakeV4/core.json")) { throw "The full zip has no configs" }
 if (-not ($fullEntries -contains "addons/counterstrikesharp/shared/RetakeV4.Contracts/RetakeV4.Contracts.dll")) { throw "The zip has no RetakeV4.Contracts" }
+if (-not ($fullEntries -contains "addons/counterstrikesharp/plugins/RetakeV4/MaxMind.Db.dll")) { throw "The zip has no MaxMind.Db.dll" }
 
 foreach ($file in @("RetakeV4.dll", "RetakeV4.Domain.dll")) {
     $stream = [System.IO.File]::OpenRead((Join-Path $staging "addons/counterstrikesharp/plugins/RetakeV4/$file"))
