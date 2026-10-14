@@ -28,7 +28,7 @@ GRANT SELECT ON retakev4.v_stats_elo_history TO 'stats_reader'@'%';
 
 SQLite works too (same tables and views, file `plugins/RetakeV4/data/retakev4.db`), but only the game server can read it.
 
-Supported databases: **MySQL 8.0.17 or newer** (the views use `CAST(... AS DOUBLE)`) and SQLite. MariaDB is untested.
+Supported databases: **MySQL 8.0.17 or newer** (the views use `CAST(... AS DOUBLE)`), **MariaDB 11.4** and SQLite. The full test suite runs against MySQL 8.0 and MariaDB 11.4.
 
 ## Conventions
 
