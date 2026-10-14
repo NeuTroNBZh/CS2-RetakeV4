@@ -66,6 +66,7 @@ Replace `retakev4` by your database name and, in production, `'%'` by the web se
 
 ```js
 // npm install express mysql2
+import fs from 'node:fs'; // only needed for the ssl option below
 import express from 'express';
 import mysql from 'mysql2/promise';
 
@@ -173,9 +174,15 @@ if (empty($hit)) {
     );
     $statement->execute([$steamId]);
     $player = $statement->fetch() ?: null;
-    if (function_exists('apcu_store')) {
+    // Cache hits only: a miss is never cached, so arbitrary ids cannot fill the cache.
+    if ($player !== null && function_exists('apcu_store')) {
         apcu_store($cacheKey, $player, 60);
     }
+}
+
+if (!$player) {
+    http_response_code(404);
+    exit;
 }
 
 header('Content-Type: application/json');
@@ -285,7 +292,9 @@ SELECT players_ct, players_t, SUM(rounds) AS rounds, ROUND(100.0 * SUM(ct_wins) 
 FROM v_stats_retake_odds WHERE map_name = ? AND site = ?
 GROUP BY players_ct, players_t HAVING SUM(rounds) >= 20 ORDER BY players_ct, players_t;
 
--- After the plant: CT win rate by players still alive
+-- After the plant: CT win rate by players still alive. With the default automatic plant (AutoPlant) the plugin plants the bomb itself
+-- and no plant is recorded (planted = 0), so these columns are NULL and this query returns nothing: it is meaningful only on a
+-- server where players plant (FastPlant).
 SELECT ct_alive_at_plant, t_alive_at_plant, SUM(rounds) AS rounds, ROUND(100.0 * SUM(ct_wins) / SUM(rounds), 1) AS ct_win_pct
 FROM v_stats_retake_odds WHERE map_name = ? AND ct_alive_at_plant IS NOT NULL
 GROUP BY ct_alive_at_plant, t_alive_at_plant ORDER BY ct_alive_at_plant, t_alive_at_plant;
