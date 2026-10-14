@@ -260,4 +260,202 @@ public class MovementAnalyzerTests
         Assert.Equal(1, M(s, Ct2).InSmokeSamples);
         Assert.Equal(0, M(s, Ct2).BehindSmokeSamples);
     }
+
+    [Fact]
+    public void FirstContact_IsTheFirstBulletShot_OrEnemyDamage()
+    {
+        var s = Analyze(Record(TwoVsTwo(), TeamSide.CT, r =>
+        {
+            r.MarkFreezeEnd(1000);
+            r.Add(Shot(Ct1, 1500, 150, "hegrenade"));
+            r.Add(Hurt(T1, Ct1, 10, 90, 2000, 200));
+            r.Add(Shot(Ct1, 2500, 250));
+            r.Add(Hurt(Ct1, Ct2, 5, 95, 1800, 180));
+            r.Add(Hurt(null, Ct2, 20, 75, 1900, 190));
+            r.Add(Shot(Ct2, 4000, 400));
+            r.Add(Shot(T2, 500, 50));
+            r.Add(Shot(T2, 1200, 120, "knife"));
+            r.Add(Hurt(T2, 0, 10, 90, 1100, 110, victimIsBot: true));
+        }));
+        Assert.Equal(1000, M(s, Ct1).FirstContactMs);
+        Assert.Equal(1000, M(s, T1).FirstContactMs);
+        Assert.Equal(3000, M(s, Ct2).FirstContactMs);
+        Assert.Null(M(s, T2).FirstContactMs);
+        Assert.Equal(1, M(s, Ct1).EngageOrder);
+        Assert.Equal(2, M(s, Ct2).EngageOrder);
+        Assert.Equal(1, M(s, T1).EngageOrder);
+        Assert.Null(M(s, T2).EngageOrder);
+    }
+
+    [Fact]
+    public void FirstContact_IgnoresSelfDamage()
+    {
+        var s = Analyze(Record(TwoVsTwo(), TeamSide.CT, r =>
+        {
+            r.MarkFreezeEnd(1000);
+            r.Add(Hurt(Ct1, Ct1, 10, 90, 2000, 200));
+        }));
+        Assert.Null(M(s, Ct1).FirstContactMs);
+        Assert.Null(M(s, Ct1).EngageOrder);
+    }
+
+    [Fact]
+    public void EngageOrder_RanksWithinTheSide_TiesShareTheRank()
+    {
+        var s = Analyze(Record(ThreeVsTwo(), TeamSide.CT, r =>
+        {
+            r.MarkFreezeEnd(1000);
+            r.Add(Shot(Ct2, 2000, 200));
+            r.Add(Shot(Ct1, 3000, 300));
+            r.Add(Shot(Ct3, 3000, 301));
+            r.Add(Shot(T1, 2500, 250));
+        }));
+        Assert.Equal(1, M(s, Ct2).EngageOrder);
+        Assert.Equal(2, M(s, Ct1).EngageOrder);
+        Assert.Equal(2, M(s, Ct3).EngageOrder);
+        Assert.Equal(1, M(s, T1).EngageOrder);
+        Assert.Equal(2000, M(s, Ct1).FirstContactMs);
+    }
+
+    // Ct2 dies to T1 at 10 s; Ct1 stands `distance` units away (BaitDistance 394, window 5 s). Ct3 has no sample.
+    private static RoundRecord BaitRound(Action<RoundRecorder>? more = null, float distance = 393f, int durationMs = 40000, bool killPosition = true) =>
+        Record(ThreeVsTwo(), TeamSide.T, r =>
+        {
+            r.MarkFreezeEnd(1000);
+            r.Add(S(Ct1, 9500, speed: 0f));
+            r.Add(S(Ct2, 9500, distance));
+            r.Add(Kill(T1, Ct2, 10000) with { VictimPosition = killPosition ? new Vec3(distance, 0, 0) : null });
+            more?.Invoke(r);
+        }, durationMs: durationMs);
+
+    [Fact]
+    public void Bait_WhenTheKillerSurvivesTheWindowUnanswered()
+    {
+        var s = Analyze(BaitRound());
+        Assert.True(M(s, Ct1).BaitChance);
+        Assert.True(M(s, Ct1).Bait);
+        Assert.True(M(s, Ct1).BaitFlag);
+        Assert.False(M(s, Ct3).BaitChance);
+        Assert.Null(M(s, Ct3).BaitFlag);
+        Assert.False(M(s, Ct2).BaitChance);
+    }
+
+    [Fact]
+    public void Bait_UsesTheVictimsLastSample_WithoutAKillPosition() =>
+        Assert.True(M(Analyze(BaitRound(killPosition: false)), Ct1).Bait);
+
+    [Fact]
+    public void Bait_NeedsATeammateCloserThanBaitDistance()
+    {
+        var m = M(Analyze(BaitRound(distance: 394f)), Ct1);
+        Assert.False(m.BaitChance);
+        Assert.Null(m.BaitFlag);
+    }
+
+    [Theory]
+    [InlineData(15000, false)]
+    [InlineData(15001, true)]
+    public void Bait_DamageToTheKillerWithinTheWindow_IsAnAnsweredChance(int damageMs, bool bait)
+    {
+        var m = M(Analyze(BaitRound(r => r.Add(Hurt(Ct1, T1, 30, 70, damageMs, damageMs / 10)))), Ct1);
+        Assert.True(m.BaitChance);
+        Assert.Equal(bait, m.Bait);
+    }
+
+    [Fact]
+    public void Bait_KillingTheKiller_IsAnAnsweredChance()
+    {
+        var m = M(Analyze(BaitRound(r => r.Add(Kill(Ct1, T1, 12000)))), Ct1);
+        Assert.True(m.BaitChance);
+        Assert.False(m.Bait);
+    }
+
+    [Theory]
+    [InlineData(15000, false)]
+    [InlineData(15001, true)]
+    public void Bait_KillerDyingInTheWindow_AtTheWindowBoundary(int killerDiesMs, bool chance)
+    {
+        var m = M(Analyze(BaitRound(r => r.Add(Kill(Ct3, T1, killerDiesMs)))), Ct1);
+        Assert.Equal(chance, m.BaitChance);
+        Assert.Equal(chance, m.Bait);
+    }
+
+    [Theory]
+    [InlineData(14999, false)]
+    [InlineData(15000, true)]
+    public void Bait_RoundEndingBeforeTheWindow_AtTheWindowBoundary(int durationMs, bool chance) =>
+        Assert.Equal(chance, M(Analyze(BaitRound(durationMs: durationMs)), Ct1).BaitChance);
+
+    [Fact]
+    public void Bait_NoChance_WhenThePlayerDiesInTheWindow() =>
+        Assert.False(M(Analyze(BaitRound(r => r.Add(Kill(T2, Ct1, 12000)))), Ct1).BaitChance);
+
+    [Fact]
+    public void Bait_IgnoresTeamKillsAndUnknownKillers()
+    {
+        foreach (var killer in new ulong?[] { Ct3, null })
+        {
+            var s = Analyze(Record(ThreeVsTwo(), TeamSide.T, r =>
+            {
+                r.MarkFreezeEnd(1000);
+                r.Add(S(Ct1, 9500, speed: 0f));
+                r.Add(Kill(killer, Ct2, 10000) with { VictimPosition = new Vec3(100, 0, 0) });
+                r.Add(Kill(killer, Ct2, 10000) with { VictimPosition = new Vec3(100, 0, 0) });
+            }));
+            Assert.False(M(s, Ct1).BaitChance);
+        }
+    }
+
+    // The player answers the first death (damage at 11 s); the same death arrives again at 12 s, unanswered in its own window.
+    [Fact]
+    public void Bait_ADuplicatedDeath_IsCountedOnce()
+    {
+        var m = M(Analyze(BaitRound(r =>
+        {
+            r.Add(Hurt(Ct1, T1, 30, 70, 11000, 1100));
+            r.Add(Kill(T1, Ct2, 12000) with { VictimPosition = new Vec3(393, 0, 0) });
+        })), Ct1);
+        Assert.True(m.BaitChance);
+        Assert.False(m.Bait);
+    }
+
+    [Fact]
+    public void Bait_ASuicide_IsNoChance()
+    {
+        var s = Analyze(Record(ThreeVsTwo(), TeamSide.T, r =>
+        {
+            r.MarkFreezeEnd(1000);
+            r.Add(S(Ct1, 9500, speed: 0f));
+            r.Add(Kill(Ct2, Ct2, 10000) with { VictimPosition = new Vec3(100, 0, 0) });
+        }));
+        Assert.False(M(s, Ct1).BaitChance);
+        Assert.False(M(s, Ct2).BaitChance);
+    }
+
+    [Fact]
+    public void Bait_SelfDamage_IsNoAnswer()
+    {
+        var m = M(Analyze(BaitRound(r => r.Add(Hurt(Ct1, Ct1, 10, 90, 11000, 1100)))), Ct1);
+        Assert.True(m.BaitChance);
+        Assert.True(m.Bait);
+    }
+
+    [Fact]
+    public void Bait_TheVictimIsNeverItsOwnChance_EvenWithASampleNearTheKill()
+    {
+        var s = Analyze(BaitRound(r => r.Add(S(Ct2, 9990, 393f, speed: 0f))));
+        Assert.False(M(s, Ct2).BaitChance);
+        Assert.False(M(s, Ct2).Bait);
+    }
+
+    [Fact]
+    public void Bait_DamageOrKillFlaggedAsAimedAtABot_IsNoAnswer()
+    {
+        var damage = M(Analyze(BaitRound(r => r.Add(Hurt(Ct1, T1, 30, 70, 11000, 1100, victimIsBot: true)))), Ct1);
+        Assert.True(damage.BaitChance);
+        Assert.True(damage.Bait);
+        var kill = M(Analyze(BaitRound(r => r.Add(Kill(Ct1, T1, 12000, victimIsBot: true)))), Ct1);
+        Assert.True(kill.BaitChance);
+        Assert.True(kill.Bait);
+    }
 }

@@ -37,6 +37,8 @@ public static class MovementAnalyzer
             result[id] = Basic(own, aliveEnd - freezeEnd, ShotTimes(record, id), afkMs);
         }
         ApplySmokes(record, rules, sides, samples, result);
+        ApplyContacts(record, sides, freezeEnd, roundEnd, result);
+        ApplyBait(record, rules, sides, samples, deathTimes, roundEnd, result);
         return result;
     }
 
@@ -251,6 +253,114 @@ public static class MovementAnalyzer
             }
         }
         return nearest;
+    }
+
+    // First contact: the first bullet shot, or damage dealt to or taken from an enemy participant, from the freeze end.
+    // Bots are never actors, so damage taken from a bot is no contact (a shot at a bot is). Engage order: rank of the
+    // first contact within the side, ties sharing the better rank; null without a contact.
+    private static void ApplyContacts(RoundRecord record, IReadOnlyDictionary<ulong, TeamSide> sides, int freezeEnd, int roundEnd,
+        Dictionary<ulong, MovementRoundStats> result)
+    {
+        var first = new Dictionary<ulong, int>();
+        foreach (var shot in record.Shots)
+        {
+            if (StatsWeapons.IsBullet(shot.Weapon))
+            {
+                Touch(first, sides, shot.Shooter, shot.TimeMs, freezeEnd, roundEnd);
+            }
+        }
+        foreach (var hurt in record.Damages)
+        {
+            if (hurt.VictimIsBot || hurt.Attacker is not { } attacker || attacker == hurt.Victim
+                || !sides.TryGetValue(attacker, out var attackerSide) || !sides.TryGetValue(hurt.Victim, out var victimSide)
+                || attackerSide == victimSide)
+            {
+                continue;
+            }
+            Touch(first, sides, attacker, hurt.TimeMs, freezeEnd, roundEnd);
+            Touch(first, sides, hurt.Victim, hurt.TimeMs, freezeEnd, roundEnd);
+        }
+        foreach (var (id, time) in first)
+        {
+            var rank = 1 + first.Count(other => sides[other.Key] == sides[id] && other.Value < time);
+            result[id] = result[id] with { FirstContactMs = time - freezeEnd, EngageOrder = rank };
+        }
+    }
+
+    private static void Touch(Dictionary<ulong, int> first, IReadOnlyDictionary<ulong, TeamSide> sides, ulong player, int timeMs, int freezeEnd, int roundEnd)
+    {
+        if (!sides.ContainsKey(player) || timeMs < freezeEnd || timeMs > roundEnd)
+        {
+            return;
+        }
+        if (!first.TryGetValue(player, out var known) || timeMs < known)
+        {
+            first[player] = timeMs;
+        }
+    }
+
+    // A teammate killed by an enemy participant closer than BaitDistance to a living player is a chance for that player
+    // when they answer (damage or kill on the killer within the window) or when the killer and the player both stay alive
+    // for the whole window, inside the round; unanswered, that second case is a bait. Other cases are no chance.
+    private static void ApplyBait(RoundRecord record, MovementRules rules, IReadOnlyDictionary<ulong, TeamSide> sides,
+        Dictionary<ulong, List<MovementSample>> samples, IReadOnlyDictionary<ulong, int> deathTimes, int roundEnd,
+        Dictionary<ulong, MovementRoundStats> result)
+    {
+        var windowMs = (int)Math.Round(rules.BaitWindowSeconds * 1000);
+        var dead = new HashSet<ulong>();
+        foreach (var kill in record.Kills.OrderBy(k => k.TimeMs))
+        {
+            if (kill.VictimIsBot || !dead.Add(kill.Victim))
+            {
+                continue;
+            }
+            if (kill.Attacker is not { } killer || killer == kill.Victim || !sides.TryGetValue(killer, out var killerSide)
+                || !sides.TryGetValue(kill.Victim, out var victimSide) || killerSide == victimSide
+                || (kill.VictimPosition ?? LastPosition(samples, kill.Victim, kill.TimeMs)) is not { } victimAt)
+            {
+                continue;
+            }
+            var windowEnd = kill.TimeMs + windowMs;
+            foreach (var (id, side) in sides)
+            {
+                if (side != victimSide || id == kill.Victim || !AliveAfter(deathTimes, id, kill.TimeMs)
+                    || LastPosition(samples, id, kill.TimeMs) is not { } at || (at - victimAt).Length >= rules.BaitDistance)
+                {
+                    continue;
+                }
+                var answered = Answered(record, id, killer, kill.TimeMs, windowEnd);
+                var baited = !answered && windowEnd <= roundEnd && AliveAfter(deathTimes, killer, windowEnd) && AliveAfter(deathTimes, id, windowEnd);
+                if (answered || baited)
+                {
+                    result[id] = result[id] with { BaitChance = true, Bait = result[id].Bait || baited };
+                }
+            }
+        }
+    }
+
+    private static bool Answered(RoundRecord record, ulong player, ulong killer, int fromMs, int toMs) =>
+        record.Damages.Any(d => d.Attacker == player && d.Victim == killer && !d.VictimIsBot && d.TimeMs >= fromMs && d.TimeMs <= toMs)
+        || record.Kills.Any(k => k.Attacker == player && k.Victim == killer && !k.VictimIsBot && k.TimeMs >= fromMs && k.TimeMs <= toMs);
+
+    private static bool AliveAfter(IReadOnlyDictionary<ulong, int> deathTimes, ulong player, int timeMs) =>
+        !deathTimes.TryGetValue(player, out var died) || died > timeMs;
+
+    private static Vec3? LastPosition(Dictionary<ulong, List<MovementSample>> samples, ulong player, int timeMs)
+    {
+        if (!samples.TryGetValue(player, out var own))
+        {
+            return null;
+        }
+        Vec3? found = null;
+        foreach (var sample in own)
+        {
+            if (sample.TimeMs > timeMs)
+            {
+                break;
+            }
+            found = sample.Position;
+        }
+        return found;
     }
 
     private static float Horizontal(Vec3 v) => MathF.Sqrt((v.X * v.X) + (v.Y * v.Y));

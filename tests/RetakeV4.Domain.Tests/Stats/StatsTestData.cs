@@ -24,12 +24,13 @@ internal static class StatsTestData
     public static RoundContext Context(params RoundParticipant[] participants) =>
         new("de_mirage", 1, BombSite.A, "FullBuy", new DateTimeOffset(2026, 10, 13, 20, 0, 0, TimeSpan.Zero), participants);
 
-    public static RoundRecord Record(RoundContext context, TeamSide? winner, Action<RoundRecorder>? facts = null, int minPlayersPerSide = 1)
+    public static RoundRecord Record(RoundContext context, TeamSide? winner, Action<RoundRecorder>? facts = null, int minPlayersPerSide = 1,
+        int durationMs = 40000)
     {
         var recorder = new RoundRecorder(1000, minPlayersPerSide);
         recorder.Open(context);
         facts?.Invoke(recorder);
-        return recorder.Close(new RoundOutcome(winner, 7, 40000))!;
+        return recorder.Close(new RoundOutcome(winner, 7, durationMs))!;
     }
 
     public static PlayerKilled Kill(ulong? attacker, ulong victim, int timeMs, string weapon = "ak47", bool headshot = false,
