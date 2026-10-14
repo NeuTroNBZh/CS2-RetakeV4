@@ -51,6 +51,7 @@ public sealed class StatsModule : IRetakeModule
     // Worst costs seen on the current map, logged at the next map start (in-game check of the 2 ms budget).
     private double _pollMaxMs;
     private double _analysisMaxMs;
+    private Task _analysis = Task.CompletedTask;
 
     public string Name => "Stats";
 
@@ -329,16 +330,40 @@ public sealed class StatsModule : IRetakeModule
         Server.NextFrame(() => _context?.Guard.Run(Name, "stats_close_round", () => CloseRound(outcome)));
     }
 
+    // The analysis (shots, movement, bait…) is pure and can take tens of milliseconds: it runs off the game thread, one
+    // round after the other, and only its result comes back to apply the ELO, refresh the scoreboard and enqueue the write.
+    // A round still being analysed when the module unloads is dropped.
     private void CloseRound(RoundOutcome outcome)
     {
-        if (_recorder?.Close(outcome) is not { } record || _rules is not { } rules)
+        if (_recorder?.Close(outcome) is not { } record || _rules is not { } rules || _writes is not { } writes)
         {
             return;
         }
-        var started = Stopwatch.GetTimestamp();
-        var summary = RoundScoring.Process(record, rules);
-        _analysisMaxMs = Math.Max(_analysisMaxMs, Stopwatch.GetElapsedTime(started).TotalMilliseconds);
-        // The round closes a frame after round_end: a player who left meanwhile gets the delta from the database on return.
+        var logger = Context.Logger;
+        _analysis = _analysis.ContinueWith(_ =>
+        {
+            try
+            {
+                var started = Stopwatch.GetTimestamp();
+                var summary = RoundScoring.Process(record, rules);
+                var elapsedMs = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
+                Server.NextFrame(() => _context?.Guard.Run(Name, "stats_round_scored", () => ApplyRound(writes, summary, elapsedMs)));
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Stats: analysing a round failed; the round is not recorded");
+            }
+        }, CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default);
+    }
+
+    private void ApplyRound(StatsWriteQueue writes, RoundSummary summary, double elapsedMs)
+    {
+        if (!ReferenceEquals(_writes, writes))
+        {
+            return;
+        }
+        _analysisMaxMs = Math.Max(_analysisMaxMs, elapsedMs);
+        // A player who left before the analysis came back gets the delta from the database on return.
         _elo?.ApplyRound(summary.Players, _playtime.IsTracked);
         foreach (var player in PlayerQueries.Humans())
         {
@@ -346,7 +371,7 @@ public sealed class StatsModule : IRetakeModule
         }
         Context.Bus.Publish(new RoundStatsRecorded(summary));
         // The samples only feed the analysis: the write queue may hold rounds for minutes during a database outage.
-        _writes?.Enqueue(new WriteRoundCommand(summary.WithoutSamples()));
+        writes.Enqueue(new WriteRoundCommand(summary.WithoutSamples()));
     }
 
     private void OnWeaponFire(EventWeaponFire e)
