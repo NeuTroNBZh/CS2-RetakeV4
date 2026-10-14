@@ -1,5 +1,6 @@
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
+using CounterStrikeSharp.API.Modules.UserMessages;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
 using RetakeV4.Adapters;
@@ -20,9 +21,11 @@ namespace RetakeV4.Modules.Stats;
 public sealed class StatsModule : IRetakeModule
 {
     private const float PresenceRefreshSeconds = 5f;
+    private const int RevealPollTicks = 8;
 
     private readonly PlaytimeTracker _playtime = new();
     private readonly Dictionary<int, string?> _primaryBySlot = new();
+    private readonly ScoreboardReveal _reveal = new((ulong)PlayerButtons.Scoreboard);
     private StatsConfig _config = new();
     private StatsRules? _rules;
     private RoundRecorder? _recorder;
@@ -135,6 +138,7 @@ public sealed class StatsModule : IRetakeModule
         {
             // The game may reset the rank fields: they are written again on every spawn.
             hooks.OnEvent<EventPlayerSpawn>("stats_scoreboard_spawn", e => ShowElo(e.Userid));
+            hooks.OnTick("stats_scoreboard_reveal", PollScoreboard);
         }
         hooks.RepeatTimer("stats_presence", PresenceRefreshSeconds, RefreshPresence);
         // Created last: it starts a background worker, which a throw during hook registration would leak.
@@ -326,6 +330,10 @@ public sealed class StatsModule : IRetakeModule
 
     private void OnDisconnected(CCSPlayerController? player, int reason)
     {
+        if (player is { IsValid: true })
+        {
+            _reveal.Forget(player.Slot);
+        }
         if (HumanId(player) is not { } id)
         {
             return;
@@ -436,6 +444,32 @@ public sealed class StatsModule : IRetakeModule
         {
             _scoreboardElo = false;
             Context.Logger.LogWarning(ex, "Stats: writing the scoreboard rank failed; ScoreboardElo is off until the next reload");
+        }
+    }
+
+    // The client hides the rank column outside round end: a fresh TAB press asks it to show every rank, as matchmaking does.
+    private void PollScoreboard()
+    {
+        if (!_scoreboardElo || !_mapStarted || Server.TickCount % RevealPollTicks != 0)
+        {
+            return;
+        }
+        try
+        {
+            foreach (var player in PlayerQueries.Humans())
+            {
+                if (player.Pawn is { IsValid: true } pawn && pawn.Value is { IsValid: true } && _reveal.Pressed(player.Slot, (ulong)player.Buttons))
+                {
+                    var message = UserMessage.FromPartialName("ServerRankRevealAll");
+                    message.Recipients.Add(player);
+                    message.Send();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _scoreboardElo = false;
+            Context.Logger.LogWarning(ex, "Stats: revealing the scoreboard ranks failed; ScoreboardElo is off until the next reload");
         }
     }
 
