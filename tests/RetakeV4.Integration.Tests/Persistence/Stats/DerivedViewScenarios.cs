@@ -125,4 +125,54 @@ internal static class DerivedViewScenarios
         Assert.Equal(3L, L(await seed.Scalar($"SELECT ct_alive_at_plant {teamDeaths}")));
         Assert.Equal(1L, L(await seed.Scalar($"SELECT t_alive_at_plant {teamDeaths}")));
     }
+
+    // Rifle: fired by two players and primary of both in round 1; pistol: fired, never primary; sniper: primary in round 2,
+    // never fired. kill_share_pct reads every weapon of the database, so it is only checked on a fresh one.
+    internal static async Task WeaponMeta(ViewSeed seed, bool freshDatabase)
+    {
+        var tag = Guid.NewGuid().ToString("N")[..8];
+        var (rifle, pistol, sniper) = ($"wa_{tag}", $"wb_{tag}", $"wc_{tag}");
+        var ids = NewIds(2);
+        var server = await seed.Server(NewKey("dv"));
+        var map = await seed.Map(server, "de_mirage", ViewSeed.Utc("2026-10-01 20:00:00"));
+        var first = await seed.Round(map, new RoundSeed(ViewSeed.Utc("2026-10-01 20:01:00")));
+        var second = await seed.Round(map, new RoundSeed(ViewSeed.Utc("2026-10-01 20:03:00")));
+        await seed.PlayerWeapon(ids[0], rifle, 10, 5, 2, 2, 1, 300);
+        await seed.PlayerWeapon(ids[1], rifle, 10, 3, 1, 2, 1, 200);
+        await seed.PlayerWeapon(ids[0], pistol, 4, 1, 0, 0, 0, 50);
+        await seed.RoundPlayer(first, ids[0], "CT", true, rifle);
+        await seed.RoundPlayer(first, ids[1], "T", false, rifle);
+        await seed.RoundPlayer(second, ids[0], "CT", true, sniper);
+        string Of(string weapon) => $"FROM v_stats_weapon_meta WHERE weapon = '{weapon}'";
+        Assert.Equal(2L, L(await seed.Scalar($"SELECT players {Of(rifle)}")));
+        Assert.Equal(20L, L(await seed.Scalar($"SELECT shots {Of(rifle)}")));
+        Assert.Equal(8L, L(await seed.Scalar($"SELECT hits {Of(rifle)}")));
+        Assert.Equal(3L, L(await seed.Scalar($"SELECT headshot_hits {Of(rifle)}")));
+        Assert.Equal(4L, L(await seed.Scalar($"SELECT kills {Of(rifle)}")));
+        Assert.Equal(2L, L(await seed.Scalar($"SELECT headshot_kills {Of(rifle)}")));
+        Assert.Equal(500L, L(await seed.Scalar($"SELECT damage {Of(rifle)}")));
+        Assert.Equal(40.0, D(await seed.Scalar($"SELECT accuracy {Of(rifle)}")));
+        Assert.Equal(37.5, D(await seed.Scalar($"SELECT hs_accuracy {Of(rifle)}")));
+        Assert.Equal(50.0, D(await seed.Scalar($"SELECT hs_pct {Of(rifle)}")));
+        Assert.Equal(2L, L(await seed.Scalar($"SELECT primary_rounds {Of(rifle)}")));
+        Assert.Equal(2L, L(await seed.Scalar($"SELECT primary_players {Of(rifle)}")));
+        Assert.Equal(1L, L(await seed.Scalar($"SELECT primary_won_rounds {Of(rifle)}")));
+        Assert.Equal(50.0, D(await seed.Scalar($"SELECT primary_win_pct {Of(rifle)}")));
+        Assert.Equal(1L, L(await seed.Scalar($"SELECT players {Of(pistol)}")));
+        Assert.Equal(25.0, D(await seed.Scalar($"SELECT accuracy {Of(pistol)}")));
+        Assert.Null(await seed.Scalar($"SELECT hs_pct {Of(pistol)}"));
+        Assert.Equal(0L, L(await seed.Scalar($"SELECT primary_rounds {Of(pistol)}")));
+        Assert.Null(await seed.Scalar($"SELECT primary_win_pct {Of(pistol)}"));
+        Assert.Equal(0L, L(await seed.Scalar($"SELECT players {Of(sniper)}")));
+        Assert.Equal(0L, L(await seed.Scalar($"SELECT shots {Of(sniper)}")));
+        Assert.Null(await seed.Scalar($"SELECT accuracy {Of(sniper)}"));
+        Assert.Equal(1L, L(await seed.Scalar($"SELECT primary_rounds {Of(sniper)}")));
+        Assert.Equal(100.0, D(await seed.Scalar($"SELECT primary_win_pct {Of(sniper)}")));
+        if (freshDatabase)
+        {
+            Assert.Equal(3L, L(await seed.Scalar("SELECT COUNT(*) FROM v_stats_weapon_meta")));
+            Assert.Equal(100.0, D(await seed.Scalar($"SELECT kill_share_pct {Of(rifle)}")));
+            Assert.Equal(0.0, D(await seed.Scalar($"SELECT kill_share_pct {Of(pistol)}")));
+        }
+    }
 }

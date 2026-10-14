@@ -44,6 +44,17 @@ public class MySqlDerivedViewsTests
         }
         await DerivedViewScenarios.RetakeOdds(new ViewSeed(connection, StatsDialect.MySql));
     }
+
+    [Fact]
+    public async Task WeaponMeta_WhenAMySqlServerIsConfigured()
+    {
+        await using var connection = await Migrated();
+        if (connection is null)
+        {
+            return;
+        }
+        await DerivedViewScenarios.WeaponMeta(new ViewSeed(connection, StatsDialect.MySql), freshDatabase: false);
+    }
 }
 
 // Test classes that use the shared MySQL stats database while dropping or recreating its views.

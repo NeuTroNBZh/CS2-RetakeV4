@@ -35,4 +35,11 @@ public sealed class StatsDerivedViewsTests : IDisposable
         await using var connection = await Migrated();
         await DerivedViewScenarios.RetakeOdds(new ViewSeed(connection, StatsDialect.Sqlite));
     }
+
+    [Fact]
+    public async Task WeaponMeta_AddsUpEveryPlayer_AndThePrimaryWeaponRounds()
+    {
+        await using var connection = await Migrated();
+        await DerivedViewScenarios.WeaponMeta(new ViewSeed(connection, StatsDialect.Sqlite), freshDatabase: true);
+    }
 }
