@@ -78,4 +78,51 @@ internal static class DerivedViewScenarios
         Assert.Null(await seed.Scalar($"SELECT ranked_ct_win_pct {mirageB}"));
         Assert.Equal(1L, L(await seed.Scalar($"SELECT ct_wins {where} AND map_name = 'de_nuke' AND site = 'A'")));
     }
+
+    // Situation at the plant: R1 had t1 (and its duplicated death) and ct3 (at the plant time) dead, a bot kill ignored.
+    // A second 4v3 round proves that a team kill, a suicide and a world death are deaths like any other (the player is dead).
+    internal static async Task RetakeOdds(ViewSeed seed)
+    {
+        var server = await SeedRounds(seed);
+        var where = $"FROM v_stats_retake_odds WHERE server = '{server}'";
+        Assert.Equal(4L, L(await seed.Scalar($"SELECT COUNT(*) {where}")));
+        var won = $"{where} AND map_name = 'de_mirage' AND site = 'A' AND ct_alive_at_plant = 2 AND t_alive_at_plant = 1";
+        Assert.Equal(1L, L(await seed.Scalar($"SELECT rounds {won}")));
+        Assert.Equal(1L, L(await seed.Scalar($"SELECT ct_wins {won}")));
+        Assert.Equal(0L, L(await seed.Scalar($"SELECT t_wins {won}")));
+        Assert.Equal(100.0, D(await seed.Scalar($"SELECT ct_win_pct {won}")));
+        Assert.Equal(1L, L(await seed.Scalar($"SELECT defused_rounds {won}")));
+        Assert.Equal(40000.0, D(await seed.Scalar($"SELECT avg_duration_ms {won}")));
+        Assert.Equal("FullBuy", await seed.Scalar($"SELECT round_type {won}"));
+        Assert.Equal(1L, L(await seed.Scalar($"SELECT ranked {won}")));
+        Assert.Equal(3L, L(await seed.Scalar($"SELECT players_ct {won}")));
+        var lost = $"{where} AND map_name = 'de_mirage' AND site = 'A' AND ct_alive_at_plant = 3 AND t_alive_at_plant = 2";
+        Assert.Equal(1L, L(await seed.Scalar($"SELECT t_wins {lost}")));
+        Assert.Equal(0.0, D(await seed.Scalar($"SELECT ct_win_pct {lost}")));
+        Assert.Equal(1L, L(await seed.Scalar($"SELECT exploded_rounds {lost}")));
+        var noPlant = $"{where} AND site = 'B'";
+        Assert.Null(await seed.Scalar($"SELECT ct_alive_at_plant {noPlant}"));
+        Assert.Null(await seed.Scalar($"SELECT t_alive_at_plant {noPlant}"));
+        Assert.Equal("Pistol", await seed.Scalar($"SELECT round_type {noPlant}"));
+        Assert.Equal(0L, L(await seed.Scalar($"SELECT ranked {noPlant}")));
+        Assert.Equal(3L, L(await seed.Scalar($"SELECT SUM(rounds) {where} AND players_ct = 3 AND players_t = 2")));
+        Assert.Equal(2L, L(await seed.Scalar($"SELECT SUM(ct_wins) {where} AND players_ct = 3 AND players_t = 2")));
+
+        // 4v3: ct1 kills its teammate ct2 (team kill), t1 kills itself, the world kills t2: all before the plant.
+        var ids = NewIds(7); // ct1..ct4, t1..t3
+        var otherKey = NewKey("dv");
+        var inferno = await seed.Map(await seed.Server(otherKey), "de_inferno", ViewSeed.Utc("2026-10-01 22:00:00"));
+        var round = await seed.Round(inferno, new RoundSeed(ViewSeed.Utc("2026-10-01 22:01:00"),
+            PlayersCt: 4, PlayersT: 3, Winner: "CT", PlantTimeMs: 10000, Defused: true, DurationMs: 40000));
+        for (var i = 0; i < 7; i++)
+        {
+            await seed.RoundPlayer(round, ids[i], i < 4 ? "CT" : "T", i < 4);
+        }
+        await seed.Kill(round, ids[0], ids[1], 2000, teamKill: true);
+        await seed.Kill(round, ids[4], ids[4], 3000);
+        await seed.Kill(round, null, ids[5], 4000);
+        var teamDeaths = $"FROM v_stats_retake_odds WHERE server = '{otherKey}' AND map_name = 'de_inferno'";
+        Assert.Equal(3L, L(await seed.Scalar($"SELECT ct_alive_at_plant {teamDeaths}")));
+        Assert.Equal(1L, L(await seed.Scalar($"SELECT t_alive_at_plant {teamDeaths}")));
+    }
 }

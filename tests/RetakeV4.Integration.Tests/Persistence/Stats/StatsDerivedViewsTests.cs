@@ -28,4 +28,11 @@ public sealed class StatsDerivedViewsTests : IDisposable
         await using var connection = await Migrated();
         await DerivedViewScenarios.SideBalance(new ViewSeed(connection, StatsDialect.Sqlite));
     }
+
+    [Fact]
+    public async Task RetakeOdds_GroupsByPlayerCountsAndThePlantSituation()
+    {
+        await using var connection = await Migrated();
+        await DerivedViewScenarios.RetakeOdds(new ViewSeed(connection, StatsDialect.Sqlite));
+    }
 }
