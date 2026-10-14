@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
+using CounterStrikeSharp.API.Modules.Commands;
 using CounterStrikeSharp.API.Modules.UserMessages;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
@@ -53,6 +54,12 @@ public sealed class StatsModule : IRetakeModule
     private double _analysisMaxMs;
     private Task _analysis = Task.CompletedTask;
 
+    // Replays (stats v2, sub-project 3): caps from stats.json, the last rounds kept for !save (null when saved replays are
+    // off; game thread only), and a per-load round number that ties a replay command to its round in the write queue.
+    private ReplayCaps _replayCaps = new(0, 0, 0);
+    private ReplayMemory? _replayMemory;
+    private long _roundKey;
+
     public string Name => "Stats";
 
     public IReadOnlyList<string> DependsOn { get; } = new[] { "Core" };
@@ -77,6 +84,13 @@ public sealed class StatsModule : IRetakeModule
         _recorder = new RoundRecorder(_rules.MaxShotsPerRound, _rules.MinPlayersPerSide);
         _elo = new EloCache(_rules.Elo.Start, _rules.Elo.Floor);
         _frames = new FrameMonitor(_config.LongFrameMs);
+        _replayCaps = _config.ToReplayCaps();
+        _replayMemory = _replayCaps.Saved > 0 && _config.SampleEveryTicks > 0 ? new ReplayMemory(_config.ReplayMemoryRounds) : null;
+        _roundKey = 0;
+        if (_replayCaps.Any && _config.SampleEveryTicks == 0)
+        {
+            context.Logger.LogInformation("Stats: replays need movement sampling (SampleEveryTicks > 0); no replay is kept");
+        }
         _repository = StatsRepositories.Create(_config.Database, context.Plugin.ModuleDirectory,
             new StatsWriteOptions(_config.Database.ServerKey, _rules.Elo.Start, _rules.Elo.Floor));
         if (_config.Database.Type == DatabaseType.Sqlite)
@@ -160,6 +174,7 @@ public sealed class StatsModule : IRetakeModule
         hooks.OnEvent<EventRoundEnd>("stats_round_end", OnRoundEnd);
         hooks.OnEvent<EventPlayerConnectFull>("stats_connect", e => OnConnected(e.Userid));
         hooks.OnEvent<EventPlayerDisconnect>("stats_disconnect", e => OnDisconnected(e.Userid, e.Reason));
+        hooks.Command("css_save", "Keeps the replay of a recent round: css_save [n] (1 = the last round)", OnSaveCommand);
         _scoreboardElo = ScoreboardRank.IsAllowed(_config.ScoreboardElo, CoreConfig.FollowCS2ServerGuidelines);
         if (_config.ScoreboardElo && !_scoreboardElo)
         {
@@ -213,6 +228,8 @@ public sealed class StatsModule : IRetakeModule
         _repository = null;
         _recorder = null;
         _frames = null;
+        _replayMemory?.Clear();
+        _replayMemory = null;
         _countries?.Dispose();
         _countries = null;
         _elo?.Clear();
@@ -330,8 +347,9 @@ public sealed class StatsModule : IRetakeModule
         Server.NextFrame(() => _context?.Guard.Run(Name, "stats_close_round", () => CloseRound(outcome)));
     }
 
-    // The analysis (shots, movement, bait…) is pure and can take tens of milliseconds: it runs off the game thread, one
-    // round after the other, and only its result comes back to apply the ELO, refresh the scoreboard and enqueue the write.
+    // The analysis (shots, movement, bait…) and the replay encoding are pure and can take tens of milliseconds: they run
+    // off the game thread, one round after the other, and only their result comes back to apply the ELO, refresh the
+    // scoreboard and enqueue the writes. The replay is encoded there, while the record still holds its samples.
     // A round still being analysed when the module unloads is dropped.
     private void CloseRound(RoundOutcome outcome)
     {
@@ -340,14 +358,17 @@ public sealed class StatsModule : IRetakeModule
             return;
         }
         var logger = Context.Logger;
+        var replayRules = _replayCaps.Any ? rules.Movement : null;
+        var sampleHz = replayRules is null ? 0 : ReplayEncoder.SampleHz(Server.TickInterval, _config.SampleEveryTicks);
         _analysis = _analysis.ContinueWith(_ =>
         {
             try
             {
                 var started = Stopwatch.GetTimestamp();
                 var summary = RoundScoring.Process(record, rules);
+                var replay = replayRules is null ? null : ReplayEncoder.Encode(record, replayRules.SmokeRadius, sampleHz);
                 var elapsedMs = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
-                Server.NextFrame(() => _context?.Guard.Run(Name, "stats_round_scored", () => ApplyRound(writes, summary, elapsedMs)));
+                Server.NextFrame(() => _context?.Guard.Run(Name, "stats_round_scored", () => ApplyRound(writes, summary, replay, elapsedMs)));
             }
             catch (Exception ex)
             {
@@ -356,7 +377,9 @@ public sealed class StatsModule : IRetakeModule
         }, CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default);
     }
 
-    private void ApplyRound(StatsWriteQueue writes, RoundSummary summary, double elapsedMs)
+    // Game thread (the replay memory is game-thread only). The replay frames stay out of RoundStatsRecorded: they only go
+    // to the replay memory and the write queue.
+    private void ApplyRound(StatsWriteQueue writes, RoundSummary summary, ReplayRound? replay, double elapsedMs)
     {
         if (!ReferenceEquals(_writes, writes))
         {
@@ -370,8 +393,22 @@ public sealed class StatsModule : IRetakeModule
             ShowElo(player);
         }
         Context.Bus.Publish(new RoundStatsRecorded(summary));
-        // The samples only feed the analysis: the write queue may hold rounds for minutes during a database outage.
-        writes.Enqueue(new WriteRoundCommand(summary.WithoutSamples()));
+        // The samples only feed the analysis and the replay: the write queue may hold rounds for minutes during a database outage.
+        var key = ++_roundKey;
+        writes.Enqueue(new WriteRoundCommand(summary.WithoutSamples()) { RoundKey = key });
+        if (replay is null)
+        {
+            return;
+        }
+        var context = summary.Record.Context;
+        _replayMemory?.Add(RememberedRound.Create(key, context.RoundNumber, context.MapName, replay,
+            summary.Players.ToDictionary(p => p.SteamId, p => p.Rating)));
+        var claims = ReplaySelection.Claims(summary, replay, _replayCaps);
+        if (claims.Count > 0)
+        {
+            // Refused while the write queue is backed up (it warns once per burst): this round's replay is then skipped.
+            writes.TryEnqueue(new WriteReplayCommand(key, replay, claims, _replayCaps, DateTimeOffset.UtcNow));
+        }
     }
 
     private void OnWeaponFire(EventWeaponFire e)
@@ -502,6 +539,42 @@ public sealed class StatsModule : IRetakeModule
             CloseSession(id, DateTimeOffset.UtcNow, reason, playtime);
         }
         _elo?.Forget(id);
+    }
+
+    // !save [n]: keeps for the player the replay of the round n rounds ago (1 = the last recorded round). Only a memory
+    // lookup and an enqueue here; the caps (oldest saved replay replaced) are applied by the database transaction. The
+    // round counts as saved for the player only once the write queue has accepted the command.
+    private void OnSaveCommand(CCSPlayerController? player, CommandInfo command)
+    {
+        if (player is not { IsValid: true } || HumanId(player) is not { } steamId)
+        {
+            return;
+        }
+        if (_replayMemory is not { } memory || _writes is not { } writes)
+        {
+            Context.Text.Chat(player, "stats.replay.disabled");
+            return;
+        }
+        var lookup = ReplayMemory.ParseRoundsAgo(command.ArgCount > 1 ? command.GetArg(1) : null, memory.Capacity) is { } roundsAgo
+            ? memory.TryFind(steamId, roundsAgo)
+            : SaveLookup.NotFound;
+        if (lookup.Round is not { } round)
+        {
+            Context.Text.Chat(player, "stats.replay.not_found", memory.Capacity);
+            return;
+        }
+        if (lookup.Status == SaveLookupStatus.Found)
+        {
+            var claim = new ReplayClaim(steamId, ReplayReason.Saved, round.Ratings[steamId]);
+            if (!writes.TryEnqueue(new WriteReplayCommand(round.RoundKey, round.Replay, new[] { claim }, _replayCaps, DateTimeOffset.UtcNow)))
+            {
+                Context.Text.Chat(player, "stats.replay.busy");
+                return;
+            }
+            // Its result is not an error signal: false would only mean the round left memory, and the command is queued anyway.
+            memory.MarkSaved(steamId, round.RoundKey);
+        }
+        Context.Text.Chat(player, "stats.replay.saved", round.RoundNumber, round.MapName);
     }
 
     private void CloseSession(ulong steamId, DateTimeOffset at, int? reason, Playtime playtime) =>

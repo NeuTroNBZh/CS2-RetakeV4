@@ -90,7 +90,8 @@ public sealed class StatsWriteQueue : IAsyncDisposable
 
     public void Enqueue(StatsCommand command) => TryEnqueue(command);
 
-    // False when a replay is refused (MaxPendingReplays pending or the queue half full); other commands are always accepted here.
+    // False when a replay is refused (MaxPendingReplays pending, the queue half full, or the queue already stopped); other
+    // commands are always accepted here (after disposal they only count as abandoned).
     public bool TryEnqueue(StatsCommand command)
     {
         ArgumentNullException.ThrowIfNull(command);
@@ -106,6 +107,7 @@ public sealed class StatsWriteQueue : IAsyncDisposable
         {
             Release(command);
             Interlocked.Increment(ref _abandoned);
+            return command is not WriteReplayCommand;
         }
         return true;
     }

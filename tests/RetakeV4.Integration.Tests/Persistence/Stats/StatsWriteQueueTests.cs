@@ -402,4 +402,15 @@ public class StatsWriteQueueTests
         gate.SetResult();
         await queue.DisposeAsync();
     }
+
+    // After disposal the channel is completed: a replay is not written, so !save must not report it saved.
+    [Fact]
+    public async Task TryEnqueue_RefusesAReplay_AfterDispose()
+    {
+        var queue = Queue(new FakeStatsRepository(), new ListLogger());
+        await queue.DisposeAsync();
+        Assert.False(queue.TryEnqueue(Replay(1)));
+        Assert.Equal(0, queue.PendingReplays);
+        Assert.Equal(1, queue.Abandoned);
+    }
 }
