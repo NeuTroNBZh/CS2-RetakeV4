@@ -125,6 +125,13 @@ public class StatsWriteQueueTests
         queue.Enqueue(new OpenMapCommand("de_mirage", Now));
         queue.Enqueue(new WriteRoundCommand(Round(1)));
         queue.Enqueue(new WriteRoundCommand(Round(2)));
+        // Wait for the first failed attempt, so that OpenMap has run and only the two rounds are left to abandon.
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (repository.RoundFailuresLeft == int.MaxValue && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(5);
+        }
+        Assert.NotEqual(int.MaxValue, repository.RoundFailuresLeft);
         var watch = System.Diagnostics.Stopwatch.StartNew();
         await queue.DisposeAsync();
         Assert.True(watch.Elapsed < TimeSpan.FromSeconds(3));
@@ -275,5 +282,124 @@ public class StatsWriteQueueTests
         Assert.Equal(2, queue.TelemetrySkipped);
         Assert.Single(logger.Entries, e => e.Level == LogLevel.Warning);
         Assert.Equal(new[] { "OpenMap de_mirage -> 1", "Round 1 map 1", "Presence de_mirage 3/0/0" }, repository.Calls);
+    }
+
+    private static WriteReplayCommand Replay(long roundKey) =>
+        new(roundKey, new ReplayRound(8, Array.Empty<ReplayTrack>()), new[] { new ReplayClaim(7, ReplayReason.Saved, 1.0) }, new ReplayCaps(10, 10, 20), Now);
+
+    [Fact]
+    public async Task Replay_IsWrittenForTheRoundWithTheSameKey()
+    {
+        var repository = new FakeStatsRepository();
+        var queue = Queue(repository, new ListLogger());
+        queue.Enqueue(new OpenMapCommand("de_mirage", Now));
+        queue.Enqueue(new WriteRoundCommand(Round(1)) { RoundKey = 7 });
+        queue.Enqueue(Replay(7));
+        await queue.DisposeAsync();
+        Assert.Equal(new[] { "OpenMap de_mirage -> 1", "Round 1 map 1", "Replay round 2 claims 1" }, repository.Calls);
+        Assert.Equal(0, queue.PendingReplays);
+    }
+
+    [Fact]
+    public async Task Replay_OfARoundNeverWritten_IsSkipped()
+    {
+        var repository = new FakeStatsRepository();
+        var logger = new ListLogger();
+        var queue = Queue(repository, logger);
+        queue.Enqueue(new OpenMapCommand("de_mirage", Now));
+        queue.Enqueue(new WriteRoundCommand(Round(1)));
+        queue.Enqueue(Replay(99));
+        await queue.DisposeAsync();
+        Assert.Equal(new[] { "OpenMap de_mirage -> 1", "Round 1 map 1" }, repository.Calls);
+        Assert.Single(logger.Entries, e => e.Level == LogLevel.Information && e.Message.Contains("replay is skipped", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task PendingReplays_AreCapped()
+    {
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var repository = new FakeStatsRepository { InitBlock = gate.Task };
+        var logger = new ListLogger();
+        var queue = Queue(repository, logger);
+        queue.Enqueue(new WriteRoundCommand(Round(1)) { RoundKey = 1 });
+        for (var i = 0; i < StatsWriteQueue.MaxPendingReplays + 2; i++)
+        {
+            queue.Enqueue(Replay(1));
+        }
+        Assert.Equal(StatsWriteQueue.MaxPendingReplays, queue.PendingReplays);
+        Assert.Equal(2, queue.ReplaysSkipped);
+        Assert.Single(logger.Entries, e => e.Level == LogLevel.Warning && e.Message.Contains("replays are skipped", StringComparison.Ordinal));
+        gate.SetResult();
+        await queue.DisposeAsync();
+        Assert.Equal(StatsWriteQueue.MaxPendingReplays, repository.Calls.Count(c => c.StartsWith("Replay round", StringComparison.Ordinal)));
+        Assert.Equal(0, queue.PendingReplays);
+    }
+
+    // capacity 10: once 5 commands wait (half), a replay is skipped like telemetry, rounds still queue.
+    [Fact]
+    public async Task Replays_AreSkipped_WhenHalfOfTheQueueIsPending()
+    {
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var repository = new FakeStatsRepository { InitBlock = gate.Task };
+        var queue = Queue(repository, new ListLogger(), capacity: 10);
+        for (var round = 1; round <= 5; round++)
+        {
+            queue.Enqueue(new WriteRoundCommand(Round(round)) { RoundKey = round });
+        }
+        queue.Enqueue(Replay(1));
+        Assert.Equal(1, queue.ReplaysSkipped);
+        Assert.Equal(0, queue.PendingReplays);
+        gate.SetResult();
+        await queue.DisposeAsync();
+        Assert.DoesNotContain(repository.Calls, c => c.StartsWith("Replay round", StringComparison.Ordinal));
+    }
+
+    // A replay pushed out of a full queue gives its slot back.
+    [Fact]
+    public async Task DroppedReplay_FreesItsSlot()
+    {
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var repository = new FakeStatsRepository { InitBlock = gate.Task };
+        var queue = Queue(repository, new ListLogger(), capacity: 10);
+        queue.Enqueue(Replay(1));
+        Assert.Equal(1, queue.PendingReplays);
+        for (var round = 1; round <= 10; round++)
+        {
+            queue.Enqueue(new WriteRoundCommand(Round(round)));
+        }
+        Assert.Equal(1, queue.Dropped);
+        Assert.Equal(0, queue.PendingReplays);
+        gate.SetResult();
+        await queue.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task TryEnqueue_ReportsWhetherTheReplayWasAccepted()
+    {
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var repository = new FakeStatsRepository { InitBlock = gate.Task };
+        var queue = Queue(repository, new ListLogger());
+        for (var i = 0; i < StatsWriteQueue.MaxPendingReplays; i++)
+        {
+            Assert.True(queue.TryEnqueue(Replay(1)));
+        }
+        Assert.False(queue.TryEnqueue(Replay(1)));
+        gate.SetResult();
+        await queue.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task TryEnqueue_RefusesAReplay_WhenHalfOfTheQueueIsPending()
+    {
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var repository = new FakeStatsRepository { InitBlock = gate.Task };
+        var queue = Queue(repository, new ListLogger(), capacity: 10);
+        for (var round = 1; round <= 5; round++)
+        {
+            queue.Enqueue(new WriteRoundCommand(Round(round)));
+        }
+        Assert.False(queue.TryEnqueue(Replay(1)));
+        gate.SetResult();
+        await queue.DisposeAsync();
     }
 }

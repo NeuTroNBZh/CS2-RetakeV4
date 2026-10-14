@@ -16,7 +16,16 @@ public sealed record CloseSessionCommand(ulong SteamId, DateTimeOffset At, int? 
     public SessionActivity Activity { get; init; } = SessionActivity.None;
 }
 
-public sealed record WriteRoundCommand(RoundSummary Round) : StatsCommand;
+public sealed record WriteRoundCommand(RoundSummary Round) : StatsCommand
+{
+    // Ties later WriteReplayCommands to this round (StatsModule numbers the rounds of a module load from 1); 0 = none.
+    public long RoundKey { get; init; }
+}
+
+// The replay of a round queued earlier by a WriteRoundCommand with the same RoundKey, and the claims on it: best and
+// highlight claims right after the round, one saved claim per !save. It holds the frame text (about 250 KB), so
+// StatsWriteQueue keeps at most MaxPendingReplays of them and skips them, like telemetry, once half of the queue is pending.
+public sealed record WriteReplayCommand(long RoundKey, ReplayRound Replay, IReadOnlyList<ReplayClaim> Claims, ReplayCaps Caps, DateTimeOffset At) : StatsCommand;
 
 public sealed record PurgeCommand(DateTimeOffset OlderThan) : StatsCommand;
 
