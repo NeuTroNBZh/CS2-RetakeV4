@@ -40,10 +40,11 @@ It is a full rewrite of CS2RetakeV3: every feature is a module that can be turne
 9. [Customising your server](#customising-your-server)
 10. [Weapon preferences and database](#weapon-preferences-and-database)
 11. [Web panel](#web-panel)
-12. [Plugin API](#plugin-api)
-13. [Troubleshooting](#troubleshooting)
-14. [Development](#development)
-15. [License](#license)
+12. [Stats](#stats)
+13. [Plugin API](#plugin-api)
+14. [Troubleshooting](#troubleshooting)
+15. [Development](#development)
+16. [License](#license)
 
 ---
 
@@ -282,6 +283,16 @@ To connect it:
 3. If several servers share the database, give each one its own `Database.ServerKey` and tell the panel which one to show.
 
 The plugin publishes the weapons on offer in the `retake_catalog` table, and a choice made on the website applies on the next round, without reconnecting.
+
+---
+
+## Stats
+
+The `Stats` module (`stats.json`) records every round: shots, damage, kills with positions, grenades, bomb, play time. It also keeps per-player totals (all, per map, per site, per round type, per side), a Retake Rating and an ELO.
+
+- Use the same `Database` block as `allocation.json` (MySQL to share the stats with the web panel or a website; `RetakeV4.ConfigCheck` warns when the two differ).
+- Nothing is ever written on the game thread; if the database is down, rounds wait in a bounded queue and are written when it comes back.
+- External websites read the `v_stats_*` views with a read-only MySQL user: see [docs/STATS.md](docs/STATS.md) for every column, the definitions and example queries.
 
 ---
 
