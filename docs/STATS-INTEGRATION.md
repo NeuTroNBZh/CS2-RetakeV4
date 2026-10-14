@@ -86,7 +86,8 @@ const pool = mysql.createPool({
 
 // Small bounded in-memory cache: at most MAX_ENTRIES keys (oldest evicted first), kept ttlMs milliseconds.
 // Misses (null) are never cached, so arbitrary ids cannot fill the memory.
-const MAX_ENTRIES = 1000;
+// 100, not more: a cached replay holds its parsed frames (about 125 KB of text, several times that in memory).
+const MAX_ENTRIES = 100;
 const cache = new Map();
 async function cached(key, ttlMs, load) {
   const hit = cache.get(key);
@@ -455,7 +456,9 @@ async function play(roundId) {
   const response = await fetch(`/api/replays/${encodeURIComponent(roundId)}`);
   if (!response.ok) throw new Error('replay not found');
   const replay = await response.json();
-  const [posX, posY, scale] = RADARS[replay.map_name];
+  const radarInfo = RADARS[replay.map_name];
+  if (!radarInfo) throw new Error(`no radar data for map ${replay.map_name}: add it to RADARS`);
+  const [posX, posY, scale] = radarInfo;
   const toPixels = (x, y) => [(x - posX) / scale, (posY - y) / scale];
   const radar = new Image();
   radar.src = `/radars/${replay.map_name}.png`;

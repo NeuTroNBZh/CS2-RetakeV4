@@ -664,4 +664,20 @@ public sealed class StatsSchemaTests : IDisposable
         Assert.Equal(0L, await Scalar(connection, "SELECT COUNT(*) FROM v_stats_replays"));
         Assert.Equal(0L, await Scalar(connection, "SELECT COUNT(*) FROM v_stats_replay_tracks"));
     }
+
+    // Golden SHA-256 of the 4.9-d entries (sub-project 3), built from the replay tables, StatsSchema.ReplayIndexes and the
+    // frozen StatsReplayViews definitions: a later change to these tables or views is a new step and must leave these
+    // entries untouched.
+    [Theory]
+    [InlineData("mysql", 7, "7e69fb6e38ecde54f497620e92388f4edac828cd3c3be5d78b008e17c023cd58")]
+    [InlineData("sqlite", 8, "a803ad96c87f482ff371052f70564679ba60c545304f5a9cb6dbcf4795be6b88")]
+    public void V2ReplayEntries_MatchTheSnapshot(string dialect, int count, string expected)
+    {
+        var d = dialect == "mysql" ? StatsDialect.MySql : StatsDialect.Sqlite;
+        var entries = StatsSchema.Migrations(d).Skip(StatsSchema.V2CatalogCount(d)).Take(StatsSchema.V2ReplaysCount(d) - StatsSchema.V2CatalogCount(d)).ToList();
+        Assert.Equal(count, entries.Count);
+        var sql = string.Join("\n-- next --\n", entries.Select(m => m.Sql.ReplaceLineEndings("\n")));
+        var hash = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(sql)));
+        Assert.Equal(expected, hash);
+    }
 }

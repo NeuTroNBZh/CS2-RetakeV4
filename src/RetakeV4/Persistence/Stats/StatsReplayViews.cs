@@ -4,6 +4,9 @@ namespace RetakeV4.Persistence.Stats;
 // v_stats_replays: one row per owner of a stored replay (round, map, site, type, dates, owner, reason, score);
 // v_stats_replay_tracks: one row per human track with its frames. Kills, grenades, damages, shots and the bomb of the
 // same round are in the v1 views (join on round_id).
+// Frozen: StatsSchemaTests.V2ReplayEntries_MatchTheSnapshot pins the 4.9-d SQL built from these definitions. A later
+// change to one of these views is a new definition swapped into StatsViewsV2.BuildViews and a new migration step
+// (DROP VIEW + CREATE VIEW), never an edit here.
 internal static class StatsReplayViews
 {
     // In the order the 4.9-d step creates them.
