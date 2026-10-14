@@ -84,4 +84,33 @@ public class PlaytimeTrackerTests
         Assert.Equal(20, closed.Single(c => c.Player == 1).Playtime.SecondsVip);
         Assert.Equal(0, closed.Single(c => c.Player == 2).Playtime.SecondsVip);
     }
+
+    [Fact]
+    public void Close_RemembersThatThePlayerLeft()
+    {
+        var tracker = new PlaytimeTracker();
+        tracker.Set(1, Presence.T, 0);
+        tracker.Close(1, 10);
+        Assert.True(tracker.HasLeft(1));
+        Assert.False(tracker.HasLeft(2));
+    }
+
+    [Fact]
+    public void NewSession_ClearsTheLeftMark()
+    {
+        var tracker = new PlaytimeTracker();
+        tracker.Set(1, Presence.T, 0);
+        tracker.Close(1, 10);
+        tracker.Set(1, Presence.T, 20);
+        Assert.False(tracker.HasLeft(1));
+    }
+
+    [Fact]
+    public void CloseAll_DoesNotMarkPlayersAsLeft()
+    {
+        var tracker = new PlaytimeTracker();
+        tracker.Set(1, Presence.T, 0);
+        tracker.CloseAll(10);
+        Assert.False(tracker.HasLeft(1));
+    }
 }

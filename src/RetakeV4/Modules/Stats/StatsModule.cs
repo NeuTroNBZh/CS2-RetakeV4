@@ -514,7 +514,11 @@ public sealed class StatsModule : IRetakeModule
             }
             if (!_playtime.IsTracked(id))
             {
-                OnConnected(player);
+                // A player listed after its disconnect (Teams publishes during player_disconnect) waits for a new connection.
+                if (!_playtime.HasLeft(id))
+                {
+                    OnConnected(player);
+                }
                 continue;
             }
             var (presence, vip) = PresenceOf(player);
