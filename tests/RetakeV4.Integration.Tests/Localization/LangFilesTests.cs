@@ -265,4 +265,14 @@ public partial class LangFilesTests
     {
         Assert.Contains(key, Load("en").Keys);
     }
+
+    [Theory]
+    [InlineData("stats.replay.saved")]
+    [InlineData("stats.replay.not_found")]
+    [InlineData("stats.replay.disabled")]
+    [InlineData("stats.replay.busy")]
+    public void StatsReplayKeys_ArePresent(string key)
+    {
+        Assert.Contains(key, Load("en").Keys);
+    }
 }

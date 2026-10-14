@@ -1,5 +1,6 @@
 using RetakeV4.Domain.Loadouts;
 using RetakeV4.Modules.Allocation;
+using RetakeV4.Persistence;
 
 namespace RetakeV4.Integration.Tests.Modules.Allocation;
 

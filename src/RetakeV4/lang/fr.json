@@ -147,5 +147,9 @@
   "mapvote.rtv.too_early": "!rtv sera disponible après {0} rounds.",
   "mapvote.change.soon": "Changement de map vers {0} dans {1} s.",
   "mapvote.rtv.no_maps": "!rtv n'est pas disponible : il n'y a pas d'autre map Retake à proposer.",
-  "remote.server_only": "Cette commande est réservée à la console du serveur."
+  "remote.server_only": "Cette commande est réservée à la console du serveur.",
+  "stats.replay.saved": "Round {0} sur {1} enregistré en replay.",
+  "stats.replay.not_found": "Aucun de tes rounds récents à enregistrer : tape !save, ou !save 1 à {0} pour un round plus ancien.",
+  "stats.replay.disabled": "Les replays sont désactivés sur ce serveur.",
+  "stats.replay.busy": "Le serveur enregistre déjà des replays, réessaie dans un instant."
 }

@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "views": {
+    "v_stats_players": ["steam_id", "name", "first_seen", "last_seen", "elo", "seconds_ct", "seconds_t", "seconds_spec", "seconds_queue", "seconds_total", "sessions",
+      "rounds", "rounds_won", "ranked_rounds", "survived_rounds", "kills", "deaths", "assists", "flash_assists", "team_kills", "damage", "utility_damage", "headshot_kills", "shots", "hits", "headshot_hits", "entry_kills", "entry_deaths", "trade_kills", "traded_deaths", "kast_rounds", "k2", "k3", "k4", "k5", "clutch_1_played", "clutch_1_won", "clutch_2_played", "clutch_2_won", "clutch_3_played", "clutch_3_won", "clutch_4_played", "clutch_4_won", "clutch_5_played", "clutch_5_won", "enemies_flashed", "teammates_flashed", "blind_ms", "mvps", "plants", "defuses", "defuses_with_kit", "rating_milli",
+      "kpr", "kd", "adr", "hs_pct", "accuracy", "hs_accuracy", "kast_pct", "survival_pct", "win_pct", "rating", "entry_success_pct", "clutch_won_pct"],
+    "v_stats_player_scopes": ["steam_id", "name", "scope",
+      "rounds", "rounds_won", "ranked_rounds", "survived_rounds", "kills", "deaths", "assists", "flash_assists", "team_kills", "damage", "utility_damage", "headshot_kills", "shots", "hits", "headshot_hits", "entry_kills", "entry_deaths", "trade_kills", "traded_deaths", "kast_rounds", "k2", "k3", "k4", "k5", "clutch_1_played", "clutch_1_won", "clutch_2_played", "clutch_2_won", "clutch_3_played", "clutch_3_won", "clutch_4_played", "clutch_4_won", "clutch_5_played", "clutch_5_won", "enemies_flashed", "teammates_flashed", "blind_ms", "mvps", "plants", "defuses", "defuses_with_kit", "rating_milli",
+      "kpr", "kd", "adr", "hs_pct", "accuracy", "hs_accuracy", "kast_pct", "survival_pct", "win_pct", "rating", "entry_success_pct", "clutch_won_pct"],
+    "v_stats_player_weapons": ["steam_id", "weapon", "shots", "hits", "headshot_hits", "kills", "headshot_kills", "damage", "accuracy", "hs_pct"],
+    "v_stats_leaderboard": ["steam_id", "name", "elo", "ranked_rounds", "rounds", "kills", "deaths", "damage", "kpr", "kd", "adr", "hs_pct", "accuracy", "kast_pct", "win_pct", "rating"],
+    "v_stats_maps": ["map_id", "server", "map_name", "started_at", "ended_at"],
+    "v_stats_rounds": ["round_id", "server", "map_name", "round_number", "site", "round_type", "players_ct", "players_t", "ranked", "winner", "end_reason", "duration_ms", "planted", "plant_site", "planter", "plant_time_ms", "defused", "defuser", "defused_with_kit", "bomb_exploded", "started_at"],
+    "v_stats_round_players": ["round_id", "server", "map_name", "site", "round_type", "started_at", "steam_id", "side", "primary_weapon", "survived", "won", "kills", "deaths", "assists", "flash_assists", "team_kills", "damage", "utility_damage", "headshot_kills", "shots", "hits", "headshot_hits", "entry_kill", "entry_death", "trade_kills", "traded_death", "kast", "clutch_vs", "clutch_won", "enemies_flashed", "teammates_flashed", "blind_seconds_inflicted", "mvp", "planted", "defused", "defused_with_kit", "rating", "elo_before", "elo_after"],
+    "v_stats_kills": ["kill_id", "round_id", "map_name", "site", "round_type", "started_at", "attacker", "victim", "victim_is_bot", "assister", "flash_assist", "weapon", "headshot", "penetrated", "noscope", "thrusmoke", "attacker_blind", "attacker_in_air", "distance", "attacker_x", "attacker_y", "attacker_z", "victim_x", "victim_y", "victim_z", "time_ms", "is_team_kill"],
+    "v_stats_shots": ["shot_id", "round_id", "steam_id", "weapon", "time_ms", "tick", "pos_x", "pos_y", "pos_z", "pitch", "yaw"],
+    "v_stats_damages": ["damage_id", "round_id", "attacker", "victim", "victim_is_bot", "weapon", "hitgroup", "dmg_health", "dmg_armor", "health_after", "time_ms", "tick"],
+    "v_stats_grenades": ["grenade_id", "round_id", "steam_id", "type", "thrown_ms", "detonated_ms", "throw_x", "throw_y", "throw_z", "det_x", "det_y", "det_z", "damage", "enemies_blinded", "teammates_blinded", "blind_seconds"],
+    "v_stats_sessions": ["session_id", "steam_id", "server", "map_name", "connected_at", "disconnected_at", "disconnect_reason", "seconds_ct", "seconds_t", "seconds_spec", "seconds_queue"],
+    "v_stats_elo_history": ["steam_id", "day", "elo", "rounds", "delta_sum"]
+  }
+}

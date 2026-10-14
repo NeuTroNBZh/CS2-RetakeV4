@@ -1,5 +1,6 @@
 using RetakeV4.Domain.Tests.TestDoubles;
 using Vote = RetakeV4.Domain.MapVote.MapVote;
+using VoteCount = RetakeV4.Domain.MapVote.MapVoteCount;
 
 namespace RetakeV4.Domain.Tests.MapVote;
 
@@ -40,5 +41,12 @@ public class MapVoteTests
     public void EmptyList_Throws()
     {
         Assert.Throws<InvalidOperationException>(() => Vote.Open(Array.Empty<string>()).Result(new FixedRandom()));
+    }
+
+    [Fact]
+    public void Tally_CountsEveryMap_InListOrder()
+    {
+        var vote = Vote.Open(Maps).Cast(1, "de_nuke").Cast(2, "de_nuke").Cast(3, "de_ancient");
+        Assert.Equal(new[] { new VoteCount("de_ancient", 1), new VoteCount("de_mirage", 0), new VoteCount("de_nuke", 2) }, vote.Tally());
     }
 }

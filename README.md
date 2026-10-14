@@ -40,10 +40,11 @@ It is a full rewrite of CS2RetakeV3: every feature is a module that can be turne
 9. [Customising your server](#customising-your-server)
 10. [Weapon preferences and database](#weapon-preferences-and-database)
 11. [Web panel](#web-panel)
-12. [Plugin API](#plugin-api)
-13. [Troubleshooting](#troubleshooting)
-14. [Development](#development)
-15. [License](#license)
+12. [Stats](#stats)
+13. [Plugin API](#plugin-api)
+14. [Troubleshooting](#troubleshooting)
+15. [Development](#development)
+16. [License](#license)
 
 ---
 
@@ -94,6 +95,7 @@ It is a full rewrite of CS2RetakeV3: every feature is a module that can be turne
 |---|---|
 | `!guns` (also `!gun`, `!g`, `!weapons`, `!menu`) | Open the weapon menu |
 | `!awp` | Volunteer (or stop volunteering) for the AWP in your current team |
+| `!save [n]` | Keep the replay of the last round (or of the round n rounds ago, 1 to `ReplayMemoryRounds`, 5 by default) on your stats page |
 | Forward / back, then Use (E) | Move through a center menu and select |
 | `!1`, `!2`… | Select in a chat menu (map vote, or every menu when the server uses chat menus) |
 | `!rtv` | Ask for a map change (a vote opens once enough players asked) |
@@ -282,6 +284,26 @@ To connect it:
 3. If several servers share the database, give each one its own `Database.ServerKey` and tell the panel which one to show.
 
 The plugin publishes the weapons on offer in the `retake_catalog` table, and a choice made on the website applies on the next round, without reconnecting.
+
+---
+
+## Stats
+
+The `Stats` module (`stats.json`) records every round: shots, damage, kills with positions, grenades, bomb, play time. It also keeps per-player totals (all, per map, per site, per round type, per side), a Retake Rating and an ELO.
+
+- Use the same `Database` block as `allocation.json` (MySQL to share the stats with the web panel or a website; `RetakeV4.ConfigCheck` warns when the two differ).
+- Nothing is ever written on the game thread; if the database is down, rounds wait in a bounded queue and are written when it comes back. A database unreachable at startup is retried too: stats start recording as soon as it is up.
+- Optional, off by default: each player's ELO in the scoreboard (TAB) rank column, CS Rating style (`stats.json` → `ScoreboardElo: true`). It also needs `FollowCS2ServerGuidelines: false` in CounterStrikeSharp's `core.json`, which goes against Valve's server guidelines: see [docs/STATS.md](docs/STATS.md).
+- External websites read the `v_stats_*` views with a read-only MySQL user: see [docs/STATS.md](docs/STATS.md) for every column, the definitions and example queries.
+- 4.9.0: shot context (still, moving, scoped), reloads, pickups, jumps, plant/defuse attempts, bomb carrier, end-of-round health, ping, VIP time, player country (optional, IPs never stored), presence and server health, movement and behaviour (time alive, walk/run/crouch/still/air shares, distance, AFK time, smokes, first contact, engage order, bait), special-kill career counters (no-scope, wallbang, through smoke, blinded, in the air), and derived views (side balance, retake odds, weapon meta, rivals, duos, server activity, player behaviour). See the "Views v2" section of [docs/STATS.md](docs/STATS.md).
+- 2D replays: per player, the 10 best rounds by Retake Rating, the 10 last highlights (aces, won 1v3+ clutches) and the 20 last rounds kept with `!save` are stored with every human's trajectory; a website animates them on the map radar (`ReplayBestPerPlayer`, `ReplayHighlightsPerPlayer`, `ReplaySavedPerPlayer`, `ReplayMemoryRounds` in `stats.json`). See the "Replays" recipe of [docs/STATS-INTEGRATION.md](docs/STATS-INTEGRATION.md).
+- Player country uses the free DB-IP Lite country database, which is **not** bundled: download it (MMDB format) from https://db-ip.com/db/download/ip-to-country-lite and save it as `configs/plugins/RetakeV4/geo/dbip-country-lite.mmdb` (`GeoDatabaseFile` in `stats.json`). Only the 2-letter country is stored, never the IP. [IP Geolocation by DB-IP](https://db-ip.com).
+
+### Stats for your website
+
+- [docs/STATS.md](docs/STATS.md): setup, conventions and every view with its columns.
+- [docs/STATS-CATALOG.md](docs/STATS-CATALOG.md): every stat by category, with its definition, where to read it (a view column or a SQL query) and its limits.
+- [docs/STATS-INTEGRATION.md](docs/STATS-INTEGRATION.md): read-only MySQL account, mandatory back end, Node.js and PHP examples, caching, SteamIDs as strings, UTC dates, recipes (player profile, leaderboard, heatmap, slow players and baiters, retake odds, 2D replays with radar values and a canvas viewer) and contract versions.
 
 ---
 

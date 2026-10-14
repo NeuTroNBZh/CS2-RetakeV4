@@ -23,10 +23,11 @@ public sealed class RetakeV4Plugin : BasePlugin
 
     private ModuleHost? _host;
     private EventBus? _bus;
+    private ServerHealthRelay? _health;
     private IDisposable? _roundResetSubscription;
 
     public override string ModuleName => "RetakeV4";
-    public override string ModuleVersion => "4.7.1";
+    public override string ModuleVersion => "4.9.0";
     public override string ModuleAuthor => "NeuTroNBZh";
     public override string ModuleDescription => "Modular CS2 retake plugin";
 
@@ -37,6 +38,7 @@ public sealed class RetakeV4Plugin : BasePlugin
         WarmUpInBackground();
         var bus = new EventBus(OnBusError);
         _bus = bus;
+        _health = new ServerHealthRelay(bus);
         var guard = new ModuleGuard(MaxErrorsPerRound, OnGuardFailure,
             new SlowRunReporter(SlowHandlerThreshold, () => Stopwatch.GetElapsedTime(0), OnSlowRun));
         var pipeline = new PreparationPipeline(guard);
@@ -95,6 +97,7 @@ public sealed class RetakeV4Plugin : BasePlugin
         _roundResetSubscription?.Dispose();
         _roundResetSubscription = null;
         _bus = null;
+        _health = null;
     }
 
     public override void OnAllPluginsLoaded(bool hotReload) => _bus?.Publish(new AllPluginsLoaded(hotReload));
@@ -104,8 +107,11 @@ public sealed class RetakeV4Plugin : BasePlugin
             t => Logger.LogWarning(t.Exception, "Domain warm-up failed: the first round may stall the server"),
             TaskContinuationOptions.OnlyOnFaulted);
 
-    private void OnSlowRun(SlowRun run) =>
+    private void OnSlowRun(SlowRun run)
+    {
         Logger.LogWarning("Slow handler {Module}/{Stage}: {Elapsed} ms", run.Module, run.Stage, (int)run.Elapsed.TotalMilliseconds);
+        _health?.Slow(run);
+    }
 
     private string ConfigDirectory() =>
         Path.GetFullPath(Path.Combine(ModuleDirectory, "..", "..", "configs", "plugins", "RetakeV4"));
@@ -120,5 +126,6 @@ public sealed class RetakeV4Plugin : BasePlugin
         {
             Logger.LogError("Module {Module} disabled until next reload (too many errors this round)", failure.Module);
         }
+        _health?.Failure(failure);
     }
 }
