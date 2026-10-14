@@ -12,8 +12,15 @@ public static partial class SqlMigrator
     [GeneratedRegex(@"^[a-z_]{1,64}\z")]
     private static partial Regex SafeTableName();
 
-    public static async Task<int> ApplyAsync(DbConnection connection, IReadOnlyList<string> migrations, CancellationToken ct, string versionTable = "schema_version")
+    public static Task<int> ApplyAsync(DbConnection connection, IReadOnlyList<string> migrations, CancellationToken ct, string versionTable = "schema_version")
     {
+        ArgumentNullException.ThrowIfNull(migrations);
+        return ApplyAsync(connection, migrations.Select(sql => new SqlMigration(sql)).ToList(), ct, versionTable);
+    }
+
+    public static async Task<int> ApplyAsync(DbConnection connection, IReadOnlyList<SqlMigration> migrations, CancellationToken ct, string versionTable = "schema_version")
+    {
+        ArgumentNullException.ThrowIfNull(migrations);
         if (!SafeTableName().IsMatch(versionTable))
         {
             throw new ArgumentException("Version table must be lowercase letters and underscores", nameof(versionTable));
@@ -34,14 +41,18 @@ public static partial class SqlMigrator
         }
     }
 
-    private static async Task<int> ApplyLockedAsync(DbConnection connection, IReadOnlyList<string> migrations, string versionTable, CancellationToken ct)
+    private static async Task<int> ApplyLockedAsync(DbConnection connection, IReadOnlyList<SqlMigration> migrations, string versionTable, CancellationToken ct)
     {
         await ExecuteAsync(connection, null, $"CREATE TABLE IF NOT EXISTS {versionTable} (version INTEGER NOT NULL PRIMARY KEY)", ct).ConfigureAwait(false);
         var current = await CurrentVersionAsync(connection, versionTable, ct).ConfigureAwait(false);
         for (var index = current; index < migrations.Count; index++)
         {
+            var migration = migrations[index];
             await using var transaction = await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
-            await ExecuteAsync(connection, transaction, migrations[index], ct).ConfigureAwait(false);
+            if (!await AlreadyAppliedAsync(connection, transaction, migration, ct).ConfigureAwait(false))
+            {
+                await ExecuteAsync(connection, transaction, migration.Sql, ct).ConfigureAwait(false);
+            }
             await ExecuteAsync(connection, transaction, $"DELETE FROM {versionTable}", ct).ConfigureAwait(false);
             await using var insert = connection.CreateCommand();
             insert.Transaction = transaction;
@@ -54,6 +65,24 @@ public static partial class SqlMigrator
             await transaction.CommitAsync(ct).ConfigureAwait(false);
         }
         return migrations.Count;
+    }
+
+    // Only an AddColumn step can tell that it already ran: its column exists.
+    private static async Task<bool> AlreadyAppliedAsync(DbConnection connection, DbTransaction transaction, SqlMigration migration, CancellationToken ct)
+    {
+        if (migration.Table is not { } table || migration.Column is not { } column)
+        {
+            return false;
+        }
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = connection is MySqlConnection
+            ? "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = @table AND COLUMN_NAME = @column"
+            : "SELECT COUNT(*) FROM pragma_table_info(@table) WHERE name = @column";
+        AddParameter(command, "@table", table);
+        AddParameter(command, "@column", column);
+        var count = await command.ExecuteScalarAsync(ct).ConfigureAwait(false);
+        return Convert.ToInt64(count, CultureInfo.InvariantCulture) > 0;
     }
 
     // Named locks are server-wide: the name is derived from the database and the version table (max 64 characters).

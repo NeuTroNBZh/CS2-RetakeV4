@@ -45,4 +45,43 @@ public class MySqlMigratorTests
             await drop.ExecuteNonQueryAsync();
         }
     }
+
+    [Fact]
+    public async Task AddColumn_IsReplayable_WhenAMySqlServerIsConfigured()
+    {
+        if (string.IsNullOrWhiteSpace(ConnectionString))
+        {
+            return;
+        }
+        var prefix = "mig_" + new string(Guid.NewGuid().ToString("N").Select(c => (char)('a' + (c % 26))).Take(12).ToArray());
+        var versionTable = prefix + "_version";
+        var table = prefix + "_t";
+        var migrations = new[]
+        {
+            new SqlMigration($"CREATE TABLE IF NOT EXISTS {table} (x INT NOT NULL PRIMARY KEY)"),
+            SqlMigration.AddColumn(table, "y", "INT NULL"),
+        };
+        await using var connection = new MySqlConnection(ConnectionString);
+        await connection.OpenAsync();
+        try
+        {
+            await SqlMigrator.ApplyAsync(connection, migrations, CancellationToken.None, versionTable);
+            await using (var reset = connection.CreateCommand())
+            {
+                reset.CommandText = $"DELETE FROM {versionTable}";
+                await reset.ExecuteNonQueryAsync();
+            }
+            await SqlMigrator.ApplyAsync(connection, migrations, CancellationToken.None, versionTable);
+            await using var command = connection.CreateCommand();
+            command.CommandText = "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = @table";
+            command.Parameters.AddWithValue("@table", table);
+            Assert.Equal(2L, Convert.ToInt64(await command.ExecuteScalarAsync()));
+        }
+        finally
+        {
+            await using var drop = connection.CreateCommand();
+            drop.CommandText = $"DROP TABLE IF EXISTS {versionTable}, {table}";
+            await drop.ExecuteNonQueryAsync();
+        }
+    }
 }
