@@ -190,4 +190,91 @@ public class StatsConfigValidatorTests
         Assert.False(config.TrackServerHealth);
         Assert.False(config.TrackUsage);
     }
+
+    [Fact]
+    public void MovementDefaults_MatchTheSpec()
+    {
+        var config = new StatsConfig();
+        Assert.Equal(8, config.SampleEveryTicks);
+        Assert.Equal(72, config.SmokeRadius);
+        Assert.Equal(394, config.BaitDistance);
+        Assert.Equal(5.0, config.BaitWindowSeconds);
+        Assert.Equal(15, config.AfkSeconds);
+        Assert.Equal(new MovementRules(72f, 394f, 5.0, 15.0), config.ToRules().Movement);
+        Assert.Null((config with { SampleEveryTicks = 0 }).ToRules().Movement);
+    }
+
+    [Theory]
+    [InlineData(0, 0)]
+    [InlineData(1, 1)]
+    [InlineData(64, 64)]
+    [InlineData(65, 8)]
+    [InlineData(-1, 8)]
+    public void SampleEveryTicks_IsOffOrBounded(int value, int expected)
+    {
+        var (config, issues) = Validate(new StatsConfig { SampleEveryTicks = value });
+        Assert.Equal(expected, config.SampleEveryTicks);
+        Assert.Equal(value == expected ? 0 : 1, issues.Count);
+    }
+
+    [Theory]
+    [InlineData(15, 72)]
+    [InlineData(16, 16)]
+    [InlineData(256, 256)]
+    [InlineData(257, 72)]
+    public void SmokeRadius_IsBounded(int value, int expected)
+    {
+        var (config, issues) = Validate(new StatsConfig { SmokeRadius = value });
+        Assert.Equal(expected, config.SmokeRadius);
+        Assert.Equal(value == expected ? 0 : 1, issues.Count);
+    }
+
+    [Theory]
+    [InlineData(49, 394)]
+    [InlineData(50, 50)]
+    [InlineData(2000, 2000)]
+    [InlineData(2001, 394)]
+    public void BaitDistance_IsBounded(int value, int expected)
+    {
+        var (config, issues) = Validate(new StatsConfig { BaitDistance = value });
+        Assert.Equal(expected, config.BaitDistance);
+        Assert.Equal(value == expected ? 0 : 1, issues.Count);
+    }
+
+    [Theory]
+    [InlineData(0.4, 5.0)]
+    [InlineData(0.5, 0.5)]
+    [InlineData(30.0, 30.0)]
+    [InlineData(30.5, 5.0)]
+    [InlineData(double.NaN, 5.0)]
+    public void BaitWindowSeconds_IsBounded(double value, double expected)
+    {
+        var (config, issues) = Validate(new StatsConfig { BaitWindowSeconds = value });
+        Assert.Equal(expected, config.BaitWindowSeconds);
+        Assert.Equal(value.Equals(expected) ? 0 : 1, issues.Count);
+    }
+
+    [Theory]
+    [InlineData(4, 15)]
+    [InlineData(5, 5)]
+    [InlineData(300, 300)]
+    [InlineData(301, 15)]
+    public void AfkSeconds_IsBounded(int value, int expected)
+    {
+        var (config, issues) = Validate(new StatsConfig { AfkSeconds = value });
+        Assert.Equal(expected, config.AfkSeconds);
+        Assert.Equal(value == expected ? 0 : 1, issues.Count);
+    }
+
+    [Fact]
+    public void AnOperatorsStatsJson_ReadsTheMovementKeys()
+    {
+        using var dir = new TempDirectory();
+        File.WriteAllText(dir.File("stats.json"), """
+            { "Version": 1, "SampleEveryTicks": 16, "SmokeRadius": 80, "BaitDistance": 300, "BaitWindowSeconds": 3.5, "AfkSeconds": 20 }
+            """);
+        var config = new JsonConfigStore(dir.Path).Load("stats.json", new StatsConfig(), new StatsConfigValidator()).Config;
+        Assert.Equal(new MovementRules(80f, 300f, 3.5, 20.0), config.ToRules().Movement);
+        Assert.Equal(16, config.SampleEveryTicks);
+    }
 }

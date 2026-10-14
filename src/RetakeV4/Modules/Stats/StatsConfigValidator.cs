@@ -32,6 +32,11 @@ public sealed partial class StatsConfigValidator : IConfigValidator<StatsConfig>
             PingSampleSeconds = OffOrRange(config.PingSampleSeconds, 5, 600, defaults.PingSampleSeconds, file, nameof(StatsConfig.PingSampleSeconds), issues),
             LongFrameMs = Range(config.LongFrameMs, 20, 5000, defaults.LongFrameMs, file, nameof(StatsConfig.LongFrameMs), issues),
             GeoDatabaseFile = GeoFile(config.GeoDatabaseFile, defaults.GeoDatabaseFile, file, issues),
+            SampleEveryTicks = OffOrRange(config.SampleEveryTicks, 1, 64, defaults.SampleEveryTicks, file, nameof(StatsConfig.SampleEveryTicks), issues),
+            SmokeRadius = Range(config.SmokeRadius, 16, 256, defaults.SmokeRadius, file, nameof(StatsConfig.SmokeRadius), issues),
+            BaitDistance = Range(config.BaitDistance, 50, 2000, defaults.BaitDistance, file, nameof(StatsConfig.BaitDistance), issues),
+            BaitWindowSeconds = Range(config.BaitWindowSeconds, 0.5, 30, defaults.BaitWindowSeconds, file, nameof(StatsConfig.BaitWindowSeconds), issues),
+            AfkSeconds = Range(config.AfkSeconds, 5, 300, defaults.AfkSeconds, file, nameof(StatsConfig.AfkSeconds), issues),
         };
         return new ValidationResult<StatsConfig>(validated, issues);
     }

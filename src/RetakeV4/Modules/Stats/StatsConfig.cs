@@ -75,10 +75,28 @@ public sealed record StatsConfig : ModuleConfig
     // map_vote, map_vote_result, command (name only), chat (count only).
     public bool TrackUsage { get; init; } = true;
 
+    // Movement sampling during the live phase, every this many server ticks (8 = 8 samples/s at 64 tick); 0 = off (no
+    // movement or behaviour stats).
+    public int SampleEveryTicks { get; init; } = 8;
+
+    // Radius of a smoke cloud, in game units (72 u = about 1.8 m).
+    public int SmokeRadius { get; init; } = 72;
+
+    // A teammate killed closer than this to a living player (game units, 394 u = about 10 m) is a bait chance.
+    public int BaitDistance { get; init; } = 394;
+
+    public double BaitWindowSeconds { get; init; } = 5.0;
+
+    // A period without a move of 2 m, a turn of 5 degrees or a shot counts as AFK from this long.
+    public int AfkSeconds { get; init; } = 15;
+
     public StatsRules ToRules() => new(
         TradeWindowSeconds,
         MinPlayersPerSide,
         MaxShotsPerRound,
         new RatingWeights(Rating.Base, Rating.Kill, Rating.Survive, Rating.Damage, Rating.Kast, Rating.Impact),
-        new EloRules(Elo.Start, Elo.Floor, Elo.K, Elo.PlayerAdvantage));
+        new EloRules(Elo.Start, Elo.Floor, Elo.K, Elo.PlayerAdvantage))
+    {
+        Movement = SampleEveryTicks > 0 ? new MovementRules(SmokeRadius, BaitDistance, BaitWindowSeconds, AfkSeconds) : null,
+    };
 }
