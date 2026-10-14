@@ -56,4 +56,11 @@ public sealed class StatsDerivedViewsTests : IDisposable
         await using var connection = await Migrated();
         await DerivedViewScenarios.Duos(new ViewSeed(connection, StatsDialect.Sqlite));
     }
+
+    [Fact]
+    public async Task ServerActivity_GroupsPresenceRoundsAndSessions_PerUtcHour()
+    {
+        await using var connection = await Migrated();
+        await DerivedViewScenarios.ServerActivity(new ViewSeed(connection, StatsDialect.Sqlite));
+    }
 }

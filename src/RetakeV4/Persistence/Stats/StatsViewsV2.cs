@@ -67,7 +67,7 @@ public static class StatsViewsV2
         new[] { "v2_stats_players", "v2_stats_player_scopes", "v2_stats_round_players", "v_stats_player_behaviour" };
 
     // Views the 4.9-c step drops and creates, in this order (StatsDerivedViews.Build).
-    public static IReadOnlyList<string> CatalogViews { get; } = new[] { "v_stats_side_balance", "v_stats_retake_odds", "v_stats_weapon_meta", "v_stats_rivals", "v_stats_duos" };
+    public static IReadOnlyList<string> CatalogViews { get; } = new[] { "v_stats_side_balance", "v_stats_retake_odds", "v_stats_weapon_meta", "v_stats_rivals", "v_stats_duos", "v_stats_server_activity" };
 
     public static IReadOnlyList<StatsView> For(StatsDialect dialect)
     {

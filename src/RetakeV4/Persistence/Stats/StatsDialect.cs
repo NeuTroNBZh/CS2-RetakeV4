@@ -68,6 +68,12 @@ public sealed class StatsDialect
     // Integer aggregates of the derived views: MySQL's SUM returns DECIMAL, which most drivers hand over as a string.
     public string IntCast(string expression) => IsMySql ? $"CAST({expression} AS SIGNED)" : $"CAST({expression} AS INTEGER)";
 
+    // UTC calendar day (yyyy-MM-dd text) and hour (0-23 integer) of a stored date: dates are stored in UTC on both
+    // backends (DATETIME(3) on MySQL, sortable "yyyy-MM-dd HH:mm:ss.fff" text on SQLite).
+    public string UtcDay(string expression) => IsMySql ? $"DATE_FORMAT({expression}, '%Y-%m-%d')" : $"SUBSTR({expression}, 1, 10)";
+
+    public string UtcHour(string expression) => IsMySql ? $"HOUR({expression})" : $"CAST(SUBSTR({expression}, 12, 2) AS INTEGER)";
+
     public string Text(int length) => IsMySql ? $"VARCHAR({length.ToString(CultureInfo.InvariantCulture)})" : "TEXT";
 
     // Replaced columns take the new value; added columns are summed with the stored one.

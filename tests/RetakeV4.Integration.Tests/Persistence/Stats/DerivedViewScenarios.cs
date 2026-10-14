@@ -263,4 +263,58 @@ internal static class DerivedViewScenarios
         Assert.Equal(2L, L(await seed.Scalar($"SELECT COUNT(*) FROM v_stats_duos WHERE steam_id = {a}")));
         Assert.Equal(0L, L(await seed.Scalar($"SELECT COUNT(*) {Pair(a, c)}")));
     }
+
+    // Presence at 20:00, 20:30, 21:00, 23:59:59.999 and the next day 00:00; rounds at 20:10 (ranked, 2 players), 20:40
+    // (unranked, one of them again), 21:05 (a third player) and 22:15 (no presence that hour); sessions opened at 20:05
+    // and 20:06, and one whose opening was lost (connected_at NULL).
+    internal static async Task ServerActivity(ViewSeed seed)
+    {
+        var key = NewKey("dv");
+        var ids = NewIds(3);
+        var server = await seed.Server(key);
+        var map = await seed.Map(server, "de_mirage", ViewSeed.Utc("2026-10-01 20:00:00"));
+        await seed.Presence(server, ViewSeed.Utc("2026-10-01 20:00:00"), 4, 2, 1);
+        await seed.Presence(server, ViewSeed.Utc("2026-10-01 20:30:00"), 6, 0, 3);
+        await seed.Presence(server, ViewSeed.Utc("2026-10-01 21:00:00"), 2, 1, 0);
+        await seed.Presence(server, ViewSeed.Utc("2026-10-01 23:59:59.999"), 5, 0, 0);
+        await seed.Presence(server, ViewSeed.Utc("2026-10-02 00:00:00"), 3, 0, 0);
+        var first = await seed.Round(map, new RoundSeed(ViewSeed.Utc("2026-10-01 20:10:00")));
+        await seed.RoundPlayer(first, ids[0], "CT", true);
+        await seed.RoundPlayer(first, ids[1], "T", false);
+        var second = await seed.Round(map, new RoundSeed(ViewSeed.Utc("2026-10-01 20:40:00"), Ranked: false));
+        await seed.RoundPlayer(second, ids[0], "CT", true);
+        var third = await seed.Round(map, new RoundSeed(ViewSeed.Utc("2026-10-01 21:05:00")));
+        await seed.RoundPlayer(third, ids[2], "CT", true);
+        await seed.Round(map, new RoundSeed(ViewSeed.Utc("2026-10-01 22:15:00")));
+        await seed.Session(ids[0], map, ViewSeed.Utc("2026-10-01 20:05:00"));
+        await seed.Session(ids[1], map, ViewSeed.Utc("2026-10-01 20:06:00"));
+        await seed.Session(ids[2], map, null);
+        string Hour(string day, int hour) => $"FROM v_stats_server_activity WHERE server = '{key}' AND day = '{day}' AND hour = {hour}";
+        Assert.Equal(5L, L(await seed.Scalar($"SELECT COUNT(*) FROM v_stats_server_activity WHERE server = '{key}'")));
+        var evening = Hour("2026-10-01", 20);
+        Assert.Equal(2L, L(await seed.Scalar($"SELECT snapshots {evening}")));
+        Assert.Equal(5.0, D(await seed.Scalar($"SELECT humans_avg {evening}")));
+        Assert.Equal(6L, L(await seed.Scalar($"SELECT humans_max {evening}")));
+        Assert.Equal(1.0, D(await seed.Scalar($"SELECT bots_avg {evening}")));
+        Assert.Equal(3L, L(await seed.Scalar($"SELECT queued_max {evening}")));
+        Assert.Equal(2L, L(await seed.Scalar($"SELECT rounds {evening}")));
+        Assert.Equal(1L, L(await seed.Scalar($"SELECT ranked_rounds {evening}")));
+        Assert.Equal(2L, L(await seed.Scalar($"SELECT players {evening}")));
+        Assert.Equal(2L, L(await seed.Scalar($"SELECT sessions {evening}")));
+        var next = Hour("2026-10-01", 21);
+        Assert.Equal(1L, L(await seed.Scalar($"SELECT snapshots {next}")));
+        Assert.Equal(2.0, D(await seed.Scalar($"SELECT humans_avg {next}")));
+        Assert.Equal(1L, L(await seed.Scalar($"SELECT rounds {next}")));
+        Assert.Equal(1L, L(await seed.Scalar($"SELECT players {next}")));
+        Assert.Equal(0L, L(await seed.Scalar($"SELECT sessions {next}")));
+        var withoutPresence = Hour("2026-10-01", 22);
+        Assert.Equal(0L, L(await seed.Scalar($"SELECT snapshots {withoutPresence}")));
+        Assert.Null(await seed.Scalar($"SELECT humans_avg {withoutPresence}"));
+        Assert.Null(await seed.Scalar($"SELECT humans_max {withoutPresence}"));
+        Assert.Equal(1L, L(await seed.Scalar($"SELECT rounds {withoutPresence}")));
+        Assert.Equal(0L, L(await seed.Scalar($"SELECT players {withoutPresence}")));
+        Assert.Equal(5L, L(await seed.Scalar($"SELECT humans_max {Hour("2026-10-01", 23)}")));
+        Assert.Equal(0L, L(await seed.Scalar($"SELECT rounds {Hour("2026-10-01", 23)}")));
+        Assert.Equal(3L, L(await seed.Scalar($"SELECT humans_max {Hour("2026-10-02", 0)}")));
+    }
 }

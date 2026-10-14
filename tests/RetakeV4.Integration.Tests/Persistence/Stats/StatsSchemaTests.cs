@@ -529,4 +529,13 @@ public sealed class StatsSchemaTests : IDisposable
         Assert.Equal(1L, await Scalar(connection, "SELECT COUNT(*) FROM v_stats_rounds"));
         Assert.Equal(1L, await Scalar(connection, "SELECT rounds FROM v_stats_side_balance WHERE server = 'eu-1'"));
     }
+
+    [Fact]
+    public void UtcDayAndHour_PerDialect()
+    {
+        Assert.Equal("DATE_FORMAT(pr.at, '%Y-%m-%d')", StatsDialect.MySql.UtcDay("pr.at"));
+        Assert.Equal("SUBSTR(pr.at, 1, 10)", StatsDialect.Sqlite.UtcDay("pr.at"));
+        Assert.Equal("HOUR(pr.at)", StatsDialect.MySql.UtcHour("pr.at"));
+        Assert.Equal("CAST(SUBSTR(pr.at, 12, 2) AS INTEGER)", StatsDialect.Sqlite.UtcHour("pr.at"));
+    }
 }

@@ -7,7 +7,7 @@ namespace RetakeV4.Persistence.Stats;
 internal static class StatsDerivedViews
 {
     // In the order the 4.9-c step creates them (StatsViewsV2.CatalogViews).
-    internal static StatsView[] Build(StatsDialect d) => new[] { SideBalance(d), RetakeOdds(d), WeaponMeta(d), Rivals(d), Duos(d) };
+    internal static StatsView[] Build(StatsDialect d) => new[] { SideBalance(d), RetakeOdds(d), WeaponMeta(d), Rivals(d), Duos(d), ServerActivity(d) };
 
     // Enemy kills between human participants: the first death row of each victim only (a duplicated death event is
     // ignored, as RoundAnalyzer does), attacker and victim both in the round on opposite sides. Bot victims, bot or world
@@ -160,5 +160,48 @@ internal static class StatsDerivedViews
                 AND t.time_ms >= dth.time_ms AND t.time_ms <= dth.time_ms + 5000
             GROUP BY t.attacker, dth.victim
         ) tr ON tr.steam_id = pr.steam_id AND tr.mate_id = pr.mate_id
+        """);
+
+    // Per server, UTC day and hour: presence snapshots (purged after RawRetentionDays: old hours keep 0 snapshots and
+    // NULL averages), rounds started, distinct participants of those rounds, sessions opened (lost openings excluded).
+    private static StatsView ServerActivity(StatsDialect d) => new("v_stats_server_activity", $"""
+        SELECT x.server, x.day, x.hour,
+            {d.IntCast("SUM(x.is_snapshot)")} AS snapshots,
+            {d.FloatCast("ROUND(1.0 * SUM(x.humans) / NULLIF(SUM(x.is_snapshot), 0), 3)")} AS humans_avg,
+            MAX(x.humans_max) AS humans_max,
+            {d.FloatCast("ROUND(1.0 * SUM(x.bots) / NULLIF(SUM(x.is_snapshot), 0), 3)")} AS bots_avg,
+            MAX(x.queued_max) AS queued_max,
+            {d.IntCast("SUM(x.is_round)")} AS rounds,
+            {d.IntCast("SUM(x.is_ranked)")} AS ranked_rounds,
+            COUNT(DISTINCT x.player_id) AS players,
+            {d.IntCast("SUM(x.is_session)")} AS sessions
+        FROM (
+            SELECT s.name AS server, {d.UtcDay("pr.at")} AS day, {d.UtcHour("pr.at")} AS hour,
+                1 AS is_snapshot, pr.humans AS humans, pr.humans AS humans_max, pr.bots AS bots, pr.queued AS queued_max,
+                0 AS is_round, 0 AS is_ranked, NULL AS player_id, 0 AS is_session
+            FROM stats_presence pr
+            JOIN stats_servers s ON s.id = pr.server_id
+            UNION ALL
+            SELECT s.name, {d.UtcDay("r.started_at")}, {d.UtcHour("r.started_at")},
+                0, 0, NULL, 0, NULL, 1, r.ranked, NULL, 0
+            FROM stats_rounds r
+            JOIN stats_maps m ON m.id = r.map_id
+            JOIN stats_servers s ON s.id = m.server_id
+            UNION ALL
+            SELECT s.name, {d.UtcDay("r.started_at")}, {d.UtcHour("r.started_at")},
+                0, 0, NULL, 0, NULL, 0, 0, rp.steam_id, 0
+            FROM stats_round_players rp
+            JOIN stats_rounds r ON r.id = rp.round_id
+            JOIN stats_maps m ON m.id = r.map_id
+            JOIN stats_servers s ON s.id = m.server_id
+            UNION ALL
+            SELECT s.name, {d.UtcDay("ss.connected_at")}, {d.UtcHour("ss.connected_at")},
+                0, 0, NULL, 0, NULL, 0, 0, NULL, 1
+            FROM stats_sessions ss
+            JOIN stats_maps m ON m.id = ss.map_id
+            JOIN stats_servers s ON s.id = m.server_id
+            WHERE ss.connected_at IS NOT NULL
+        ) x
+        GROUP BY x.server, x.day, x.hour
         """);
 }
