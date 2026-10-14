@@ -1,4 +1,6 @@
 using System.Data.Common;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Microsoft.Data.Sqlite;
 using MySqlConnector;
@@ -247,7 +249,26 @@ public sealed class StatsSchemaTests : IDisposable
         await Execute(connection,
             "INSERT INTO stats_players (steam_id, name, first_seen, last_seen, elo) VALUES (1, 'old', '2026-10-01 00:00:00.000', '2026-10-01 00:00:00.000', 1010)");
         await Execute(connection, "INSERT INTO stats_player_totals (steam_id, scope, rounds, kills) VALUES (1, 'all', 7, 3)");
+        await Execute(connection, "INSERT INTO stats_sessions (steam_id, map_id, seconds_ct) VALUES (1, 1, 120)");
+        await Execute(connection, """
+            INSERT INTO stats_round_players (round_id, steam_id, side, survived, won, kills, deaths, assists, flash_assists, team_kills,
+                damage, utility_damage, headshot_kills, shots, hits, headshot_hits, entry_kill, entry_death, trade_kills, traded_death,
+                kast, clutch_vs, clutch_won, enemies_flashed, teammates_flashed, blind_seconds_inflicted, mvp, planted, defused,
+                defused_with_kit, rating, elo_before, elo_after)
+            VALUES (1, 1, 'CT', 1, 1, 2, 0, 0, 0, 0, 150, 0, 1, 10, 4, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1.2, 1000, 1010)
+            """);
+        await Execute(connection, "INSERT INTO stats_shots (round_id, steam_id, weapon, time_ms, tick) VALUES (1, 1, 'ak47', 500, 64)");
         await SqlMigrator.ApplyAsync(connection, all, CancellationToken.None, StatsSchema.VersionTable);
+        Assert.Equal((long)all.Count, await Scalar(connection, $"SELECT MAX(version) FROM {StatsSchema.VersionTable}"));
+        Assert.Equal(120L, await Scalar(connection, "SELECT seconds_ct FROM stats_sessions WHERE steam_id = 1"));
+        Assert.Equal(0L, await Scalar(connection, "SELECT seconds_vip FROM stats_sessions WHERE steam_id = 1"));
+        Assert.Null(await Scalar(connection, "SELECT ping_avg FROM stats_sessions WHERE steam_id = 1"));
+        Assert.Equal(150L, await Scalar(connection, "SELECT damage FROM stats_round_players WHERE steam_id = 1"));
+        Assert.Equal(0L, await Scalar(connection, "SELECT shots_still FROM stats_round_players WHERE steam_id = 1"));
+        Assert.Null(await Scalar(connection, "SELECT health_end FROM stats_round_players WHERE steam_id = 1"));
+        Assert.Equal("ak47", await Scalar(connection, "SELECT weapon FROM stats_shots WHERE steam_id = 1"));
+        Assert.Null(await Scalar(connection, "SELECT speed FROM stats_shots WHERE steam_id = 1"));
+        Assert.Null(await Scalar(connection, "SELECT still FROM stats_shots WHERE steam_id = 1"));
         Assert.Equal(3L, await Scalar(connection, "SELECT kills FROM v_stats_players WHERE steam_id = 1"));
         Assert.Equal(0L, await Scalar(connection, "SELECT shots_still FROM stats_player_totals WHERE steam_id = 1"));
         Assert.Null(await Scalar(connection, "SELECT country FROM stats_players WHERE steam_id = 1"));
@@ -299,5 +320,32 @@ public sealed class StatsSchemaTests : IDisposable
         Assert.Equal(
             "DELETE FROM stats_presence WHERE id IN (SELECT id FROM stats_presence WHERE at < @cutoff LIMIT 500)",
             StatsDialect.Sqlite.DeleteBatchBefore("stats_presence", 500));
+    }
+
+    // Golden SHA-256 of the v1 (4.8) entries as shipped: SqlMigrator applies entries by index, so editing one (or anything it
+    // is built from: dialect, counters, v1 views) would silently diverge from deployed databases. Line endings are normalised
+    // because the raw string literals follow the checkout's line endings.
+    [Theory]
+    [InlineData("mysql", "c784bb35ad3a7f949b4fd469aaa1238fd54e20de5b0d28b236538bac1f2227c4")]
+    [InlineData("sqlite", "1f2404e470aa1c978689ed3ce610fdf0645f56035cdb5d13867a51aa01f82f6c")]
+    public void V1Entries_MatchTheShippedSnapshot(string dialect, string expected)
+    {
+        var d = dialect == "mysql" ? StatsDialect.MySql : StatsDialect.Sqlite;
+        var sql = string.Join("\n-- next --\n", StatsSchema.Migrations(d).Take(StatsSchema.V1Count(d)).Select(m => m.Sql.ReplaceLineEndings("\n")));
+        Assert.Equal(expected, Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(sql))));
+    }
+
+    // No IP address is stored: no view (v1 or v2) exposes a column named after one.
+    [Fact]
+    public async Task NoView_HasAnIpAddressColumn()
+    {
+        await using var connection = await MigratedSqlite();
+        foreach (var view in StatsViews.Names.Concat(StatsViewsV2.Names))
+        {
+            var columns = await SqliteColumns(connection, view);
+            Assert.NotEmpty(columns);
+            Assert.All(columns, column => Assert.DoesNotContain(
+                column.Split('_'), token => token.Equals("ip", StringComparison.OrdinalIgnoreCase) || token.Equals("address", StringComparison.OrdinalIgnoreCase)));
+        }
     }
 }
