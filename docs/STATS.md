@@ -2,6 +2,8 @@
 
 The `Stats` module records every Retake round: shots, damage, kills, grenades, bomb, sessions. On top of the raw data it stores additive per-player totals, a Retake Rating and an ELO. This page documents the **public views**: they are the stable contract for the web panel and for external websites. Read the views, never the `stats_*` tables (those can change between versions).
 
+Every stat with its definition, source and limits: [STATS-CATALOG.md](STATS-CATALOG.md). Building a website on the views (read-only account, back end, Node.js and PHP examples, recipes): [STATS-INTEGRATION.md](STATS-INTEGRATION.md).
+
 ## Setup
 
 1. In `stats.json` set `Database.Type` to `MySql`, with the same connection string and `ServerKey` as `allocation.json` (`RetakeV4.ConfigCheck` reports a mismatch).
@@ -35,6 +37,12 @@ GRANT SELECT ON retakev4.v_stats_player_network TO 'stats_reader'@'%';
 GRANT SELECT ON retakev4.v_stats_server_health TO 'stats_reader'@'%';
 GRANT SELECT ON retakev4.v_stats_presence TO 'stats_reader'@'%';
 GRANT SELECT ON retakev4.v_stats_player_behaviour TO 'stats_reader'@'%';
+GRANT SELECT ON retakev4.v_stats_retake_odds TO 'stats_reader'@'%';
+GRANT SELECT ON retakev4.v_stats_side_balance TO 'stats_reader'@'%';
+GRANT SELECT ON retakev4.v_stats_weapon_meta TO 'stats_reader'@'%';
+GRANT SELECT ON retakev4.v_stats_rivals TO 'stats_reader'@'%';
+GRANT SELECT ON retakev4.v_stats_duos TO 'stats_reader'@'%';
+GRANT SELECT ON retakev4.v_stats_server_activity TO 'stats_reader'@'%';
 ```
 
 SQLite works too (same tables and views, file `plugins/RetakeV4/data/retakev4.db`), but only the game server can read it.
@@ -154,6 +162,13 @@ Shots, damages and player events of rounds older than `RawRetentionDays` (30 by 
 - Movement counters (after `bomb_carry_ms` in `v2_stats_players` and `v2_stats_player_scopes`): `alive_ms`, `walk_samples`, `run_samples`, `crouch_samples`, `still_samples`, `air_samples`, `alive_samples`, `distance_cm`, `afk_ms`, `in_smoke_samples`, `behind_smoke_samples`, `first_contact_ms_sum`, `first_contact_rounds`, `engage_order_sum`, `bait_rounds`, `bait_chances`; and after `dtr` the ratios `walk_pct`, `run_pct`, `crouch_pct`, `still_pct`, `air_pct`, `in_smoke_pct`, `behind_smoke_pct` (% of the alive samples), `afk_pct` (% of `alive_ms`), `distance_m_per_min` (meters per minute alive), `avg_first_contact_ms`, `avg_engage_order` (over the rounds with a contact), `bait_rate` (`bait_rounds / bait_chances`, 0 to 1).
 - Movement in `v2_stats_round_players` (after `armor_end`): `alive_ms`, `walk_pct`, `run_pct`, `crouch_pct`, `still_pct`, `air_pct`, `distance_m`, `afk_ms`, `in_smoke_pct`, `behind_smoke_pct`, `first_contact_ms`, `engage_order`, `bait`. All `NULL` for rounds without movement data (recorded before 4.9, `SampleEveryTicks` = 0, or no freeze end seen); percentages `NULL` without a sample; `first_contact_ms` and `engage_order` `NULL` without a contact; `bait` `NULL` without a bait chance, else 0 or 1.
 - `v_stats_player_behaviour`: one row per player: `steam_id`, `name`, `contact_rounds`, `avg_first_contact_ms`, `compared_rounds` (rounds where the player and at least one teammate made contact), `own_first_contact_ms` and `team_first_contact_ms` (the player's average and the average of the teammates' round averages on those rounds), `slowness_index` (own / team: above 1 = slower than the teammates), `behind_smoke_pct`, `in_smoke_pct`, `avg_engage_order`, `bait_rounds`, `bait_chances`, `bait_rate`. The view compares every round with its teammates: cache it on the site side. Starting thresholds for a site (the plugin applies none): "slow" when `slowness_index` >= 1.3 over at least 30 `compared_rounds`; "baiter" when `bait_rate` >= 0.5 over at least 10 `bait_chances`, or `avg_engage_order` >= 2.5 over at least 30 `contact_rounds`.
+- `v_stats_side_balance`: per `server`, `map_name` and `site`: `rounds`, `ct_wins`, `t_wins`, `ct_win_pct`, `t_win_pct`, `ranked_rounds`, `ranked_ct_wins`, `ranked_ct_win_pct`, `avg_duration_ms`, `first_round_at`, `last_round_at`.
+- `v_stats_retake_odds`: rounds grouped by `server`, `map_name`, `site`, `round_type`, `ranked`, `players_ct`, `players_t` (humans at the round start) and `ct_alive_at_plant`, `t_alive_at_plant` (participants not dead when the bomb was planted, a death at the plant time counting as dead; `NULL` without a plant): `rounds`, `ct_wins`, `t_wins`, `ct_win_pct`, `defused_rounds`, `exploded_rounds`, `avg_duration_ms`. Bots and players who left are not subtracted. Merge rows with `SUM(rounds)` and `SUM(ct_wins)`, never by averaging `ct_win_pct`. The alive-at-plant counts are approximate: they can be off (even negative) when a human joins after the round start, deaths without a round-player row are ignored, and team kills, suicides and world deaths before the plant count as deaths.
+- `v_stats_weapon_meta`: per weapon over every player: `players` (players with a `v_stats_player_weapons` row for it), `shots`, `hits`, `headshot_hits`, `kills`, `headshot_kills`, `damage`, `accuracy`, `hs_accuracy`, `hs_pct`, `kill_share_pct` (its kills / the kills of every weapon), `primary_rounds`, `primary_players`, `primary_won_rounds`, `primary_win_pct` (rounds where it was the primary weapon given at the round start).
+- `v_stats_rivals`: one row per player and enemy, in both directions: `steam_id`, `name`, `opponent_id`, `opponent_name`, `kills` (the player killed the enemy), `deaths` (the enemy killed the player), `headshot_kills`, `headshot_deaths`, `kd`. Only kills between human participants of opposite sides, and only the first death row of each victim (as the totals): team kills, suicides, the world and bots are excluded.
+- `v_stats_duos`: one row per player and teammate, in both directions: `steam_id`, `name`, `mate_id`, `mate_name`, `rounds` (same round, same side), `rounds_won`, `win_pct`, `trades` (times the player killed that teammate's killer within 5 s, fixed in the view even if `TradeWindowSeconds` differs in `stats.json`). A revenge kill is credited to every teammate that killer killed within the window, so the `trades` of a player's pairs summed can exceed their `trade_kills`.
+- `v_stats_server_activity`: per `server`, UTC `day` (`yyyy-MM-dd`) and `hour` (0-23): `snapshots`, `humans_avg`, `humans_max`, `bots_avg`, `queued_max` (presence snapshots of that hour), `rounds`, `ranked_rounds` (rounds started), `players` (distinct participants of those rounds), `sessions` (sessions opened). Hours older than `RawRetentionDays` keep their rounds and sessions but lose their presence (`snapshots` 0, averages `NULL`).
+- The derived views above aggregate whole tables at each query; `v_stats_rivals` and `v_stats_duos` scan the whole kills table every time: cache their results on the site side. Their sums are integers (`BIGINT`), not `DECIMAL`.
 
 ### Definitions (v2)
 
