@@ -30,6 +30,12 @@ SQLite works too (same tables and views, file `plugins/RetakeV4/data/retakev4.db
 
 Supported databases: **MySQL 8.0.17 or newer** (the views use `CAST(... AS DOUBLE)`), **MariaDB 11.4** and SQLite. The full test suite runs against MySQL 8.0 and MariaDB 11.4.
 
+### Player countries (optional)
+
+The plugin does **not** bundle the database (DB-IP Lite is CC BY 4.0 and kept out of the package). Download the free **DB-IP Lite country** database in MMDB format (https://db-ip.com/db/download/ip-to-country-lite) once a month, unzip it and save it as `addons/counterstrikesharp/configs/plugins/RetakeV4/geo/dbip-country-lite.mmdb` (path set by `GeoDatabaseFile` in `stats.json`, relative to `configs/plugins/RetakeV4`). Without the file, `country` stays `NULL` and the console shows one information line at load. Only the 2-letter country code is stored. IP addresses are only read in memory for the lookup: they are never stored, logged or sent anywhere.
+
+Attribution (required by CC BY 4.0): [IP Geolocation by DB-IP](https://db-ip.com).
+
 ## Conventions
 
 - `steam_id`, `attacker`, `victim`, `assister`, `planter`, `defuser`: SteamID64 (`BIGINT UNSIGNED`). Read them as strings in JavaScript.
@@ -115,12 +121,39 @@ Players with at least one ranked round: `steam_id`, `name`, `elo`, `ranked_round
 - `v_stats_damages`: `damage_id`, `round_id`, `attacker`, `victim`, `victim_is_bot`, `weapon`, `hitgroup` (1 = head), `dmg_health`, `dmg_armor`, `health_after`, `time_ms`, `tick`.
 - `v_stats_grenades`: `grenade_id`, `round_id`, `steam_id`, `type` (`He`, `Flash`, `Smoke`, `Molotov`, `Decoy`), `thrown_ms`, `detonated_ms`, `throw_x/y/z`, `det_x/y/z`, `damage` (to enemies), `enemies_blinded`, `teammates_blinded`, `blind_seconds`.
 
-Shots and damages older than `RawRetentionDays` (30 by default, 0 = keep) are purged at each map start; everything else is kept. The purge assumes round ids grow with time (true in normal operation).
+Shots, damages and player events of rounds older than `RawRetentionDays` (30 by default, 0 = keep), and presence snapshots and server events older than that, are purged at each map start; everything else is kept. The purge assumes round ids grow with time (true in normal operation).
 
 ### `v_stats_sessions`, `v_stats_elo_history`
 
 - `v_stats_sessions`: `session_id`, `steam_id`, `server`, `map_name`, `connected_at` (`NULL` if the opening was lost), `disconnected_at`, `disconnect_reason`, `seconds_ct`, `seconds_t`, `seconds_spec`, `seconds_queue`.
 - `v_stats_elo_history`: `steam_id`, `day` (`yyyy-MM-dd`, UTC), `elo` at the end of the day, `rounds`, `delta_sum`.
+
+## Views v2 (4.9)
+
+`contract/stats/views.v2.json` lists the views added in 4.9. The v1 views are unchanged; the `v2_stats_*` views repeat their v1 counterpart with the new columns.
+
+- `v2_stats_players`, `v2_stats_player_scopes`: v1 columns plus `country` (players only), the counters `shots_still`, `hits_still`, `shots_moving`, `hits_moving`, `shots_scoped`, `hits_scoped`, `reloads`, `reloads_full`, `pickups`, `drops`, `jumps`, `plant_attempts`, `plant_aborts`, `defuse_attempts`, `defuse_aborts`, `clutch_defuses`, `damage_taken`, `bomb_carry_ms`, and the ratios `still_accuracy`, `moving_accuracy`, `scoped_accuracy` (hits / shots, %), `still_shot_pct` (still shots / still + moving shots, %), `dtr` (damage taken per round).
+- `v2_stats_round_players`: v1 columns plus `shots_still` ... `hits_scoped`, `damage_taken`, `bomb_carry_ms`, `health_end`, `armor_end` (`NULL` when the player left without a state at round end, 0 when dead).
+- `v2_stats_shots`: v1 columns plus `speed` (horizontal, u/s), `crouched`, `scoped`, `airborne`, `walking`, `still` (`NULL` when the pawn could not be read).
+- `v2_stats_sessions`: v1 columns plus `seconds_vip`, `ping_avg`, `ping_max` (ms, `NULL` without a sample), `country`.
+- `v_stats_player_events`: one row per player event: `event_id`, `round_id`, `map_name`, `site`, `round_type`, `started_at`, `steam_id`, `type`, `time_ms`, `value`, `pos_x/y/z`. Types: `reload`, `reload_full_clip`, `pickup`, `drop`, `jump`, `plant_begin`, `plant_abort`, `defuse_begin`, `defuse_abort`, `bomb_pickup`, `bomb_drop`. `value`: the weapon (pickup, drop), `weapon:clip/max` (reloads), `kit` (defuse started with a kit), `start` (bomb carrier at the round start).
+- `v_stats_player_network`: per player `country`, `sessions`, `sessions_with_ping`, `ping_avg` (average of session averages), `ping_max`, `seconds_vip`.
+- `v_stats_server_health`: `event_id`, `server`, `at`, `type`, `module`, `value`, `occurrences`, `max_ms`. Types: `plugin_start` / `hot_reload` (value = version), `module_error` / `module_disabled` (module, value = stage), `slow_handler` (module, stage, `max_ms`), `long_frame` (`max_ms`), `uptime` (value = seconds, every 10 min), `map_vote` (value = map, `occurrences` = votes), `map_vote_result` (winning map and its votes), `command` (module, command name only, never the arguments), `chat` (`say` / `say_team`, counted by command name only, never the text). Repeated types (`module_error`, `module_disabled`, `slow_handler`, `long_frame`, `command`, `chat`) are aggregated: one row per (type, module, value) and minute, `occurrences` = count, `max_ms` = longest duration.
+- `v_stats_presence`: `snapshot_id`, `server`, `at`, `map_name`, `humans`, `bots`, `queued`, every `PresenceSnapshotSeconds`.
+
+### Definitions (v2)
+
+- **Still shot**: on the ground and at a horizontal speed of at most 34 % of the weapon's max speed (CS2 weapon data; scoped speed for scoped rifles). It is not "stopped": a slow walk can still count. A hit takes the state of the shot fired in the same tick by the same player.
+- **reload_full_clip**: a reload started with at least half of the magazine left (CS2 never reloads a full one). Each reload is one event, `reload` or `reload_full_clip`; `reloads` counts both.
+- **pickups / drops**: grenades and the bomb are never pickups or drops (neither stored nor counted); pickups before the freeze ends (spawn equipment) and drops from the player's death on are stored but not counted.
+- **bomb_carry_ms**: from `bomb_pickup` until the carrier's `bomb_drop`, the plant, their death, another pickup or the round end.
+- **clutch_defuses**: defuses with less than 1 s left on the bomb.
+- **damage_taken**: health lost from any source (enemies, teammates, world, bots), capped by the health left.
+- **seconds_vip**: time queued with a priority above 0 (part of `seconds_queue`).
+- **ping**: sampled every `PingSampleSeconds`, capped at 999 ms. Packet loss is not recorded.
+- **Long frame**: a server frame of at least `LongFrameMs` (gaps of 10 s or more are pauses, not frames).
+
+New `stats.json` keys: `PresenceSnapshotSeconds` (60, 0 = off), `PingSampleSeconds` (30, 0 = off), `LongFrameMs` (50), `GeoDatabaseFile` (`geo/dbip-country-lite.mmdb`), `TrackServerHealth` (true), `TrackUsage` (true).
 
 ## Reliability
 
@@ -155,4 +188,4 @@ SELECT name, ROUND(seconds_total / 3600.0, 1) AS hours FROM v_stats_players ORDE
 
 ## Contract
 
-`contract/stats/views.v1.json` lists every view with its columns in order; the plugin's tests compare it with the real schema on SQLite (and MySQL when available). Views only grow by new views: an incompatible change creates `views.v2.json` and new view names.
+`contract/stats/views.v1.json` and `contract/stats/views.v2.json` list every view with its columns in order; the plugin's tests compare them with the real schema on SQLite (and MySQL / MariaDB when available). Views only grow by new views: v1 never changes, 4.9 additions are in v2.
