@@ -202,6 +202,56 @@ internal static class ReplayScenarios
         }
     }
 
+    // One call with several claims on r1 (best cap 1): ids[0] as best (evicting r0) and as highlight, the same best claim
+    // twice (the second sees the first in memory and is skipped, no duplicate key), ids[1] as saved. The round gets three
+    // owners and its replay once; the same call again changes nothing.
+    internal static async Task SeveralClaimsInOneCall(SqlStatsRepository repository, Func<string, Task<object?>> scalar)
+    {
+        var ids = NewIds(3);
+        var caps = new ReplayCaps(1, 10, 20);
+        var rounds = await Rounds(repository, 2, ids);
+        Assert.Equal(1, await Claim(repository, rounds[0], ids[0], ReplayReason.Best, 1.0, caps, T0));
+        var claims = new[]
+        {
+            new ReplayClaim(ids[1], ReplayReason.Saved, 0.5),
+            new ReplayClaim(ids[0], ReplayReason.Highlight, 3.0),
+            new ReplayClaim(ids[0], ReplayReason.Best, 3.0),
+            new ReplayClaim(ids[0], ReplayReason.Best, 3.0),
+        };
+        var r1 = rounds[1];
+        Assert.Equal(3, await repository.WriteReplayAsync(r1.RoundId, r1.Replay, claims, caps, T0.AddMinutes(1), CancellationToken.None));
+        Assert.Equal(3, await repository.WriteReplayAsync(r1.RoundId, r1.Replay, claims, caps, T0.AddMinutes(2), CancellationToken.None));
+
+        await AssertGone(scalar, rounds[0].RoundId);
+        Assert.Equal(3, await Count(scalar, $"SELECT COUNT(*) FROM stats_replay_owners WHERE round_id = {r1.RoundId}"));
+        Assert.Equal(1, await Count(scalar, $"SELECT COUNT(*) FROM stats_replay_owners WHERE round_id = {r1.RoundId} AND steam_id = {ids[0]} AND reason = 'best'"));
+        Assert.Equal(1, await Count(scalar, $"SELECT COUNT(*) FROM stats_replay_owners WHERE round_id = {r1.RoundId} AND steam_id = {ids[0]} AND reason = 'highlight'"));
+        Assert.Equal(1, await Count(scalar, $"SELECT COUNT(*) FROM stats_replay_owners WHERE round_id = {r1.RoundId} AND steam_id = {ids[1]} AND reason = 'saved'"));
+        Assert.Equal(1, await Count(scalar, $"SELECT COUNT(*) FROM stats_replay_owners WHERE steam_id = {ids[0]} AND reason = 'best'"));
+        Assert.Equal(1, await Count(scalar, $"SELECT COUNT(*) FROM stats_replays WHERE round_id = {r1.RoundId}"));
+        Assert.Equal(3, await Count(scalar, $"SELECT COUNT(*) FROM stats_replay_tracks WHERE round_id = {r1.RoundId}"));
+        Assert.Equal(3, await Count(scalar, $"SELECT COUNT(*) FROM v_stats_replays WHERE round_id = {r1.RoundId}"));
+    }
+
+    // A write that fails midway (two tracks of one player: duplicate key on stats_replay_tracks) rolls back whole: no
+    // owner, replay or track of the new round, and the evicted round keeps its owner and replay.
+    internal static async Task FailedWrite_RollsBack(SqlStatsRepository repository, Func<string, Task<object?>> scalar)
+    {
+        var ids = NewIds(3);
+        var caps = new ReplayCaps(1, 10, 20);
+        var rounds = await Rounds(repository, 2, ids);
+        Assert.Equal(1, await Claim(repository, rounds[0], ids[0], ReplayReason.Best, 1.0, caps, T0));
+        var track = rounds[1].Replay.Tracks[0];
+        var broken = new Written(rounds[1].RoundId, new ReplayRound(8, new[] { track, track }));
+
+        await Assert.ThrowsAnyAsync<System.Data.Common.DbException>(() => Claim(repository, broken, ids[0], ReplayReason.Best, 2.0, caps, T0.AddMinutes(1)));
+
+        await AssertGone(scalar, rounds[1].RoundId);
+        Assert.Equal(1, await Count(scalar, $"SELECT COUNT(*) FROM stats_replay_owners WHERE round_id = {rounds[0].RoundId} AND steam_id = {ids[0]} AND reason = 'best'"));
+        Assert.Equal(1, await Count(scalar, $"SELECT COUNT(*) FROM stats_replays WHERE round_id = {rounds[0].RoundId}"));
+        Assert.Equal(3, await Count(scalar, $"SELECT COUNT(*) FROM stats_replay_tracks WHERE round_id = {rounds[0].RoundId}"));
+    }
+
     // A claim for a SteamID that never played (no stats_players row) and an empty claim list store nothing.
     internal static async Task UnknownPlayersAndNoClaims_StoreNothing(SqlStatsRepository repository, Func<string, Task<object?>> scalar)
     {

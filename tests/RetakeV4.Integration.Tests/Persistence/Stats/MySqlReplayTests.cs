@@ -82,6 +82,26 @@ public class MySqlReplayTests
     }
 
     [Fact]
+    public async Task SeveralClaims_InOneCall_WhenAMySqlServerIsConfigured()
+    {
+        if (string.IsNullOrWhiteSpace(ConnectionString))
+        {
+            return;
+        }
+        await ReplayScenarios.SeveralClaimsInOneCall((await Repository()).Repository, Scalar);
+    }
+
+    [Fact]
+    public async Task FailedWrite_RollsBack_WhenAMySqlServerIsConfigured()
+    {
+        if (string.IsNullOrWhiteSpace(ConnectionString))
+        {
+            return;
+        }
+        await ReplayScenarios.FailedWrite_RollsBack((await Repository()).Repository, Scalar);
+    }
+
+    [Fact]
     public async Task LongFrames_RoundTrip_WhenAMySqlServerIsConfigured()
     {
         if (string.IsNullOrWhiteSpace(ConnectionString))

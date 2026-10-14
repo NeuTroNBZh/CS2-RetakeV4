@@ -245,7 +245,8 @@ public sealed class SqlStatsRepository : IStatsRepository
         var sides = context.Participants.ToDictionary(p => p.SteamId, p => p.Side);
         await using var connection = await _open(ct).ConfigureAwait(false);
         await using var transaction = await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
-        foreach (var player in round.Players)
+        // Ascending SteamID: the same stats_players lock order as WriteReplayAsync, so the two never wait on each other in a cycle.
+        foreach (var player in round.Players.OrderBy(p => p.SteamId))
         {
             await UpsertPlayerAsync(connection, transaction, player.SteamId, player.Name, context.StartedAt, ct).ConfigureAwait(false);
         }
@@ -292,8 +293,10 @@ public sealed class SqlStatsRepository : IStatsRepository
     }
 
     // Lock order, the same on every server: the claimants' stats_players rows (ascending SteamID), then the stats_rounds
-    // rows of every round the decisions touch (ascending id). A player's ownerships only change under that player's lock
-    // and a round's owners, replay and tracks only under that round's lock, so two servers deciding for the same player or
+    // rows of every round the decisions touch (ascending id); WriteRoundAsync also takes its stats_players locks in
+    // ascending SteamID and locks no existing round. A locking read of a round's owners happens only under that round's
+    // lock (without a kept claim, the returned count is a plain read). A player's ownerships only change under that
+    // player's lock and a round's owners, replay and tracks only under that round's lock, so two servers deciding for the same player or
     // the same round wait for each other, always in the same order (no deadlock). Every owner keeps a stats_players row:
     // claimants without one are ignored, and players are never deleted. MySQL / MariaDB run this transaction in READ
     // COMMITTED: each read sees what the previous lock holder committed, and the locking reads (owners count, replay row)
@@ -338,7 +341,7 @@ public sealed class SqlStatsRepository : IStatsRepository
         }
         if (kept.Count == 0)
         {
-            var current = await CountOwnersAsync(connection, transaction, roundId, ct).ConfigureAwait(false);
+            var current = await CountOwnersAsync(connection, transaction, roundId, locking: false, ct).ConfigureAwait(false);
             await transaction.CommitAsync(ct).ConfigureAwait(false);
             return current;
         }
@@ -363,7 +366,7 @@ public sealed class SqlStatsRepository : IStatsRepository
                 "INSERT INTO stats_replay_owners (round_id, steam_id, reason, score, created_at) VALUES (@round, @steam, @reason, @score, @at)", ct,
                 ("@round", roundId), ("@steam", steam), ("@reason", reason), ("@score", claim.Score), ("@at", when)).ConfigureAwait(false);
         }
-        var owners = await CountOwnersAsync(connection, transaction, roundId, ct).ConfigureAwait(false);
+        var owners = await CountOwnersAsync(connection, transaction, roundId, locking: true, ct).ConfigureAwait(false);
         if (owners > 0 && await ScalarAsync(connection, transaction, $"SELECT round_id FROM stats_replays WHERE round_id = @round{_dialect.ForUpdate}", ct,
                 ("@round", roundId)).ConfigureAwait(false) is null or DBNull)
         {
@@ -377,7 +380,7 @@ public sealed class SqlStatsRepository : IStatsRepository
         }
         foreach (var old in evicted)
         {
-            if (await CountOwnersAsync(connection, transaction, old, ct).ConfigureAwait(false) == 0)
+            if (await CountOwnersAsync(connection, transaction, old, locking: true, ct).ConfigureAwait(false) == 0)
             {
                 await ExecuteAsync(connection, transaction, "DELETE FROM stats_replay_tracks WHERE round_id = @round", ct, ("@round", old)).ConfigureAwait(false);
                 await ExecuteAsync(connection, transaction, "DELETE FROM stats_replays WHERE round_id = @round", ct, ("@round", old)).ConfigureAwait(false);
@@ -408,9 +411,11 @@ public sealed class SqlStatsRepository : IStatsRepository
         return held;
     }
 
-    // Locking read on MySQL / MariaDB: the latest committed owners of the round.
-    private async Task<int> CountOwnersAsync(DbConnection connection, DbTransaction transaction, long roundId, CancellationToken ct) =>
-        Convert.ToInt32(await ScalarAsync(connection, transaction, $"SELECT COUNT(*) FROM stats_replay_owners WHERE round_id = @round{_dialect.ForUpdate}", ct,
+    // locking (MySQL / MariaDB): a locking read of the round's latest committed owners, only while the round's
+    // stats_rounds lock is held; otherwise a plain read.
+    private async Task<int> CountOwnersAsync(DbConnection connection, DbTransaction transaction, long roundId, bool locking, CancellationToken ct) =>
+        Convert.ToInt32(await ScalarAsync(connection, transaction,
+            $"SELECT COUNT(*) FROM stats_replay_owners WHERE round_id = @round{(locking ? _dialect.ForUpdate : string.Empty)}", ct,
             ("@round", roundId)).ConfigureAwait(false), CultureInfo.InvariantCulture);
 
     public async Task<IReadOnlyDictionary<ulong, int>> LoadEloAsync(IReadOnlyCollection<ulong> steamIds, CancellationToken ct)

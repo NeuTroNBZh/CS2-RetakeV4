@@ -57,6 +57,12 @@ public sealed class SqliteReplayTests : IDisposable
         await ReplayScenarios.SharedRoundEvictedConcurrently(await Repository("eu-1"), await Repository("eu-2"), Scalar);
 
     [Fact]
+    public async Task SeveralClaims_InOneCall() => await ReplayScenarios.SeveralClaimsInOneCall(await Repository(), Scalar);
+
+    [Fact]
+    public async Task FailedWrite_RollsBack() => await ReplayScenarios.FailedWrite_RollsBack(await Repository(), Scalar);
+
+    [Fact]
     public async Task LongFrames_RoundTrip() => await ReplayScenarios.LongFramesRoundTrip(await Repository(), Scalar);
 
     [Fact]
