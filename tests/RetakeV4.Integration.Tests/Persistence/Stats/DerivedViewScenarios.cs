@@ -175,4 +175,92 @@ internal static class DerivedViewScenarios
             Assert.Equal(0.0, D(await seed.Scalar($"SELECT kill_share_pct {Of(pistol)}")));
         }
     }
+
+    // Players a, b, c, d, e. Round 1: a, b (CT) lose to c, d (T); c kills a (headshot), a duplicated death of a by d, b kills
+    // a bot, b kills c exactly 5 s after a died (a trade), d kills b 3 s after c died (a trade). Round 2: a, e (CT) beat
+    // c, d (T); d team-kills c, a kills d (headshot), the world kills e. Round 3: a, b (CT) lose to c, d (T); c kills a,
+    // b kills c 5.001 s later (too late for a trade). Returns { a, b, c, d, e }.
+    internal static async Task<ulong[]> SeedDuels(ViewSeed seed)
+    {
+        var ids = NewIds(5);
+        var (a, b, c, d, e) = (ids[0], ids[1], ids[2], ids[3], ids[4]);
+        foreach (var id in ids)
+        {
+            await seed.Player(id);
+        }
+        var server = await seed.Server(NewKey("dv"));
+        var map = await seed.Map(server, "de_mirage", ViewSeed.Utc("2026-10-01 20:00:00"));
+        var first = await seed.Round(map, new RoundSeed(ViewSeed.Utc("2026-10-01 20:01:00"), Winner: "T"));
+        await RoundPlayers(seed, first, (a, "CT", false), (b, "CT", false), (c, "T", true), (d, "T", true));
+        await seed.Kill(first, c, a, 1000, headshot: true);
+        await seed.Kill(first, d, a, 1001);                    // duplicated death of a: only the first row counts
+        await seed.Kill(first, b, 0, 2000, victimIsBot: true); // a bot victim: never a duel
+        await seed.Kill(first, b, c, 6000);                    // 5 s after a's death: b trades a
+        await seed.Kill(first, d, b, 9000);                    // 3 s after c's death: d trades c
+        var second = await seed.Round(map, new RoundSeed(ViewSeed.Utc("2026-10-01 20:03:00"), Winner: "CT"));
+        await RoundPlayers(seed, second, (a, "CT", true), (e, "CT", true), (c, "T", false), (d, "T", false));
+        await seed.Kill(second, d, c, 500, teamKill: true);    // team kill: not a duel
+        await seed.Kill(second, a, d, 2000, headshot: true);
+        await seed.Kill(second, null, e, 3000);                // the world: no attacker
+        var third = await seed.Round(map, new RoundSeed(ViewSeed.Utc("2026-10-01 20:05:00"), Winner: "T"));
+        await RoundPlayers(seed, third, (a, "CT", false), (b, "CT", false), (c, "T", true), (d, "T", true));
+        await seed.Kill(third, c, a, 1000);
+        await seed.Kill(third, b, c, 6001);                    // 5.001 s: too late for a trade
+        return ids;
+    }
+
+    private static async Task RoundPlayers(ViewSeed seed, long roundId, params (ulong Id, string Side, bool Won)[] players)
+    {
+        foreach (var (id, side, won) in players)
+        {
+            await seed.RoundPlayer(roundId, id, side, won);
+        }
+    }
+
+    internal static async Task Rivals(ViewSeed seed)
+    {
+        var ids = await SeedDuels(seed);
+        var (a, b, c, d, e) = (ids[0], ids[1], ids[2], ids[3], ids[4]);
+        string Pair(ulong player, ulong opponent) => $"FROM v_stats_rivals WHERE steam_id = {player} AND opponent_id = {opponent}";
+        Assert.Equal(2L, L(await seed.Scalar($"SELECT kills {Pair(c, a)}")));
+        Assert.Equal(1L, L(await seed.Scalar($"SELECT headshot_kills {Pair(c, a)}")));
+        Assert.Equal(0L, L(await seed.Scalar($"SELECT deaths {Pair(c, a)}")));
+        Assert.Null(await seed.Scalar($"SELECT kd {Pair(c, a)}"));
+        Assert.Equal(0L, L(await seed.Scalar($"SELECT kills {Pair(a, c)}")));
+        Assert.Equal(2L, L(await seed.Scalar($"SELECT deaths {Pair(a, c)}")));
+        Assert.Equal(1L, L(await seed.Scalar($"SELECT headshot_deaths {Pair(a, c)}")));
+        Assert.Equal(0.0, D(await seed.Scalar($"SELECT kd {Pair(a, c)}")));
+        Assert.Equal($"p{c}", await seed.Scalar($"SELECT opponent_name {Pair(a, c)}"));
+        Assert.Equal($"p{a}", await seed.Scalar($"SELECT name {Pair(a, c)}"));
+        Assert.Equal(2L, L(await seed.Scalar($"SELECT kills {Pair(b, c)}")));
+        Assert.Equal(1L, L(await seed.Scalar($"SELECT kills {Pair(d, b)}")));
+        Assert.Equal(1L, L(await seed.Scalar($"SELECT headshot_kills {Pair(a, d)}")));
+        Assert.Equal(0L, L(await seed.Scalar($"SELECT kills {Pair(d, a)}")));
+        Assert.Equal(1L, L(await seed.Scalar($"SELECT deaths {Pair(d, a)}")));
+        Assert.Equal(0L, L(await seed.Scalar($"SELECT COUNT(*) {Pair(d, c)}")));
+        Assert.Equal(2L, L(await seed.Scalar($"SELECT COUNT(*) FROM v_stats_rivals WHERE steam_id = {d}")));
+        Assert.Equal(0L, L(await seed.Scalar($"SELECT COUNT(*) FROM v_stats_rivals WHERE steam_id = {e} OR opponent_id = {e}")));
+    }
+
+    internal static async Task Duos(ViewSeed seed)
+    {
+        var ids = await SeedDuels(seed);
+        var (a, b, c, d, e) = (ids[0], ids[1], ids[2], ids[3], ids[4]);
+        string Pair(ulong player, ulong mate) => $"FROM v_stats_duos WHERE steam_id = {player} AND mate_id = {mate}";
+        Assert.Equal(2L, L(await seed.Scalar($"SELECT rounds {Pair(a, b)}")));
+        Assert.Equal(0L, L(await seed.Scalar($"SELECT rounds_won {Pair(a, b)}")));
+        Assert.Equal(0.0, D(await seed.Scalar($"SELECT win_pct {Pair(a, b)}")));
+        Assert.Equal(0L, L(await seed.Scalar($"SELECT trades {Pair(a, b)}")));
+        Assert.Equal($"p{b}", await seed.Scalar($"SELECT mate_name {Pair(a, b)}"));
+        Assert.Equal(1L, L(await seed.Scalar($"SELECT trades {Pair(b, a)}")));
+        Assert.Equal(1L, L(await seed.Scalar($"SELECT rounds {Pair(a, e)}")));
+        Assert.Equal(100.0, D(await seed.Scalar($"SELECT win_pct {Pair(a, e)}")));
+        Assert.Equal(3L, L(await seed.Scalar($"SELECT rounds {Pair(c, d)}")));
+        Assert.Equal(2L, L(await seed.Scalar($"SELECT rounds_won {Pair(c, d)}")));
+        Assert.Equal(66.667, D(await seed.Scalar($"SELECT win_pct {Pair(c, d)}")));
+        Assert.Equal(0L, L(await seed.Scalar($"SELECT trades {Pair(c, d)}")));
+        Assert.Equal(1L, L(await seed.Scalar($"SELECT trades {Pair(d, c)}")));
+        Assert.Equal(2L, L(await seed.Scalar($"SELECT COUNT(*) FROM v_stats_duos WHERE steam_id = {a}")));
+        Assert.Equal(0L, L(await seed.Scalar($"SELECT COUNT(*) {Pair(a, c)}")));
+    }
 }

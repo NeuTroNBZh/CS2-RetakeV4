@@ -55,6 +55,28 @@ public class MySqlDerivedViewsTests
         }
         await DerivedViewScenarios.WeaponMeta(new ViewSeed(connection, StatsDialect.MySql), freshDatabase: false);
     }
+
+    [Fact]
+    public async Task Rivals_WhenAMySqlServerIsConfigured()
+    {
+        await using var connection = await Migrated();
+        if (connection is null)
+        {
+            return;
+        }
+        await DerivedViewScenarios.Rivals(new ViewSeed(connection, StatsDialect.MySql));
+    }
+
+    [Fact]
+    public async Task Duos_WhenAMySqlServerIsConfigured()
+    {
+        await using var connection = await Migrated();
+        if (connection is null)
+        {
+            return;
+        }
+        await DerivedViewScenarios.Duos(new ViewSeed(connection, StatsDialect.MySql));
+    }
 }
 
 // Test classes that use the shared MySQL stats database while dropping or recreating its views.

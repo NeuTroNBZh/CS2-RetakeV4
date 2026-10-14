@@ -7,7 +7,19 @@ namespace RetakeV4.Persistence.Stats;
 internal static class StatsDerivedViews
 {
     // In the order the 4.9-c step creates them (StatsViewsV2.CatalogViews).
-    internal static StatsView[] Build(StatsDialect d) => new[] { SideBalance(d), RetakeOdds(d), WeaponMeta(d) };
+    internal static StatsView[] Build(StatsDialect d) => new[] { SideBalance(d), RetakeOdds(d), WeaponMeta(d), Rivals(d), Duos(d) };
+
+    // Enemy kills between human participants: the first death row of each victim only (a duplicated death event is
+    // ignored, as RoundAnalyzer does), attacker and victim both in the round on opposite sides. Bot victims, bot or world
+    // killers (attacker NULL), team kills and suicides never match.
+    private const string EnemyKills = """
+        SELECT k.round_id, k.attacker, k.victim, k.headshot, k.time_ms
+        FROM stats_kills k
+        JOIN (SELECT round_id, victim, MIN(id) AS id FROM stats_kills WHERE victim_is_bot = 0 GROUP BY round_id, victim) f ON f.id = k.id
+        JOIN stats_round_players a ON a.round_id = k.round_id AND a.steam_id = k.attacker
+        JOIN stats_round_players v ON v.round_id = k.round_id AND v.steam_id = k.victim
+        WHERE k.attacker <> k.victim AND a.side <> v.side
+        """;
 
     // CT / T wins per server, map and site, over the whole history.
     private static StatsView SideBalance(StatsDialect d) => new("v_stats_side_balance", $"""
@@ -104,5 +116,49 @@ internal static class StatsDerivedViews
             GROUP BY primary_weapon
         ) u ON u.weapon = w.weapon
         CROSS JOIN (SELECT SUM(kills) AS total_kills FROM stats_player_weapons) t
+        """);
+
+    // One row per player and enemy, in both directions: kills of the player on the enemy and deaths of the player by him.
+    private static StatsView Rivals(StatsDialect d) => new("v_stats_rivals", $"""
+        SELECT x.steam_id, p.name, x.opponent_id, o.name AS opponent_name,
+            {d.IntCast("SUM(x.is_kill)")} AS kills,
+            {d.IntCast("SUM(x.is_death)")} AS deaths,
+            {d.IntCast("SUM(x.hs_kill)")} AS headshot_kills,
+            {d.IntCast("SUM(x.hs_death)")} AS headshot_deaths,
+            {d.FloatCast("ROUND(1.0 * SUM(x.is_kill) / NULLIF(SUM(x.is_death), 0), 3)")} AS kd
+        FROM (
+            SELECT e.attacker AS steam_id, e.victim AS opponent_id, 1 AS is_kill, 0 AS is_death, e.headshot AS hs_kill, 0 AS hs_death
+            FROM ({EnemyKills}) e
+            UNION ALL
+            SELECT e.victim, e.attacker, 0, 1, 0, e.headshot
+            FROM ({EnemyKills}) e
+        ) x
+        JOIN stats_players p ON p.steam_id = x.steam_id
+        JOIN stats_players o ON o.steam_id = x.opponent_id
+        GROUP BY x.steam_id, p.name, x.opponent_id, o.name
+        """);
+
+    // One row per player and teammate, in both directions: rounds on the same side, wins, and trades = times the player
+    // killed that teammate's killer within 5 s (the default TradeWindowSeconds: a view cannot read stats.json). A revenge
+    // on the killer of two teammates counts for both.
+    private static StatsView Duos(StatsDialect d) => new("v_stats_duos", $"""
+        SELECT pr.steam_id, p.name, pr.mate_id, q.name AS mate_name, pr.rounds, pr.rounds_won,
+            {d.FloatCast("ROUND(100.0 * pr.rounds_won / NULLIF(pr.rounds, 0), 3)")} AS win_pct,
+            COALESCE(tr.trades, 0) AS trades
+        FROM (
+            SELECT a.steam_id, b.steam_id AS mate_id, COUNT(*) AS rounds, {d.IntCast("SUM(a.won)")} AS rounds_won
+            FROM stats_round_players a
+            JOIN stats_round_players b ON b.round_id = a.round_id AND b.side = a.side AND b.steam_id <> a.steam_id
+            GROUP BY a.steam_id, b.steam_id
+        ) pr
+        JOIN stats_players p ON p.steam_id = pr.steam_id
+        JOIN stats_players q ON q.steam_id = pr.mate_id
+        LEFT JOIN (
+            SELECT t.attacker AS steam_id, dth.victim AS mate_id, COUNT(DISTINCT dth.round_id) AS trades
+            FROM ({EnemyKills}) dth
+            JOIN ({EnemyKills}) t ON t.round_id = dth.round_id AND t.victim = dth.attacker AND t.attacker <> dth.victim
+                AND t.time_ms >= dth.time_ms AND t.time_ms <= dth.time_ms + 5000
+            GROUP BY t.attacker, dth.victim
+        ) tr ON tr.steam_id = pr.steam_id AND tr.mate_id = pr.mate_id
         """);
 }

@@ -42,4 +42,18 @@ public sealed class StatsDerivedViewsTests : IDisposable
         await using var connection = await Migrated();
         await DerivedViewScenarios.WeaponMeta(new ViewSeed(connection, StatsDialect.Sqlite), freshDatabase: true);
     }
+
+    [Fact]
+    public async Task Rivals_CountDuelsBetweenHumans_OnceEachDeath()
+    {
+        await using var connection = await Migrated();
+        await DerivedViewScenarios.Rivals(new ViewSeed(connection, StatsDialect.Sqlite));
+    }
+
+    [Fact]
+    public async Task Duos_CountRoundsTogether_AndTradesWithinFiveSeconds()
+    {
+        await using var connection = await Migrated();
+        await DerivedViewScenarios.Duos(new ViewSeed(connection, StatsDialect.Sqlite));
+    }
 }

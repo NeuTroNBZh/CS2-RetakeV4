@@ -27,6 +27,8 @@
     "v_stats_player_behaviour": ["steam_id", "name", "contact_rounds", "avg_first_contact_ms", "compared_rounds", "own_first_contact_ms", "team_first_contact_ms", "slowness_index", "behind_smoke_pct", "in_smoke_pct", "avg_engage_order", "bait_rounds", "bait_chances", "bait_rate"],
     "v_stats_side_balance": ["server", "map_name", "site", "rounds", "ct_wins", "t_wins", "ct_win_pct", "t_win_pct", "ranked_rounds", "ranked_ct_wins", "ranked_ct_win_pct", "avg_duration_ms", "first_round_at", "last_round_at"],
     "v_stats_retake_odds": ["server", "map_name", "site", "round_type", "ranked", "players_ct", "players_t", "ct_alive_at_plant", "t_alive_at_plant", "rounds", "ct_wins", "t_wins", "ct_win_pct", "defused_rounds", "exploded_rounds", "avg_duration_ms"],
-    "v_stats_weapon_meta": ["weapon", "players", "shots", "hits", "headshot_hits", "kills", "headshot_kills", "damage", "accuracy", "hs_accuracy", "hs_pct", "kill_share_pct", "primary_rounds", "primary_players", "primary_won_rounds", "primary_win_pct"]
+    "v_stats_weapon_meta": ["weapon", "players", "shots", "hits", "headshot_hits", "kills", "headshot_kills", "damage", "accuracy", "hs_accuracy", "hs_pct", "kill_share_pct", "primary_rounds", "primary_players", "primary_won_rounds", "primary_win_pct"],
+    "v_stats_rivals": ["steam_id", "name", "opponent_id", "opponent_name", "kills", "deaths", "headshot_kills", "headshot_deaths", "kd"],
+    "v_stats_duos": ["steam_id", "name", "mate_id", "mate_name", "rounds", "rounds_won", "win_pct", "trades"]
   }
 }
