@@ -34,6 +34,10 @@ public sealed class StatsModule : IRetakeModule
     private float _roundStartTime;
     private bool _missingPreparationWarned;
 
+    // At server start the plugin loads before the engine globals exist (Teams publishes TeamStateChanged on load):
+    // players are only queried once a map has started.
+    private bool _mapStarted;
+
     public string Name => "Stats";
 
     public IReadOnlyList<string> DependsOn { get; } = new[] { "Core" };
@@ -140,6 +144,7 @@ public sealed class StatsModule : IRetakeModule
         _recorder = null;
         _elo?.Clear();
         _elo = null;
+        _mapStarted = false;
         ReleaseSqliteFiles();
         _context = null;
     }
@@ -148,6 +153,7 @@ public sealed class StatsModule : IRetakeModule
 
     private void OnMapStarted(string mapName)
     {
+        _mapStarted = true;
         _recorder?.Abandon();
         _primaryBySlot.Clear();
         _missingPreparationWarned = false;
@@ -318,6 +324,10 @@ public sealed class StatsModule : IRetakeModule
 
     private void RefreshPresence()
     {
+        if (!_mapStarted)
+        {
+            return;
+        }
         var now = Clock();
         foreach (var player in PlayerQueries.Humans())
         {
