@@ -14,7 +14,7 @@ CS2 server (RetakeV4) ──writes──▶ MySQL / MariaDB ◀──reads views
 
 ## 2. Read-only account
 
-Create one account for the website, allowed to `SELECT` on the views only, from the web server's address only. The views run with the rights of the plugin's account (`SQL SECURITY DEFINER`), so the website account needs no right on the tables.
+Create one account for the website, allowed to `SELECT` on the views only, from the web server's address only. By default MySQL and MariaDB views run with the rights of the account that created them (`SQL SECURITY DEFINER`, the plugin's account), so the website account needs no right on the tables.
 
 ```sql
 CREATE USER 'stats_reader'@'%' IDENTIFIED BY 'change-me';
@@ -51,16 +51,15 @@ GRANT SELECT ON retakev4.v_stats_duos TO 'stats_reader'@'%';
 GRANT SELECT ON retakev4.v_stats_server_activity TO 'stats_reader'@'%';
 ```
 
-Replace `retakev4` by your database name and, in production, `'%'` by the web server's address (`'stats_reader'@'10.0.0.5'`). Add `REQUIRE SSL` (`ALTER USER 'stats_reader'@'10.0.0.5' REQUIRE SSL;`) when the web server and the database are on different machines, and keep port 3306 closed to everything else.
+Replace `retakev4` by your database name and, in production, `'%'` by the web server's address (`'stats_reader'@'10.0.0.5'`). Add `REQUIRE SSL` (`ALTER USER 'stats_reader'@'10.0.0.5' REQUIRE SSL;`) when the web server and the database are on different machines, and keep port 3306 closed to everything else. A new plugin version can add views: run the missing `GRANT` lines again after each upgrade (a view without a grant is simply invisible to the account).
 
 ## 3. Data types
 
 - **SteamID64 is a string.** `steam_id`, `attacker`, `victim`, `assister`, `planter`, `defuser`, `opponent_id` and `mate_id` are `BIGINT UNSIGNED` values around 7.6 × 10^16, above JavaScript's safe integer (2^53): as a JS `number` they silently lose their last digits. Select them as text (`CAST(steam_id AS CHAR) AS steam_id`) and keep them as strings everywhere (URLs, JSON, caches).
-- **Compare a SteamID parameter as an integer**: `WHERE steam_id = CAST(? AS UNSIGNED)`. MySQL compares a string with an integer column as floating-point numbers, which can match the wrong player; the cast keeps the comparison exact and still uses the index. Validate the parameter first (`^\d{17}$`).
+- **Compare a SteamID parameter as an integer**: `WHERE steam_id = CAST(? AS UNSIGNED)`. The cast keeps the comparison an exact integer one, avoids implicit string-to-number conversion pitfalls and still uses the index. Validate the parameter first (`^\d{17}$`).
 - **Dates are UTC** (`DATETIME(3)`, no time zone). Read them as strings (`dateStrings: true` in Node.js) and add the zone yourself: `'2026-10-14 20:15:00.000'` → `'2026-10-14T20:15:00.000Z'`. Convert to the visitor's time zone in the browser. `day` columns (`v_stats_elo_history`, `v_stats_server_activity`) and `hour` are UTC too.
 - Booleans are `0` / `1`. Ratios are `DOUBLE` and `NULL` when undefined (no deaths for `kd`…): show "–", not 0.
-- Integer sums of the derived views are `BIGINT`. A few older columns are `SUM`s that MySQL returns as `DECIMAL` (`v_stats_player_network.seconds_vip`): use `decimalNumbers: true` in Node.js, or cast in the query.
-- **MySQL `SUM()` returns `DECIMAL`, which drivers hand over as strings.** In your own queries over the views, wrap sums in `CAST(SUM(...) AS SIGNED)` or convert in code (the recipes below that use `SUM` produce numbers only with `decimalNumbers: true` or a cast). The derived views already cast their sums.
+- **MySQL `SUM()` returns `DECIMAL`, which drivers hand over as strings.** The derived views already cast their sums to `BIGINT`, but a few older columns are plain sums (`v_stats_player_network.seconds_vip`), and so are the sums in your own queries (the recipes below). Use `decimalNumbers: true` in Node.js, wrap them in `CAST(SUM(...) AS SIGNED)`, or convert in code.
 - **Player names are user input**: escape them before inserting them in HTML (`textContent` in the browser, `htmlspecialchars` in PHP).
 
 ## 4. Node.js example (Express + mysql2)
@@ -79,15 +78,22 @@ const pool = mysql.createPool({
   supportBigNumbers: true,                  // never turn 64-bit values into lossy numbers
   dateStrings: true,                        // UTC 'YYYY-MM-DD HH:MM:SS.mmm'
   decimalNumbers: true,
+  // ssl: { ca: fs.readFileSync(process.env.STATS_DB_CA) },  // TLS, when the database is on another machine
 });
 
-// Small in-memory cache: one entry per key, kept ttlMs milliseconds.
+// Small bounded in-memory cache: at most MAX_ENTRIES keys (oldest evicted first), kept ttlMs milliseconds.
+// Misses (null) are never cached, so arbitrary ids cannot fill the memory.
+const MAX_ENTRIES = 1000;
 const cache = new Map();
 async function cached(key, ttlMs, load) {
   const hit = cache.get(key);
   if (hit && hit.expires > Date.now()) return hit.value;
   const value = await load();
-  cache.set(key, { value, expires: Date.now() + ttlMs });
+  if (value !== null && value !== undefined) {
+    cache.delete(key);
+    cache.set(key, { value, expires: Date.now() + ttlMs });
+    if (cache.size > MAX_ENTRIES) cache.delete(cache.keys().next().value);
+  }
   return value;
 }
 
@@ -115,16 +121,21 @@ app.get('/api/players/:steamId', async (req, res) => {
 });
 
 app.get('/api/leaderboard', async (req, res) => {
-  const page = Math.max(0, Number.parseInt(req.query.page ?? '0', 10) || 0);
-  const rows = await cached(`leaderboard:${page}`, 60_000, async () => {
-    // With MySQL 8.0.22+, execute() can reject numeric LIMIT / OFFSET values ("Incorrect arguments to mysqld_stmt_execute"): pass strings.
-    const [result] = await pool.execute(
-      `SELECT CAST(steam_id AS CHAR) AS steam_id, name, elo, ranked_rounds, rating, adr, kd
-       FROM v_stats_leaderboard WHERE ranked_rounds >= ? ORDER BY elo DESC LIMIT ? OFFSET ?`,
-      ['50', '50', String(page * 50)]);
-    return result;
-  });
-  res.set('Cache-Control', 'public, max-age=60').json(rows);
+  const page = Math.min(200, Math.max(0, Number.parseInt(String(req.query.page ?? '0'), 10) || 0));
+  try {
+    const rows = await cached(`leaderboard:${page}`, 60_000, async () => {
+      // With MySQL 8.0.22+, execute() can reject numeric LIMIT / OFFSET values ("Incorrect arguments to mysqld_stmt_execute"): pass strings.
+      const [result] = await pool.execute(
+        `SELECT CAST(steam_id AS CHAR) AS steam_id, name, elo, ranked_rounds, rating, adr, kd
+         FROM v_stats_leaderboard WHERE ranked_rounds >= ? ORDER BY elo DESC LIMIT ? OFFSET ?`,
+        ['50', '50', String(page * 50)]);
+      return result;
+    });
+    res.set('Cache-Control', 'public, max-age=60').json(rows);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'stats unavailable' });
+  }
 });
 
 app.listen(3000);
@@ -143,11 +154,12 @@ $pdo = new PDO(
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
         PDO::ATTR_EMULATE_PREPARES => false, // real prepared statements
+        // PDO::MYSQL_ATTR_SSL_CA => getenv('STATS_DB_CA'), // TLS, when the database is on another machine
     ]
 );
 
-$steamId = $_GET['steam_id'] ?? '';
-if (!preg_match('/^\d{17}$/', $steamId)) {
+$steamId = $_GET['steam_id'] ?? null;
+if (!is_string($steamId) || !preg_match('/^\d{17}\z/', $steamId)) {
     http_response_code(400);
     exit;
 }
@@ -207,6 +219,7 @@ WHERE steam_id = CAST(? AS UNSIGNED) ORDER BY kills DESC LIMIT 10;
 -- ELO curve (last 90 days)
 SELECT day, elo FROM v_stats_elo_history
 WHERE steam_id = CAST(? AS UNSIGNED) AND day >= DATE_FORMAT(UTC_DATE() - INTERVAL 90 DAY, '%Y-%m-%d') ORDER BY day;
+-- MySQL / MariaDB syntax; SQLite: day >= date('now', '-90 day')
 
 -- Nemesis and favourite victims
 SELECT CAST(opponent_id AS CHAR) AS opponent_id, opponent_name, kills, deaths
@@ -292,6 +305,7 @@ SELECT hour, ROUND(AVG(humans_avg), 1) AS humans, SUM(rounds) AS rounds
 FROM v_stats_server_activity
 WHERE server = ? AND day >= DATE_FORMAT(UTC_DATE() - INTERVAL 30 DAY, '%Y-%m-%d') AND snapshots > 0
 GROUP BY hour ORDER BY hour;
+-- MySQL / MariaDB syntax; SQLite: day >= date('now', '-30 day')
 ```
 
 ### Replays — coming in 4.9.0
