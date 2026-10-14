@@ -358,7 +358,7 @@ public sealed class StatsModule : IRetakeModule
             return;
         }
         var logger = Context.Logger;
-        var replayRules = _replayCaps.Any ? rules.Movement : null;
+        var replayRules = _replayCaps.Any && _config.SampleEveryTicks > 0 ? rules.Movement : null;
         var sampleHz = replayRules is null ? 0 : ReplayEncoder.SampleHz(Server.TickInterval, _config.SampleEveryTicks);
         _analysis = _analysis.ContinueWith(_ =>
         {
@@ -366,7 +366,7 @@ public sealed class StatsModule : IRetakeModule
             {
                 var started = Stopwatch.GetTimestamp();
                 var summary = RoundScoring.Process(record, rules);
-                var replay = replayRules is null ? null : ReplayEncoder.Encode(record, replayRules.SmokeRadius, sampleHz);
+                var replay = replayRules is null ? null : EncodeReplay(record, replayRules.SmokeRadius, sampleHz, logger);
                 var elapsedMs = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
                 Server.NextFrame(() => _context?.Guard.Run(Name, "stats_round_scored", () => ApplyRound(writes, summary, replay, elapsedMs)));
             }
@@ -375,6 +375,20 @@ public sealed class StatsModule : IRetakeModule
                 logger.LogError(ex, "Stats: analysing a round failed; the round is not recorded");
             }
         }, CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default);
+    }
+
+    // Off the game thread. A replay that fails to encode never costs the round: the round is recorded without a replay.
+    private static ReplayRound? EncodeReplay(RoundRecord record, float smokeRadius, double sampleHz, ILogger logger)
+    {
+        try
+        {
+            return ReplayEncoder.Encode(record, smokeRadius, sampleHz);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Stats: encoding a round replay failed; the round is recorded without a replay");
+            return null;
+        }
     }
 
     // Game thread (the replay memory is game-thread only). The replay frames stay out of RoundStatsRecorded: they only go
@@ -396,18 +410,34 @@ public sealed class StatsModule : IRetakeModule
         // The samples only feed the analysis and the replay: the write queue may hold rounds for minutes during a database outage.
         var key = ++_roundKey;
         writes.Enqueue(new WriteRoundCommand(summary.WithoutSamples()) { RoundKey = key });
-        if (replay is null)
+        if (replay is not null)
         {
-            return;
+            KeepReplay(writes, summary, replay, key);
         }
-        var context = summary.Record.Context;
-        _replayMemory?.Add(RememberedRound.Create(key, context.RoundNumber, context.MapName, replay,
-            summary.Players.ToDictionary(p => p.SteamId, p => p.Rating)));
-        var claims = ReplaySelection.Claims(summary, replay, _replayCaps);
-        if (claims.Count > 0)
+    }
+
+    // Game thread. The round write is already queued: a failure here only loses this round's replay.
+    private void KeepReplay(StatsWriteQueue writes, RoundSummary summary, ReplayRound replay, long key)
+    {
+        try
         {
-            // Refused while the write queue is backed up (it warns once per burst): this round's replay is then skipped.
-            writes.TryEnqueue(new WriteReplayCommand(key, replay, claims, _replayCaps, DateTimeOffset.UtcNow));
+            var context = summary.Record.Context;
+            var ratings = new Dictionary<ulong, double>();
+            foreach (var player in summary.Players)
+            {
+                ratings.TryAdd(player.SteamId, player.Rating);
+            }
+            _replayMemory?.Add(RememberedRound.Create(key, context.RoundNumber, context.MapName, replay, ratings));
+            var claims = ReplaySelection.Claims(summary, replay, _replayCaps);
+            if (claims.Count > 0)
+            {
+                // Refused while the write queue is backed up (it warns once per burst): this round's replay is then skipped.
+                writes.TryEnqueue(new WriteReplayCommand(key, replay, claims, _replayCaps, DateTimeOffset.UtcNow));
+            }
+        }
+        catch (Exception ex)
+        {
+            Context.Logger.LogWarning(ex, "Stats: keeping a round replay failed; the round is recorded without a replay");
         }
     }
 
