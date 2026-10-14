@@ -22,14 +22,11 @@ public sealed class StatsModule : IRetakeModule
     private const float PresenceRefreshSeconds = 5f;
 
     private readonly PlaytimeTracker _playtime = new();
-    private readonly Dictionary<ulong, int> _elo = new();
-    private readonly HashSet<ulong> _eloLoaded = new();
-    private readonly HashSet<ulong> _eloLoading = new();
-    private readonly Dictionary<ulong, int> _eloPendingDelta = new();
     private readonly Dictionary<int, string?> _primaryBySlot = new();
     private StatsConfig _config = new();
     private StatsRules? _rules;
     private RoundRecorder? _recorder;
+    private EloCache? _elo;
     private IStatsRepository? _repository;
     private StatsWriteQueue? _writes;
     private ModuleContext? _context;
@@ -58,6 +55,7 @@ public sealed class StatsModule : IRetakeModule
         _context = context;
         _rules = _config.ToRules();
         _recorder = new RoundRecorder(_rules.MaxShotsPerRound, _rules.MinPlayersPerSide);
+        _elo = new EloCache(_rules.Elo.Start, _rules.Elo.Floor);
         _repository = StatsRepositories.Create(_config.Database, context.Plugin.ModuleDirectory,
             new StatsWriteOptions(_config.Database.ServerKey, _rules.Elo.Start, _rules.Elo.Floor));
         if (_config.Database.Type == DatabaseType.Sqlite)
@@ -140,10 +138,8 @@ public sealed class StatsModule : IRetakeModule
         _writes = null;
         _repository = null;
         _recorder = null;
-        _elo.Clear();
-        _eloLoaded.Clear();
-        _eloLoading.Clear();
-        _eloPendingDelta.Clear();
+        _elo?.Clear();
+        _elo = null;
         ReleaseSqliteFiles();
         _context = null;
     }
@@ -179,7 +175,7 @@ public sealed class StatsModule : IRetakeModule
 
     private void OpenRound(PreparationContext preparation)
     {
-        if (_recorder is not { } recorder || _rules is not { } rules)
+        if (_recorder is not { } recorder || _elo is not { } elo)
         {
             return;
         }
@@ -191,7 +187,7 @@ public sealed class StatsModule : IRetakeModule
                 continue;
             }
             participants.Add(new RoundParticipant(
-                id, player.PlayerName, side, _elo.GetValueOrDefault(id, rules.Elo.Start), _primaryBySlot.GetValueOrDefault(player.Slot)));
+                id, player.PlayerName, side, elo.Current(id), _primaryBySlot.GetValueOrDefault(player.Slot)));
         }
         _roundStartTime = Server.CurrentTime;
         recorder.Open(new RoundContext(Server.MapName, preparation.RoundNumber, preparation.Site, preparation.RoundType, DateTimeOffset.UtcNow, participants));
@@ -229,14 +225,8 @@ public sealed class StatsModule : IRetakeModule
             return;
         }
         var summary = RoundScoring.Process(record, rules);
-        foreach (var player in summary.Players)
-        {
-            _elo[player.SteamId] = player.EloAfter;
-            if (!_eloLoaded.Contains(player.SteamId))
-            {
-                _eloPendingDelta[player.SteamId] = _eloPendingDelta.GetValueOrDefault(player.SteamId) + player.EloDelta;
-            }
-        }
+        // The round closes a frame after round_end: a player who left meanwhile gets the delta from the database on return.
+        _elo?.ApplyRound(summary.Players, _playtime.IsTracked);
         Context.Bus.Publish(new RoundStatsRecorded(summary));
         _writes?.Enqueue(new WriteRoundCommand(summary));
     }
@@ -321,10 +311,7 @@ public sealed class StatsModule : IRetakeModule
         {
             _writes?.Enqueue(new CloseSessionCommand(id, DateTimeOffset.UtcNow, reason, playtime));
         }
-        _elo.Remove(id);
-        _eloLoaded.Remove(id);
-        _eloLoading.Remove(id);
-        _eloPendingDelta.Remove(id);
+        _elo?.Forget(id);
     }
 
     private void RefreshPresence()
@@ -342,7 +329,7 @@ public sealed class StatsModule : IRetakeModule
                 continue;
             }
             _playtime.Set(id, PresenceOf(player), now);
-            if (!_eloLoaded.Contains(id))
+            if (_elo?.IsLoaded(id) == false)
             {
                 LoadElo(id);
             }
@@ -363,10 +350,11 @@ public sealed class StatsModule : IRetakeModule
         };
     }
 
-    // Reads wait for the schema, run off the game thread, and come back through the guard.
+    // Reads wait for the schema, run off the game thread, and come back through the guard. The token ties the result to
+    // this connection (a load started before a disconnect is ignored), the cache instance to this module load.
     private void LoadElo(ulong steamId)
     {
-        if (_repository is not { } repository || _writes is not { } writes || !_eloLoading.Add(steamId))
+        if (_repository is not { } repository || _writes is not { } writes || _elo is not { } cache || cache.BeginLoad(steamId) is not { } token)
         {
             return;
         }
@@ -376,34 +364,28 @@ public sealed class StatsModule : IRetakeModule
             {
                 if (!await writes.Initialized.ConfigureAwait(false))
                 {
+                    OnGameThread("stats_elo_load_failed", cache, c => c.CancelLoad(steamId, token));
                     return;
                 }
                 var elo = await repository.LoadEloAsync(new[] { steamId }, CancellationToken.None).ConfigureAwait(false);
-                Server.NextFrame(() => _context?.Guard.Run(Name, "stats_elo_loaded", () => ApplyLoadedElo(steamId, elo)));
+                OnGameThread("stats_elo_loaded", cache, c => c.CompleteLoad(steamId, token, elo));
             }
             catch (Exception ex)
             {
                 _context?.Logger.LogWarning(ex, "Stats: could not load the ELO of {SteamId}", steamId);
-                Server.NextFrame(() => _context?.Guard.Run(Name, "stats_elo_load_failed", () => _eloLoading.Remove(steamId)));
+                OnGameThread("stats_elo_load_failed", cache, c => c.CancelLoad(steamId, token));
             }
         });
     }
 
-    // Game thread only: merges the stored value with the deltas of rounds closed while the load was pending.
-    private void ApplyLoadedElo(ulong steamId, IReadOnlyDictionary<ulong, int> loaded)
-    {
-        _eloLoading.Remove(steamId);
-        if (!_playtime.IsTracked(steamId) || _rules is not { } rules)
+    private void OnGameThread(string label, EloCache cache, Action<EloCache> action) =>
+        Server.NextFrame(() => _context?.Guard.Run(Name, label, () =>
         {
-            return;
-        }
-        if (loaded.TryGetValue(steamId, out var value))
-        {
-            _elo[steamId] = Math.Max(rules.Elo.Floor, value + _eloPendingDelta.GetValueOrDefault(steamId));
-        }
-        _eloLoaded.Add(steamId);
-        _eloPendingDelta.Remove(steamId);
-    }
+            if (ReferenceEquals(_elo, cache))
+            {
+                action(cache);
+            }
+        }));
 
     private static (ulong Id, bool IsBot)? VictimOf(CCSPlayerController? victim)
     {
