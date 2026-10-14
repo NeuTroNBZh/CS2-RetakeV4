@@ -49,6 +49,21 @@ internal static class StatsEventMapper
         return new ShotMotion(ShotMotion.Horizontal(velocity.X, velocity.Y), crouched, pawn.IsScoped, (pawn.Flags & OnGround) == 0, pawn.IsWalking);
     }
 
+    // Living pawn state for a movement sample; null for a dead or unreadable pawn. Reads only, no collection or string.
+    public static MovementSample? SampleOf(ulong steamId, CCSPlayerController player, int timeMs)
+    {
+        if (!player.PawnIsAlive || player.PlayerPawn.Value is not { IsValid: true, AbsOrigin: { } origin } pawn)
+        {
+            return null;
+        }
+        var velocity = pawn.AbsVelocity;
+        var angles = pawn.EyeAngles;
+        var crouched = pawn.MovementServices is { } movement && new CCSPlayer_MovementServices(movement.Handle).Ducked;
+        var flags = MovementSample.FlagsOf(crouched, pawn.IsWalking, (pawn.Flags & OnGround) == 0);
+        return new MovementSample(steamId, timeMs, new Vec3(origin.X, origin.Y, origin.Z), ShotMotion.Horizontal(velocity.X, velocity.Y),
+            angles.Y, angles.X, flags, pawn.Health);
+    }
+
     // Designer name, rounds left and magazine size of the active weapon (weapon_reload carries no weapon).
     public static (string Weapon, int Clip, int MaxClip)? ActiveWeaponOf(CCSPlayerController? player)
     {

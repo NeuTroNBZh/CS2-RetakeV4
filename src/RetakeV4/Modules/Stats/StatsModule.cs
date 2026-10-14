@@ -48,6 +48,10 @@ public sealed class StatsModule : IRetakeModule
     private bool _mapStarted;
     private bool _scoreboardElo;
 
+    // Worst costs seen on the current map, logged at the next map start (in-game check of the 2 ms budget).
+    private double _sampleMaxMs;
+    private double _analysisMaxMs;
+
     public string Name => "Stats";
 
     public IReadOnlyList<string> DependsOn { get; } = new[] { "Core" };
@@ -120,7 +124,13 @@ public sealed class StatsModule : IRetakeModule
         hooks.OnEvent<EventGrenadeThrown>("stats_grenade_thrown", OnGrenadeThrown);
         hooks.OnEvent<EventHegrenadeDetonate>("stats_he_detonate", e => OnDetonated(e.Userid, GrenadeType.He, e.Entityid, e.X, e.Y, e.Z));
         hooks.OnEvent<EventFlashbangDetonate>("stats_flash_detonate", e => OnDetonated(e.Userid, GrenadeType.Flash, e.Entityid, e.X, e.Y, e.Z));
-        hooks.OnEvent<EventSmokegrenadeDetonate>("stats_smoke_detonate", e => OnDetonated(e.Userid, GrenadeType.Smoke, e.Entityid, e.X, e.Y, e.Z));
+        hooks.OnEvent<EventSmokegrenadeDetonate>("stats_smoke_detonate", e =>
+        {
+            OnDetonated(e.Userid, GrenadeType.Smoke, e.Entityid, e.X, e.Y, e.Z);
+            // Any thrower, bots included: a smoke cloud is geometry, not an action.
+            _recorder?.AddSmoke(e.Entityid, Now(), new Vec3(e.X, e.Y, e.Z));
+        });
+        hooks.OnEvent<EventSmokegrenadeExpired>("stats_smoke_expired", e => _recorder?.EndSmoke(e.Entityid, Now()));
         hooks.OnEvent<EventMolotovDetonate>("stats_molotov_detonate", e => OnDetonated(e.Userid, GrenadeType.Molotov, null, e.X, e.Y, e.Z));
         hooks.OnEvent<EventDecoyStarted>("stats_decoy_started", e => OnDetonated(e.Userid, GrenadeType.Decoy, e.Entityid, e.X, e.Y, e.Z));
         hooks.OnEvent<EventPlayerBlind>("stats_player_blind", OnPlayerBlind);
@@ -216,6 +226,7 @@ public sealed class StatsModule : IRetakeModule
     private void OnMapStarted(string mapName)
     {
         _mapStarted = true;
+        ReportTimings();
         _recorder?.Abandon();
         _frames?.Reset();
         _primaryBySlot.Clear();
@@ -231,6 +242,18 @@ public sealed class StatsModule : IRetakeModule
         {
             _writes?.Enqueue(new PurgeCommand(at.AddDays(-_config.RawRetentionDays)));
         }
+    }
+
+    private void ReportTimings()
+    {
+        if (_sampleMaxMs > 0 || _analysisMaxMs > 0)
+        {
+            Context.Logger.LogInformation(
+                "Stats: on the previous map, a sampling tick took at most {SampleMs:F2} ms and a round analysis {AnalysisMs:F2} ms",
+                _sampleMaxMs, _analysisMaxMs);
+        }
+        _sampleMaxMs = 0;
+        _analysisMaxMs = 0;
     }
 
     private void OnLoadoutsAssigned(LoadoutsAssigned e)
@@ -278,6 +301,8 @@ public sealed class StatsModule : IRetakeModule
         {
             return;
         }
+        // No movement sample after round_end, even though the round closes on the next frame.
+        recorder.EndLive();
         if (!recorder.IsOpen)
         {
             if (!_missingPreparationWarned && WinnerOf(e.Winner) is not null && GameRulesAccessor.Get()?.WarmupPeriod != true)
@@ -310,7 +335,9 @@ public sealed class StatsModule : IRetakeModule
         {
             return;
         }
+        var started = Stopwatch.GetTimestamp();
         var summary = RoundScoring.Process(record, rules);
+        _analysisMaxMs = Math.Max(_analysisMaxMs, Stopwatch.GetElapsedTime(started).TotalMilliseconds);
         // The round closes a frame after round_end: a player who left meanwhile gets the delta from the database on return.
         _elo?.ApplyRound(summary.Players, _playtime.IsTracked);
         foreach (var player in PlayerQueries.Humans())
@@ -318,7 +345,8 @@ public sealed class StatsModule : IRetakeModule
             ShowElo(player);
         }
         Context.Bus.Publish(new RoundStatsRecorded(summary));
-        _writes?.Enqueue(new WriteRoundCommand(summary));
+        // The samples only feed the analysis: the write queue may hold rounds for minutes during a database outage.
+        _writes?.Enqueue(new WriteRoundCommand(summary.WithoutSamples()));
     }
 
     private void OnWeaponFire(EventWeaponFire e)
@@ -656,13 +684,18 @@ public sealed class StatsModule : IRetakeModule
     }
 
     // Every tick: jumps (player_jump does not reach plugins), the scoreboard rank (the game resets it, so it is written
-    // again whenever it differs) and TAB presses (the client hides the rank column outside round end unless asked).
+    // again whenever it differs) and TAB presses (the client hides the rank column outside round end unless asked). Every
+    // SampleEveryTicks of the live phase, the same loop also takes one movement sample per living human.
     private void PollInput()
     {
         if (!_mapStarted)
         {
             return;
         }
+        var sampling = _config.SampleEveryTicks > 0 && _recorder is { IsLive: true } && Server.TickCount % _config.SampleEveryTicks == 0;
+        var started = sampling ? Stopwatch.GetTimestamp() : 0;
+        // One time for the whole tick: the analyzer groups the samples by TimeMs (behind smoke).
+        var time = sampling ? Now() : 0;
         foreach (var player in PlayerQueries.Humans())
         {
             if (player.Pawn is not { IsValid: true } pawn || pawn.Value is not { IsValid: true })
@@ -682,6 +715,22 @@ public sealed class StatsModule : IRetakeModule
             {
                 RevealRanks(player);
             }
+            if (sampling && HumanId(player) is { } id && SampleOf(id, player, time) is { } sample)
+            {
+                AddSample(sample);
+            }
+        }
+        if (sampling)
+        {
+            _sampleMaxMs = Math.Max(_sampleMaxMs, Stopwatch.GetElapsedTime(started).TotalMilliseconds);
+        }
+    }
+
+    private void AddSample(MovementSample sample)
+    {
+        if (_recorder is { } recorder && !recorder.Add(sample) && recorder.SamplesDropped == 1)
+        {
+            Context.Logger.LogWarning("Stats: more than {Max} movement samples this round; further samples are not recorded", RoundRecorder.MaxSamplesPerRound);
         }
     }
 

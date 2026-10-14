@@ -85,6 +85,7 @@ public sealed record StatsConfig : ModuleConfig
     // A teammate killed closer than this to a living player (game units, 394 u = about 10 m) is a bait chance.
     public int BaitDistance { get; init; } = 394;
 
+    // Seconds after a teammate's death during which the player can answer the killer (bait).
     public double BaitWindowSeconds { get; init; } = 5.0;
 
     // A period without a move of 2 m, a turn of 5 degrees or a shot counts as AFK from this long.
