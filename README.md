@@ -297,6 +297,12 @@ The `Stats` module (`stats.json`) records every round: shots, damage, kills with
 - 4.9 (in progress): shot context (still, moving, scoped), reloads, pickups, jumps, plant/defuse attempts, bomb carrier, end-of-round health, ping, VIP time, player country (optional, IPs never stored), presence and server health, movement and behaviour (time alive, walk/run/crouch/still/air shares, distance, AFK time, smokes, first contact, engage order, bait). See the "Views v2" section of [docs/STATS.md](docs/STATS.md).
 - Player country uses the free DB-IP Lite country database, which is **not** bundled: download it (MMDB format) from https://db-ip.com/db/download/ip-to-country-lite and save it as `configs/plugins/RetakeV4/geo/dbip-country-lite.mmdb` (`GeoDatabaseFile` in `stats.json`). Only the 2-letter country is stored, never the IP. [IP Geolocation by DB-IP](https://db-ip.com).
 
+### Stats for your website
+
+- [docs/STATS.md](docs/STATS.md): setup, conventions and every view with its columns.
+- [docs/STATS-CATALOG.md](docs/STATS-CATALOG.md): every stat by category, with its definition, where to read it (a view column or a SQL query) and its limits.
+- [docs/STATS-INTEGRATION.md](docs/STATS-INTEGRATION.md): read-only MySQL account, mandatory back end, Node.js and PHP examples, caching, SteamIDs as strings, UTC dates, recipes (player profile, leaderboard, heatmap, slow players and baiters, retake odds) and contract versions.
+
 ---
 
 ## Plugin API

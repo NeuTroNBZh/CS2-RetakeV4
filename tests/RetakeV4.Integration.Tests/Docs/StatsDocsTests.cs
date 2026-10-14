@@ -43,8 +43,22 @@ public class StatsDocsTests
         Assert.Empty(missing);
     }
 
+    [Fact]
+    public void Catalog_QualifiedColumns_ExistInTheContracts()
+    {
+        var contracts = Contract("views.v1.json").Concat(Contract("views.v2.json")).ToDictionary(v => v.Key, v => v.Value);
+        var stale = Regex.Matches(Doc("STATS-CATALOG.md"), @"`(v2?_stats_[a-z_]+)\.([a-z0-9_]+)`")
+            .Select(m => (view: m.Groups[1].Value, column: m.Groups[2].Value))
+            .Where(x => !contracts.TryGetValue(x.view, out var columns) || !columns.Contains(x.column))
+            .Select(x => $"{x.view}.{x.column}")
+            .Distinct()
+            .ToList();
+        Assert.Empty(stale);
+    }
+
     [Theory]
     [InlineData("STATS.md")]
+    [InlineData("STATS-INTEGRATION.md")]
     public void GrantExamples_CoverEveryView(string doc)
     {
         var text = Doc(doc);
