@@ -28,6 +28,8 @@ GRANT SELECT ON retakev4.v_stats_elo_history TO 'stats_reader'@'%';
 
 SQLite works too (same tables and views, file `plugins/RetakeV4/data/retakev4.db`), but only the game server can read it.
 
+Supported databases: **MySQL 8.0.17 or newer** (the views use `CAST(... AS DOUBLE)`) and SQLite. MariaDB is untested.
+
 ## Conventions
 
 - `steam_id`, `attacker`, `victim`, `assister`, `planter`, `defuser`: SteamID64 (`BIGINT UNSIGNED`). Read them as strings in JavaScript.
@@ -36,10 +38,12 @@ SQLite works too (same tables and views, file `plugins/RetakeV4/data/retakev4.db
 - `side`, `winner`: `CT` or `T`. `site`, `plant_site`: `A` or `B`.
 - `time_ms`: milliseconds since the round started.
 - Positions (`*_x`, `*_y`, `*_z`) are world coordinates; `NULL` when unknown.
-- Ratios are computed by the views and are `NULL` when their denominator is 0 (for example `kd` without deaths). They are floating-point (`DOUBLE` on MySQL, `REAL` on SQLite) in every view.
+- Ratios are computed by the views and are `NULL` when their denominator is 0 (for example `kd` without deaths). They are floating-point (`DOUBLE` on MySQL, `REAL` on SQLite) in every view, rounded to 3 decimals.
+- `*_pct`, `accuracy`, `hs_accuracy`, `survival_pct` and `win_pct` are percentages from 0 to 100. `kpr`, `kd`, `adr` and `rating` are plain ratios.
 - Free-text values are truncated to their column size (name 128; map, round type and weapons 64).
 - MySQL tables use `utf8mb4` with the binary collation `utf8mb4_bin`: keys and comparisons are case- and accent-sensitive.
-- Bots never get stats. Damage dealt to bots stays in `v_stats_damages` (`victim_is_bot = 1`, `victim = 0`).
+- Bots never get stats. Kills on bots do not count as kills and damage to bots does not count as damage; it stays in the raw views (`victim_is_bot = 1`, `victim = 0`).
+- Sessions are per map: a session closes at map change and reopens on the next map, so `sessions` counts map segments, not connections.
 - A round is **ranked** when each side had at least `MinPlayersPerSide` humans at round start. Unranked rounds count in every total but do not change the ELO.
 - Rounds that end without a T or CT winner (restart, game commencing) are not recorded.
 
@@ -119,7 +123,12 @@ Shots and damages older than `RawRetentionDays` (30 by default, 0 = keep) are pu
 
 ## Reliability
 
-Nothing is written on the game thread. Writes go through a bounded queue (`QueueCapacity`): when it is full, the oldest round is dropped. A failing write is retried with backoff (1 s, doubling up to 60 s) and dropped after 10 attempts with an error log. On shutdown the queue drains for `ShutdownFlushSeconds`, then gives up.
+Nothing is written on the game thread. Writes go through a bounded queue (`QueueCapacity`): when it is full, the oldest round is dropped.
+
+- Database unreachable at startup: table creation is retried with the same backoff (1 s, doubling up to 60 s) until it succeeds; one error is logged, then warnings. Rounds keep queuing meanwhile and are written once the database is up.
+- During a database outage each pending write is retried for about 4 minutes (10 attempts, 1 s doubling up to 60 s), then dropped with an error log.
+- A round write retried after a lost `COMMIT` acknowledgment can, rarely, be counted twice.
+- On shutdown the queue drains for `ShutdownFlushSeconds`, then gives up.
 
 ## Example queries
 

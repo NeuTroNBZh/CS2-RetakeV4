@@ -291,7 +291,7 @@ The plugin publishes the weapons on offer in the `retake_catalog` table, and a c
 The `Stats` module (`stats.json`) records every round: shots, damage, kills with positions, grenades, bomb, play time. It also keeps per-player totals (all, per map, per site, per round type, per side), a Retake Rating and an ELO.
 
 - Use the same `Database` block as `allocation.json` (MySQL to share the stats with the web panel or a website; `RetakeV4.ConfigCheck` warns when the two differ).
-- Nothing is ever written on the game thread; if the database is down, rounds wait in a bounded queue and are written when it comes back.
+- Nothing is ever written on the game thread; if the database is down, rounds wait in a bounded queue and are written when it comes back. A database unreachable at startup is retried too: stats start recording as soon as it is up.
 - External websites read the `v_stats_*` views with a read-only MySQL user: see [docs/STATS.md](docs/STATS.md) for every column, the definitions and example queries.
 
 ---
