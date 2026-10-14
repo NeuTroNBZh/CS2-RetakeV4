@@ -1,11 +1,15 @@
 using RetakeV4.Domain.Common;
+using RetakeV4.Domain.Geometry;
 
 namespace RetakeV4.Domain.Stats;
 
 // Collects the facts of one round on the game thread: appends only, no I/O. maxShots caps the shots and, separately,
-// the player events of a round.
+// the player events of a round; MaxSamplesPerRound caps the movement samples.
 public sealed class RoundRecorder
 {
+    // Memory bound: 10 players x 8 samples/s x 2 min stay under 10 000; 50 000 samples are about 2 MB.
+    public const int MaxSamplesPerRound = 50_000;
+
     private readonly int _maxShots;
     private readonly int _minPlayersPerSide;
     private readonly List<ShotFired> _shots = new();
@@ -18,10 +22,13 @@ public sealed class RoundRecorder
     private readonly List<PlayerLeftRound> _leavers = new();
     private readonly List<PlayerEventFact> _events = new();
     private readonly Dictionary<ulong, PlayerEndState> _endStates = new();
+    private readonly List<SmokeCloud> _smokes = new();
+    private List<MovementSample> _samples = new();
     private BombPlantedFact? _plant;
     private BombDefusedFact? _defuse;
     private BombExplodedFact? _explosion;
     private int? _freezeEndMs;
+    private bool _liveEnded;
 
     public RoundRecorder(int maxShots, int minPlayersPerSide)
     {
@@ -35,9 +42,14 @@ public sealed class RoundRecorder
 
     public bool IsOpen => Context is not null;
 
+    // From the freeze end until EndLive (round_end) or the close.
+    public bool IsLive => IsOpen && _freezeEndMs is not null && !_liveEnded;
+
     public int ShotsDropped { get; private set; }
 
     public int EventsDropped { get; private set; }
+
+    public int SamplesDropped { get; private set; }
 
     public void Open(RoundContext context)
     {
@@ -80,6 +92,22 @@ public sealed class RoundRecorder
         return true;
     }
 
+    // False outside the live phase or when the per-round cap is reached.
+    public bool Add(MovementSample sample)
+    {
+        if (!IsLive)
+        {
+            return false;
+        }
+        if (_samples.Count >= MaxSamplesPerRound)
+        {
+            SamplesDropped++;
+            return false;
+        }
+        _samples.Add(sample);
+        return true;
+    }
+
     // The last state read for a player wins.
     public void Add(PlayerEndState state)
     {
@@ -96,6 +124,40 @@ public sealed class RoundRecorder
         if (IsOpen && _freezeEndMs is null)
         {
             _freezeEndMs = timeMs;
+        }
+    }
+
+    // round_end: no sample after it, even before the round closes on the next frame.
+    public void EndLive()
+    {
+        if (IsOpen)
+        {
+            _liveEnded = true;
+        }
+    }
+
+    public void AddSmoke(int entityId, int timeMs, Vec3 center)
+    {
+        if (IsOpen)
+        {
+            _smokes.Add(new SmokeCloud(entityId, timeMs, center));
+        }
+    }
+
+    // Ends the latest cloud of that entity still open; an expiry without its detonation is ignored.
+    public void EndSmoke(int entityId, int timeMs)
+    {
+        if (!IsOpen)
+        {
+            return;
+        }
+        for (var index = _smokes.Count - 1; index >= 0; index--)
+        {
+            if (_smokes[index].EntityId == entityId && _smokes[index].EndMs is null)
+            {
+                _smokes[index] = _smokes[index] with { EndMs = timeMs };
+                return;
+            }
         }
     }
 
@@ -146,6 +208,9 @@ public sealed class RoundRecorder
         }
         var ranked = context.Participants.Count(p => p.Side == TeamSide.CT) >= _minPlayersPerSide
             && context.Participants.Count(p => p.Side == TeamSide.T) >= _minPlayersPerSide;
+        // The record takes the sample list itself (no copy of ~10 000 structs); the recorder starts a new one.
+        var samples = _samples;
+        _samples = new List<MovementSample>();
         var record = new RoundRecord(
             context, outcome, ranked,
             _shots.ToList(), _damages.ToList(), _kills.ToList(), _thrown.ToList(), _detonated.ToList(), _blinds.ToList(),
@@ -154,6 +219,8 @@ public sealed class RoundRecorder
             Events = _events.ToList(),
             EndStates = _endStates.Values.ToList(),
             FreezeEndMs = _freezeEndMs,
+            Samples = samples,
+            Smokes = _smokes.ToList(),
         };
         Reset();
         return record;
@@ -172,6 +239,7 @@ public sealed class RoundRecorder
         Context = null;
         ShotsDropped = 0;
         EventsDropped = 0;
+        SamplesDropped = 0;
         _shots.Clear();
         _damages.Clear();
         _kills.Clear();
@@ -182,9 +250,12 @@ public sealed class RoundRecorder
         _leavers.Clear();
         _events.Clear();
         _endStates.Clear();
+        _smokes.Clear();
+        _samples.Clear();
         _plant = null;
         _defuse = null;
         _explosion = null;
         _freezeEndMs = null;
+        _liveEnded = false;
     }
 }

@@ -142,4 +142,64 @@ public class RoundRecorderTests
         recorder.Open(Context(P(Ct1, TeamSide.CT), P(T1, TeamSide.T)));
         Assert.Equal(0, recorder.EventsDropped);
     }
+
+    [Fact]
+    public void Samples_AreKept_OnlyDuringTheLivePhase()
+    {
+        var recorder = new RoundRecorder(10, 1);
+        var sample = new MovementSample(Ct1, 1500, new Vec3(1, 2, 3), 250f, 90f, 0f, MovementFlags.None, 100);
+        Assert.False(recorder.Add(sample));
+        recorder.Open(Context(P(Ct1, TeamSide.CT), P(T1, TeamSide.T)));
+        Assert.False(recorder.IsLive);
+        Assert.False(recorder.Add(sample));
+        recorder.MarkFreezeEnd(1000);
+        Assert.True(recorder.IsLive);
+        Assert.True(recorder.Add(sample));
+        recorder.EndLive();
+        Assert.False(recorder.IsLive);
+        Assert.False(recorder.Add(sample with { TimeMs = 2000 }));
+        var record = recorder.Close(new RoundOutcome(TeamSide.CT, 7, 3000))!;
+        Assert.Equal(new[] { sample }, record.Samples);
+        recorder.Open(Context(P(Ct1, TeamSide.CT), P(T1, TeamSide.T)));
+        recorder.MarkFreezeEnd(0);
+        Assert.True(recorder.IsLive);
+        Assert.Equal(new[] { sample }, record.Samples);
+    }
+
+    [Fact]
+    public void Samples_BeyondTheCap_AreDropped_AndCounted()
+    {
+        var recorder = new RoundRecorder(10, 1);
+        recorder.Open(Context(P(Ct1, TeamSide.CT), P(T1, TeamSide.T)));
+        recorder.MarkFreezeEnd(0);
+        var sample = new MovementSample(Ct1, 0, default, 0f, 0f, 0f, MovementFlags.None, 100);
+        for (var i = 0; i < RoundRecorder.MaxSamplesPerRound; i++)
+        {
+            Assert.True(recorder.Add(sample));
+        }
+        Assert.False(recorder.Add(sample));
+        Assert.False(recorder.Add(sample));
+        Assert.Equal(2, recorder.SamplesDropped);
+        Assert.Equal(RoundRecorder.MaxSamplesPerRound, recorder.Close(new RoundOutcome(TeamSide.CT, 7, 1))!.Samples.Count);
+        Assert.Equal(0, recorder.SamplesDropped);
+    }
+
+    [Fact]
+    public void Smokes_StartAndExpire_ByEntity()
+    {
+        var recorder = new RoundRecorder(10, 1);
+        recorder.AddSmoke(5, 100, new Vec3(9, 9, 9));
+        recorder.Open(Context(P(Ct1, TeamSide.CT), P(T1, TeamSide.T)));
+        recorder.AddSmoke(5, 2000, new Vec3(1, 2, 3));
+        recorder.AddSmoke(6, 2500, new Vec3(4, 5, 6));
+        recorder.EndSmoke(5, 20000);
+        recorder.EndSmoke(5, 21000);
+        recorder.EndSmoke(9, 21000);
+        var record = recorder.Close(new RoundOutcome(TeamSide.CT, 7, 30000))!;
+        Assert.Equal(
+            new[] { new SmokeCloud(5, 2000, new Vec3(1, 2, 3)) { EndMs = 20000 }, new SmokeCloud(6, 2500, new Vec3(4, 5, 6)) },
+            record.Smokes);
+        recorder.Open(Context(P(Ct1, TeamSide.CT), P(T1, TeamSide.T)));
+        Assert.Empty(recorder.Close(new RoundOutcome(TeamSide.CT, 7, 1))!.Smokes);
+    }
 }

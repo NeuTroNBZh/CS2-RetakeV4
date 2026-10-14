@@ -33,4 +33,9 @@ public sealed record RoundRecord(
 
     // Milliseconds from the round start to round_freeze_end; null when it was not seen.
     public int? FreezeEndMs { get; init; }
+
+    // Movement samples of the live phase, in the order taken. RoundSummary.WithoutSamples drops them before the write.
+    public IReadOnlyList<MovementSample> Samples { get; init; } = Array.Empty<MovementSample>();
+
+    public IReadOnlyList<SmokeCloud> Smokes { get; init; } = Array.Empty<SmokeCloud>();
 }

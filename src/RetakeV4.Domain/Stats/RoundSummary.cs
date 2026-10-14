@@ -124,4 +124,9 @@ public sealed record GrenadeSummary(
     ulong Thrower, GrenadeType Type, int? ThrownMs, int? DetonatedMs, Vec3? ThrowPosition, Vec3? DetonationPosition,
     int Damage, int EnemiesBlinded, int TeammatesBlinded, double BlindSeconds);
 
-public sealed record RoundSummary(RoundRecord Record, IReadOnlyList<PlayerRoundStats> Players, IReadOnlyList<GrenadeSummary> Grenades);
+public sealed record RoundSummary(RoundRecord Record, IReadOnlyList<PlayerRoundStats> Players, IReadOnlyList<GrenadeSummary> Grenades)
+{
+    // The samples only feed the analysis: a summary waiting in the write queue (minutes during a database outage) must
+    // not hold them.
+    public RoundSummary WithoutSamples() => this with { Record = Record with { Samples = Array.Empty<MovementSample>() } };
+}
