@@ -52,4 +52,17 @@ public class PlaytimeTrackerTests
         tracker.Set(1, Presence.Ct, 100);
         Assert.Equal(0, tracker.Close(1, 50)!.Total);
     }
+
+    [Fact]
+    public void VipTime_CountsWhileFlaggedOnly()
+    {
+        var tracker = new PlaytimeTracker();
+        tracker.Set(1, Presence.Queue, 0, vip: true);
+        tracker.Set(1, Presence.Queue, 30, vip: false);
+        tracker.Set(1, Presence.Ct, 40);
+        var playtime = tracker.Close(1, 100)!;
+        Assert.Equal(40, playtime.SecondsQueue);
+        Assert.Equal(30, playtime.SecondsVip);
+        Assert.Equal(60, playtime.SecondsCt);
+    }
 }
