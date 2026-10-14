@@ -78,6 +78,7 @@ The weights are configurable in `stats.json` → `Rating`.
 - `E = 1 / (1 + 10^((R_opp − R_side) / 400))`; every player of the side gets `round(K × (S − E))`, where `S` is 1 for a win and 0 for a loss. The other side gets the opposite.
 - Several servers can share one database: ELO changes are applied relatively.
 - When the floor clamps a loss, `v_stats_round_players.elo_after - elo_before` can differ from the applied delta; `v_stats_elo_history.delta_sum` sums the raw (unclamped) deltas.
+- In game, the scoreboard (TAB) shows each player's ELO in the rank column, as a CS Rating value (`stats.json` → `ScoreboardElo`, on by default). The game colours it by its own CS Rating tiers (grey below 5 000), so typical ELO values show in grey. Nothing is shown until the player's stored ELO is loaded; bots show nothing.
 
 ## Views
 
