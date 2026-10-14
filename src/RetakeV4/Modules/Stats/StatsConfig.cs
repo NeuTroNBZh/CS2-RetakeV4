@@ -53,6 +53,9 @@ public sealed record StatsConfig : ModuleConfig
 
     public int ShutdownFlushSeconds { get; init; } = 5;
 
+    // Shows each player's ELO in the scoreboard rank column (CS Rating style).
+    public bool ScoreboardElo { get; init; } = true;
+
     public StatsRules ToRules() => new(
         TradeWindowSeconds,
         MinPlayersPerSide,

@@ -124,6 +124,11 @@ public sealed class StatsModule : IRetakeModule
         hooks.OnEvent<EventRoundEnd>("stats_round_end", OnRoundEnd);
         hooks.OnEvent<EventPlayerConnectFull>("stats_connect", e => OnConnected(e.Userid));
         hooks.OnEvent<EventPlayerDisconnect>("stats_disconnect", e => OnDisconnected(e.Userid, e.Reason));
+        if (_config.ScoreboardElo)
+        {
+            // The game may reset the rank fields: they are written again on every spawn.
+            hooks.OnEvent<EventPlayerSpawn>("stats_scoreboard_spawn", e => ShowElo(e.Userid));
+        }
         hooks.RepeatTimer("stats_presence", PresenceRefreshSeconds, RefreshPresence);
         // Created last: it starts a background worker, which a throw during hook registration would leak.
         _writes = new StatsWriteQueue(_repository, context.Logger, _config.QueueCapacity,
@@ -235,6 +240,10 @@ public sealed class StatsModule : IRetakeModule
         var summary = RoundScoring.Process(record, rules);
         // The round closes a frame after round_end: a player who left meanwhile gets the delta from the database on return.
         _elo?.ApplyRound(summary.Players, _playtime.IsTracked);
+        foreach (var player in PlayerQueries.Humans())
+        {
+            ShowElo(player);
+        }
         Context.Bus.Publish(new RoundStatsRecorded(summary));
         _writes?.Enqueue(new WriteRoundCommand(summary));
     }
@@ -380,7 +389,13 @@ public sealed class StatsModule : IRetakeModule
                     return;
                 }
                 var elo = await repository.LoadEloAsync(new[] { steamId }, CancellationToken.None).ConfigureAwait(false);
-                OnGameThread("stats_elo_loaded", cache, c => c.CompleteLoad(steamId, token, elo));
+                OnGameThread("stats_elo_loaded", cache, c =>
+                {
+                    if (c.CompleteLoad(steamId, token, elo))
+                    {
+                        ShowElo(PlayerQueries.Humans().FirstOrDefault(p => p.SteamID == steamId));
+                    }
+                });
             }
             catch (Exception ex)
             {
@@ -388,6 +403,24 @@ public sealed class StatsModule : IRetakeModule
                 OnGameThread("stats_elo_load_failed", cache, c => c.CancelLoad(steamId, token));
             }
         });
+    }
+
+    // Writes the scoreboard rank column only when it changes, then flags it for the network.
+    private void ShowElo(CCSPlayerController? player)
+    {
+        if (!_config.ScoreboardElo || player is not { IsValid: true } || _elo is not { } elo)
+        {
+            return;
+        }
+        var rank = HumanId(player) is { } id ? ScoreboardRank.For(true, elo.IsLoaded(id), elo.Current(id)) : ScoreboardRank.None;
+        if (player.CompetitiveRankType == rank.RankType && player.CompetitiveRanking == rank.Value)
+        {
+            return;
+        }
+        player.CompetitiveRankType = rank.RankType;
+        player.CompetitiveRanking = rank.Value;
+        Utilities.SetStateChanged(player, "CCSPlayerController", "m_iCompetitiveRankType");
+        Utilities.SetStateChanged(player, "CCSPlayerController", "m_iCompetitiveRanking");
     }
 
     private void OnGameThread(string label, EloCache cache, Action<EloCache> action) =>
