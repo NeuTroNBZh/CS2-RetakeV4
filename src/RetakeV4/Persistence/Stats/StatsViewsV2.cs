@@ -1,15 +1,16 @@
 using System.Globalization;
-using RetakeV4.Domain.Stats;
 
 namespace RetakeV4.Persistence.Stats;
 
 // The v2 read contract (contract/stats/views.v2.json): new views only, the v1 views never change. Portable SQL only:
 // it runs unchanged on MySQL 8, MariaDB and SQLite. Ratios are computed here, never stored; a ratio over zero is NULL.
-// Events(d) is what the 4.9-a migration step creates: frozen (StatsSchemaTests pins its SQL), so it reads the frozen
-// counter lists of StatsSchema, never StatsCounters. For(d) is the current contract.
-// A view changed after 4.9-a is replaced by a later step (StatsSchema: DROP VIEW + CREATE VIEW).
+// Events(d) is what the 4.9-a migration step creates and Movement(d) what the 4.9-b step creates: both frozen
+// (StatsSchemaTests pins their SQL), so they read the frozen counter and ratio lists below and of StatsSchema, never
+// StatsCounters. For(d) is the current contract, today equal to Movement(d). A view changed after 4.9-b gets its new
+// definition swapped into BuildViews and is replaced by a later step (StatsSchema: DROP VIEW + CREATE VIEW).
 public static class StatsViewsV2
 {
+    // Frozen with the 4.9-a views (and reused unchanged by 4.9-b).
     private static readonly (string Name, string Expression)[] Ratios =
     {
         ("still_accuracy", "ROUND(100.0 * {0}hits_still / NULLIF({0}shots_still, 0), 3)"),
@@ -19,6 +20,7 @@ public static class StatsViewsV2
         ("dtr", "ROUND(1.0 * {0}damage_taken / NULLIF({0}rounds, 0), 3)"),
     };
 
+    // Frozen with the 4.9-b views.
     private static readonly (string Name, string Expression)[] MovementRatios =
     {
         ("walk_pct", "ROUND(100.0 * {0}walk_samples / NULLIF({0}alive_samples, 0), 3)"),
@@ -38,9 +40,16 @@ public static class StatsViewsV2
     // The stats_player_totals counters when the 4.9-a step ran.
     private static readonly IReadOnlyList<string> EventsCounters = StatsSchema.V1Counters.Concat(StatsSchema.V2Counters).ToArray();
 
+    // The stats_player_totals counters when the 4.9-b step ran.
+    private static readonly IReadOnlyList<string> MovementCounters = EventsCounters.Concat(StatsSchema.MovementCounters).ToArray();
+
     private static readonly StatsView[] MySqlEvents = BuildEvents(StatsDialect.MySql);
 
     private static readonly StatsView[] SqliteEvents = BuildEvents(StatsDialect.Sqlite);
+
+    private static readonly StatsView[] MySqlMovement = BuildMovement(StatsDialect.MySql);
+
+    private static readonly StatsView[] SqliteMovement = BuildMovement(StatsDialect.Sqlite);
 
     private static readonly StatsView[] MySqlViews = BuildViews(StatsDialect.MySql);
 
@@ -64,12 +73,23 @@ public static class StatsViewsV2
         return dialect.IsMySql ? MySqlEvents : SqliteEvents;
     }
 
-    // The 4.9-a views with those changed by 4.9-b swapped in, then the views added by 4.9-b.
-    private static StatsView[] BuildViews(StatsDialect d)
+    internal static IReadOnlyList<StatsView> Movement(StatsDialect dialect)
+    {
+        ArgumentNullException.ThrowIfNull(dialect);
+        return dialect.IsMySql ? MySqlMovement : SqliteMovement;
+    }
+
+    // The current contract: the 4.9-b views, unchanged so far.
+    private static StatsView[] BuildViews(StatsDialect d) => BuildMovement(d);
+
+    // Frozen: the 4.9-a views with those changed by 4.9-b swapped in, then the views added by 4.9-b.
+    private static StatsView[] BuildMovement(StatsDialect d)
     {
         var replaced = new[] { Players(d), Scopes(d), RoundPlayers() }.ToDictionary(v => v.Name);
         return BuildEvents(d).Select(v => replaced.GetValueOrDefault(v.Name, v)).Append(Behaviour(d)).ToArray();
     }
+
+    // Players, Scopes, RoundPlayers and Behaviour are the frozen 4.9-b definitions (read by BuildMovement).
 
     private static StatsView Players(StatsDialect d) => new("v2_stats_players", $"""
         SELECT p.steam_id, p.name, p.country, p.first_seen, p.last_seen, p.elo,
@@ -77,7 +97,7 @@ public static class StatsViewsV2
             COALESCE(pt.seconds_spec, 0) AS seconds_spec, COALESCE(pt.seconds_queue, 0) AS seconds_queue,
             COALESCE(pt.seconds_ct + pt.seconds_t + pt.seconds_spec + pt.seconds_queue, 0) AS seconds_total,
             COALESCE(pt.sessions, 0) AS sessions,
-            {StatsViews.CountersOrZero(StatsCounters.AllColumns, "t.")},
+            {StatsViews.CountersOrZero(MovementCounters, "t.")},
             {StatsViews.RatioColumns(d, "t.", null)},
             {RatioColumns(d, "t.", Ratios)},
             {RatioColumns(d, "t.", MovementRatios)}
@@ -88,7 +108,7 @@ public static class StatsViewsV2
 
     private static StatsView Scopes(StatsDialect d) => new("v2_stats_player_scopes", $"""
         SELECT t.steam_id, p.name, t.scope,
-            {StatsViews.Counters(StatsCounters.AllColumns, "t.")},
+            {StatsViews.Counters(MovementCounters, "t.")},
             {StatsViews.RatioColumns(d, "t.", null)},
             {RatioColumns(d, "t.", Ratios)},
             {RatioColumns(d, "t.", MovementRatios)}

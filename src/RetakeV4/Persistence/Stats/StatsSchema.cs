@@ -84,6 +84,13 @@ public static class StatsSchema
         return V1(d).Count + V2(d).Count;
     }
 
+    // Number of entries up to the end of 4.9-b (sub-project 2): a database of that stage has this version.
+    internal static int V2MovementCount(StatsDialect d)
+    {
+        ArgumentNullException.ThrowIfNull(d);
+        return V2EventsCount(d) + V2Movement(d).Count;
+    }
+
     private static List<string> V1(StatsDialect d)
     {
         var counters = string.Join(", ", V1Counters.Select(c => $"{c} {d.BigInt} NOT NULL DEFAULT 0"));
@@ -204,13 +211,13 @@ public static class StatsSchema
 
     // 4.9-b (Stats v2, sub-project 2): movement columns, then the v2 views that show them. SQLite's CREATE VIEW IF NOT
     // EXISTS never replaces a view, so each changed view is dropped first (MySQL's CREATE OR REPLACE would do; DROP keeps
-    // the dialects alike and the step replayable). A later change to these views is a new step, with these definitions
-    // frozen the way StatsViewsV2.Events froze 4.9-a.
+    // the dialects alike and the step replayable). Built from the frozen StatsViewsV2.Movement, never from the live For:
+    // a later change to these views is a new step.
     private static List<SqlMigration> V2Movement(StatsDialect d)
     {
         var migrations = MovementCounters.Select(c => SqlMigration.AddColumn("stats_player_totals", c, $"{d.BigInt} NOT NULL DEFAULT 0")).ToList();
         migrations.AddRange(MovementRoundColumns.Select(c => SqlMigration.AddColumn("stats_round_players", c, MovementRoundType(d, c))));
-        foreach (var view in StatsViewsV2.For(d).Where(v => StatsViewsV2.MovementViews.Contains(v.Name)))
+        foreach (var view in StatsViewsV2.Movement(d).Where(v => StatsViewsV2.MovementViews.Contains(v.Name)))
         {
             migrations.Add(new SqlMigration($"DROP VIEW IF EXISTS {view.Name}"));
             migrations.Add(new SqlMigration($"{d.CreateView} {view.Name} AS {view.Select}"));
