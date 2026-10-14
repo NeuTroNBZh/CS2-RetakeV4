@@ -301,6 +301,27 @@ public class StatsWriteQueueTests
     }
 
     [Fact]
+    public async Task FailingReplay_IsDroppedQuickly_AndNeverDelaysTheNextRound()
+    {
+        var repository = new FakeStatsRepository { ReplayAlwaysFails = true };
+        var logger = new ListLogger();
+        await using var queue = new StatsWriteQueue(repository, logger, 100, TimeSpan.FromSeconds(10), _ => TimeSpan.FromSeconds(30));
+        queue.Enqueue(new WriteRoundCommand(Round(1)) { RoundKey = 1 });
+        queue.Enqueue(Replay(1));
+        queue.Enqueue(new WriteRoundCommand(Round(2)) { RoundKey = 2 });
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (!repository.Calls.Any(c => c.StartsWith("Round 2", StringComparison.Ordinal)) && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(10);
+        }
+        Assert.Contains(repository.Calls, c => c.StartsWith("Round 2", StringComparison.Ordinal));
+        Assert.Equal(2, repository.ReplayAttempts);
+        Assert.Equal(1, queue.Failed);
+        Assert.Equal(0, queue.PendingReplays);
+        Assert.Single(logger.Entries, e => e.Level == LogLevel.Warning && e.Message.Contains("replay could not be written", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task Replay_OfARoundNeverWritten_IsSkipped()
     {
         var repository = new FakeStatsRepository();

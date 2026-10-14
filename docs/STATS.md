@@ -215,7 +215,7 @@ The server samples every living human every `SampleEveryTicks` ticks of the live
 - **`!save [n]`**: `n` from 1 to `ReplayMemoryRounds` (5 by default, 1 to 10); `n` counts the recorded rounds (a warmup or abandoned round is not one) and you must have been a participant. Replies: `saved` (the request is queued; the final decision, caps included, is taken in the database; saving a round twice answers `saved` without a second write), `not_found` (no such round of yours in memory, or `n` out of range), `disabled` (saved replays are off: `ReplaySavedPerPlayer` = 0 or `SampleEveryTicks` = 0), `busy` (the server is already writing replays: try again in a moment).
 - **Highlights and bots**: a 1v3 whose enemies are bots counts against humans only (bots are never actors), so it may not be a highlight.
 - **Caps need sampling**: with `SampleEveryTicks` = 0 there are no samples, so the three caps do nothing.
-- **Database settings**: replay writes run in a `READ COMMITTED` transaction. On MySQL / MariaDB this needs `binlog_format` `ROW` or `MIXED` (the defaults) when binary logging is on: a server forced to `STATEMENT` rejects them (error 1665) and the replay is lost.
+- **Database settings**: replay writes run in a `READ COMMITTED` transaction. On MySQL / MariaDB this needs `binlog_format` `ROW` or `MIXED` (the defaults) when binary logging is on: a server forced to `STATEMENT` rejects them (error 1665). A replay that cannot be written is retried once, then dropped with a warning in the log; round stats are never delayed or lost because of it.
 
 The radar conversion, the values of every Retake map and a complete JavaScript viewer are in [STATS-INTEGRATION.md](STATS-INTEGRATION.md) ("Replays").
 

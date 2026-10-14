@@ -18,6 +18,10 @@ internal sealed class FakeStatsRepository : IStatsRepository
 
     public int RoundFailuresLeft { get; set; }
 
+    public bool ReplayAlwaysFails { get; set; }
+
+    public int ReplayAttempts { get; private set; }
+
     public IReadOnlyList<string> Calls
     {
         get
@@ -88,6 +92,14 @@ internal sealed class FakeStatsRepository : IStatsRepository
 
     public Task<int> WriteReplayAsync(long roundId, ReplayRound replay, IReadOnlyList<ReplayClaim> claims, ReplayCaps caps, DateTimeOffset at, CancellationToken ct)
     {
+        if (ReplayAlwaysFails)
+        {
+            lock (_lock)
+            {
+                ReplayAttempts++;
+            }
+            throw new InvalidOperationException("binlog_format=STATEMENT");
+        }
         Record($"Replay round {roundId} claims {claims.Count}");
         return Task.FromResult(claims.Count);
     }

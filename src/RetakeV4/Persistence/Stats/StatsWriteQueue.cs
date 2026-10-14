@@ -15,6 +15,10 @@ public sealed class StatsWriteQueue : IAsyncDisposable
     // Replay commands waiting at most (each holds a round of frame text).
     public const int MaxPendingReplays = 4;
 
+    // A replay is best effort: it is tried this many times, a short delay apart, then dropped (never the long round backoff).
+    public const int ReplayMaxAttempts = 2;
+    private static readonly TimeSpan ReplayRetryDelay = TimeSpan.FromMilliseconds(250);
+
     // Round ids remembered by RoundKey: a replay follows its round within ReplayMemoryRounds (10 at most) rounds.
     public const int RememberedRounds = 32;
 
@@ -258,6 +262,8 @@ public sealed class StatsWriteQueue : IAsyncDisposable
 
     private async Task ApplyWithRetryAsync(StatsCommand command)
     {
+        var isReplay = command is WriteReplayCommand;
+        var maxAttempts = isReplay ? Math.Min(ReplayMaxAttempts, _maxAttempts) : _maxAttempts;
         for (var attempt = 1; ; attempt++)
         {
             if (_stop.IsCancellationRequested)
@@ -277,16 +283,21 @@ public sealed class StatsWriteQueue : IAsyncDisposable
             }
             catch (Exception ex)
             {
-                if (attempt >= _maxAttempts)
+                if (attempt >= maxAttempts)
                 {
                     Interlocked.Increment(ref _failedCommands);
+                    if (isReplay)
+                    {
+                        _logger.LogWarning(ex, "Stats: a replay could not be written and is dropped; rounds are not affected");
+                        return;
+                    }
                     _logger.LogError(ex, "Stats write gave up after {Attempts} attempts: {Command} dropped", attempt, command.GetType().Name);
                     return;
                 }
                 _logger.LogWarning(ex, "Stats write failed (attempt {Attempt}): {Command}; retrying", attempt, command.GetType().Name);
                 try
                 {
-                    await Task.Delay(_backoff(attempt), _stop.Token).ConfigureAwait(false);
+                    await Task.Delay(isReplay ? ReplayRetryDelay : _backoff(attempt), _stop.Token).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException)
                 {
