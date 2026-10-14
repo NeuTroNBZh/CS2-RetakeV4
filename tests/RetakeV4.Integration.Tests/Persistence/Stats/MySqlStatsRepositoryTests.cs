@@ -1,3 +1,4 @@
+using MySqlConnector;
 using RetakeV4.Domain.Stats;
 using RetakeV4.Persistence.Stats;
 using static RetakeV4.Integration.Tests.Persistence.Stats.StatsSamples;
@@ -47,5 +48,34 @@ public class MySqlStatsRepositoryTests
             .Select(i => StatsRepositories.MySql(ConnectionString, new StatsWriteOptions($"conc-{i}", 1000, 100)))
             .ToList();
         await Task.WhenAll(repositories.Select(r => Task.Run(() => r.InitializeAsync(CancellationToken.None))));
+    }
+
+    [Fact]
+    public async Task ServerLastSeen_OnlyMovesForward_WhenAMySqlServerIsConfigured()
+    {
+        if (string.IsNullOrWhiteSpace(ConnectionString))
+        {
+            return;
+        }
+        var key = $"seen-{Guid.NewGuid():N}"[..20];
+        var repository = StatsRepositories.MySql(ConnectionString, new StatsWriteOptions(key, 1000, 100));
+        await repository.InitializeAsync(CancellationToken.None);
+        var now = new DateTimeOffset(2026, 10, 13, 20, 0, 0, TimeSpan.Zero);
+        await repository.OpenMapAsync("de_mirage", now, CancellationToken.None);
+        await repository.OpenMapAsync("de_nuke", now.AddDays(-1), CancellationToken.None);
+        await repository.WritePresenceAsync(new PresenceSnapshot(now.AddHours(1), "de_nuke", 1, 0, 0), CancellationToken.None);
+        Assert.Equal(now.UtcDateTime, await LastSeen(key));
+        await repository.OpenMapAsync("de_anubis", now.AddHours(2), CancellationToken.None);
+        Assert.Equal(now.AddHours(2).UtcDateTime, await LastSeen(key));
+    }
+
+    private static async Task<DateTime> LastSeen(string key)
+    {
+        await using var connection = new MySqlConnection(ConnectionString);
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT last_seen FROM stats_servers WHERE name = @name";
+        command.Parameters.AddWithValue("@name", key);
+        return Convert.ToDateTime(await command.ExecuteScalarAsync(), System.Globalization.CultureInfo.InvariantCulture);
     }
 }

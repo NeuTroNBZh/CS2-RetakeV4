@@ -79,6 +79,11 @@ public sealed class StatsDialect
             replace.Select(c => $"{c} = excluded.{c}").Concat(add.Select(c => $"{c} = {c} + excluded.{c}")));
     }
 
+    // Upsert that only moves a timestamp forward (GREATEST on MySQL / MariaDB, scalar MAX on SQLite).
+    public string OnConflictKeepLatest(IReadOnlyList<string> keys, string column, string parameter) => IsMySql
+        ? $"ON DUPLICATE KEY UPDATE {column} = {Greatest}({column}, {parameter})"
+        : $"ON CONFLICT ({string.Join(", ", keys)}) DO UPDATE SET {column} = {Greatest}({column}, {parameter})";
+
     // MySQL refuses LIMIT inside an IN subquery; SQLite has no DELETE ... LIMIT by default.
     public string DeleteBatch(string table, int batchSize)
     {

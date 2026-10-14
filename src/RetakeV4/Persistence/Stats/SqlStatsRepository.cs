@@ -68,6 +68,9 @@ public sealed class SqlStatsRepository : IStatsRepository
     private readonly Func<CancellationToken, Task<DbConnection>> _open;
     private readonly StatsWriteOptions _options;
 
+    // stats_servers id of ServerKey, cached once a transaction that resolved it has committed (the row is never deleted).
+    private long? _serverId;
+
     public SqlStatsRepository(StatsDialect dialect, Func<CancellationToken, Task<DbConnection>> open, StatsWriteOptions options)
     {
         ArgumentNullException.ThrowIfNull(dialect);
@@ -89,19 +92,26 @@ public sealed class SqlStatsRepository : IStatsRepository
         await using var connection = await _open(ct).ConfigureAwait(false);
         await using var transaction = await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
         var at = _dialect.DateParam(startedAt);
-        var serverId = await EnsureServerAsync(connection, transaction, at, ct).ConfigureAwait(false);
+        var serverId = await EnsureServerAsync(connection, transaction, at, touch: true, ct).ConfigureAwait(false);
         var mapId = await InsertAsync(connection, transaction, "stats_maps", new[] { "server_id", "map_name", "started_at" },
             new object?[] { serverId, Clip(mapName, NameLength), at }, ct).ConfigureAwait(false);
         await transaction.CommitAsync(ct).ConfigureAwait(false);
+        _serverId ??= serverId;
         return mapId;
     }
 
-    private async Task<long> EnsureServerAsync(DbConnection connection, DbTransaction transaction, object at, CancellationToken ct)
+    // touch (map opening): upsert the row, last_seen only moving forward. Otherwise (telemetry) the cached id is reused
+    // and the row is only written when it was never resolved by this repository.
+    private async Task<long> EnsureServerAsync(DbConnection connection, DbTransaction transaction, object at, bool touch, CancellationToken ct)
     {
+        if (_serverId is { } cached && !touch)
+        {
+            return cached;
+        }
         await ExecuteAsync(connection, transaction,
-            $"INSERT INTO stats_servers (name, first_seen, last_seen) VALUES (@name, @at, @at) {_dialect.OnConflict(new[] { "name" }, new[] { "last_seen" }, Array.Empty<string>())}",
+            $"INSERT INTO stats_servers (name, first_seen, last_seen) VALUES (@name, @at, @at) {_dialect.OnConflictKeepLatest(new[] { "name" }, "last_seen", "@at")}",
             ct, ("@name", _options.ServerKey), ("@at", at)).ConfigureAwait(false);
-        return Convert.ToInt64(
+        return _serverId ?? Convert.ToInt64(
             await ScalarAsync(connection, transaction, "SELECT id FROM stats_servers WHERE name = @name", ct, ("@name", _options.ServerKey)).ConfigureAwait(false),
             CultureInfo.InvariantCulture);
     }
@@ -189,12 +199,13 @@ public sealed class SqlStatsRepository : IStatsRepository
         await using var connection = await _open(ct).ConfigureAwait(false);
         await using var transaction = await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
         var at = _dialect.DateParam(snapshot.At);
-        var serverId = await EnsureServerAsync(connection, transaction, at, ct).ConfigureAwait(false);
+        var serverId = await EnsureServerAsync(connection, transaction, at, touch: false, ct).ConfigureAwait(false);
         await ExecuteAsync(connection, transaction,
             "INSERT INTO stats_presence (server_id, at, humans, bots, queued, map_name) VALUES (@server, @at, @humans, @bots, @queued, @map)", ct,
             ("@server", serverId), ("@at", at), ("@humans", snapshot.Humans), ("@bots", snapshot.Bots), ("@queued", snapshot.Queued),
             ("@map", Clip(snapshot.MapName, NameLength))).ConfigureAwait(false);
         await transaction.CommitAsync(ct).ConfigureAwait(false);
+        _serverId ??= serverId;
     }
 
     public async Task WriteServerEventsAsync(IReadOnlyList<ServerEvent> serverEvents, CancellationToken ct)
@@ -206,7 +217,7 @@ public sealed class SqlStatsRepository : IStatsRepository
         }
         await using var connection = await _open(ct).ConfigureAwait(false);
         await using var transaction = await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
-        var serverId = await EnsureServerAsync(connection, transaction, _dialect.DateParam(serverEvents[0].At), ct).ConfigureAwait(false);
+        var serverId = await EnsureServerAsync(connection, transaction, _dialect.DateParam(serverEvents[0].At), touch: false, ct).ConfigureAwait(false);
         foreach (var serverEvent in serverEvents)
         {
             await ExecuteAsync(connection, transaction,
@@ -216,6 +227,7 @@ public sealed class SqlStatsRepository : IStatsRepository
                 ("@occurrences", serverEvent.Occurrences), ("@max_ms", serverEvent.MaxMs)).ConfigureAwait(false);
         }
         await transaction.CommitAsync(ct).ConfigureAwait(false);
+        _serverId ??= serverId;
     }
 
     public async Task<long> WriteRoundAsync(long mapId, RoundSummary round, CancellationToken ct)

@@ -309,4 +309,43 @@ public sealed class SqliteStatsRepositoryTests : IDisposable
         Assert.Equal(0L, await Scalar("SELECT COUNT(*) FROM stats_server_events"));
         Assert.Equal(0L, await Scalar("SELECT COUNT(*) FROM stats_servers"));
     }
+
+    // Servers sharing a database, or a queue replaying an older write, must never move last_seen back.
+    [Fact]
+    public async Task ServerLastSeen_OnlyMovesForward()
+    {
+        var repository = await Repository();
+        await repository.OpenMapAsync("de_mirage", Now, CancellationToken.None);
+        await repository.OpenMapAsync("de_nuke", Now.AddDays(-1), CancellationToken.None);
+        Assert.Equal("2026-10-13 20:00:00.000", await Scalar("SELECT last_seen FROM stats_servers"));
+        var other = await Repository();
+        await other.OpenMapAsync("de_inferno", Now.AddHours(-2), CancellationToken.None);
+        Assert.Equal("2026-10-13 20:00:00.000", await Scalar("SELECT last_seen FROM stats_servers"));
+        await repository.OpenMapAsync("de_anubis", Now.AddHours(1), CancellationToken.None);
+        Assert.Equal("2026-10-13 21:00:00.000", await Scalar("SELECT last_seen FROM stats_servers"));
+        Assert.Equal(1L, await Scalar("SELECT COUNT(*) FROM stats_servers"));
+    }
+
+    // The server id is resolved once per repository: telemetry does not upsert stats_servers on every write.
+    [Fact]
+    public async Task Telemetry_ReusesTheResolvedServer_WithoutTouchingIt()
+    {
+        var repository = await Repository();
+        await repository.OpenMapAsync("de_mirage", Now, CancellationToken.None);
+        await repository.WritePresenceAsync(new PresenceSnapshot(Now.AddHours(1), "de_mirage", 1, 0, 0), CancellationToken.None);
+        await repository.WriteServerEventsAsync(new[] { new ServerEvent(Now.AddHours(2), ServerEventTypes.Uptime, null, "600") }, CancellationToken.None);
+        Assert.Equal("2026-10-13 20:00:00.000", await Scalar("SELECT last_seen FROM stats_servers"));
+        Assert.Equal(1L, await Scalar("SELECT COUNT(DISTINCT server_id) FROM stats_presence"));
+        Assert.Equal(await Scalar("SELECT id FROM stats_servers"), await Scalar("SELECT server_id FROM stats_server_events"));
+    }
+
+    [Fact]
+    public async Task Telemetry_BeforeAnyMap_ResolvesTheServerOnce()
+    {
+        var repository = await Repository("eu-3");
+        await repository.WritePresenceAsync(new PresenceSnapshot(Now, "de_mirage", 1, 0, 0), CancellationToken.None);
+        await repository.WritePresenceAsync(new PresenceSnapshot(Now.AddMinutes(1), "de_mirage", 1, 0, 0), CancellationToken.None);
+        Assert.Equal(1L, await Scalar("SELECT COUNT(*) FROM stats_servers WHERE name = 'eu-3'"));
+        Assert.Equal("2026-10-13 20:00:00.000", await Scalar("SELECT last_seen FROM stats_servers"));
+    }
 }

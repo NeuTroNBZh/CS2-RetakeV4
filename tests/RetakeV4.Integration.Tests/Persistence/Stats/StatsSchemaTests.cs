@@ -164,6 +164,17 @@ public sealed class StatsSchemaTests : IDisposable
     }
 
     [Fact]
+    public void OnConflictKeepLatest_PerDialect()
+    {
+        Assert.Equal(
+            "ON DUPLICATE KEY UPDATE last_seen = GREATEST(last_seen, @at)",
+            StatsDialect.MySql.OnConflictKeepLatest(new[] { "name" }, "last_seen", "@at"));
+        Assert.Equal(
+            "ON CONFLICT (name) DO UPDATE SET last_seen = MAX(last_seen, @at)",
+            StatsDialect.Sqlite.OnConflictKeepLatest(new[] { "name" }, "last_seen", "@at"));
+    }
+
+    [Fact]
     public void SteamIds_RoundTripInBothDialects()
     {
         const ulong steamId = 76561198000000001UL;
