@@ -23,13 +23,12 @@ public sealed class StatsModule : IRetakeModule
 {
     private const float PresenceRefreshSeconds = 5f;
     private const float UptimeSeconds = 600f;
-    private const int RevealPollTicks = 8;
 
     private readonly PlaytimeTracker _playtime = new();
     private readonly SessionActivityTracker _activity = new();
     private readonly ServerEventAggregator _serverEvents = new();
     private readonly Dictionary<int, string?> _primaryBySlot = new();
-    private readonly ScoreboardReveal _reveal = new((ulong)PlayerButtons.Scoreboard);
+    private readonly PlayerInputTracker _input = new((ulong)PlayerButtons.Scoreboard, (ulong)PlayerButtons.Jump);
     private StatsConfig _config = new();
     private StatsRules? _rules;
     private RoundRecorder? _recorder;
@@ -109,7 +108,7 @@ public sealed class StatsModule : IRetakeModule
         hooks.OnEvent<EventWeaponReload>("stats_weapon_reload", OnWeaponReload);
         hooks.OnEvent<EventItemPickup>("stats_item_pickup", e => OnItem(e.Userid, PlayerEventType.Pickup, e.Item));
         hooks.OnEvent<EventItemRemove>("stats_item_remove", e => OnItem(e.Userid, PlayerEventType.Drop, e.Item));
-        hooks.OnEvent<EventPlayerJump>("stats_player_jump", e => OnPlayerEvent(e.Userid, PlayerEventType.Jump));
+        hooks.OnTick("stats_input", PollInput);
         hooks.OnEvent<EventBombBeginplant>("stats_bomb_beginplant", e => OnPlayerEvent(e.Userid, PlayerEventType.PlantBegin));
         hooks.OnEvent<EventBombAbortplant>("stats_bomb_abortplant", e => OnPlayerEvent(e.Userid, PlayerEventType.PlantAbort));
         hooks.OnEvent<EventBombBegindefuse>("stats_bomb_begindefuse", e => OnPlayerEvent(e.Userid, PlayerEventType.DefuseBegin, e.Haskit ? "kit" : null));
@@ -155,12 +154,6 @@ public sealed class StatsModule : IRetakeModule
         {
             context.Logger.LogWarning(
                 "Stats: ScoreboardElo needs FollowCS2ServerGuidelines set to false in CounterStrikeSharp core.json; the scoreboard is left untouched");
-        }
-        if (_scoreboardElo)
-        {
-            // The game may reset the rank fields: they are written again on every spawn.
-            hooks.OnEvent<EventPlayerSpawn>("stats_scoreboard_spawn", e => ShowElo(e.Userid));
-            hooks.OnTick("stats_scoreboard_reveal", PollScoreboard);
         }
         if (_config.TrackServerHealth)
         {
@@ -444,7 +437,7 @@ public sealed class StatsModule : IRetakeModule
     {
         if (player is { IsValid: true })
         {
-            _reveal.Forget(player.Slot);
+            _input.Forget(player.Slot);
         }
         if (HumanId(player) is not { } id)
         {
@@ -643,14 +636,17 @@ public sealed class StatsModule : IRetakeModule
         try
         {
             var rank = HumanId(player) is { } id ? ScoreboardRank.For(true, elo.IsLoaded(id), elo.Current(id)) : ScoreboardRank.None;
-            if (player.CompetitiveRankType == rank.RankType && player.CompetitiveRanking == rank.Value)
+            var wins = rank == ScoreboardRank.None ? 0 : ScoreboardRank.ShownWins;
+            if (player.CompetitiveRankType == rank.RankType && player.CompetitiveRanking == rank.Value && player.CompetitiveWins == wins)
             {
                 return;
             }
             player.CompetitiveRankType = rank.RankType;
             player.CompetitiveRanking = rank.Value;
+            player.CompetitiveWins = wins;
             Utilities.SetStateChanged(player, "CCSPlayerController", "m_iCompetitiveRankType");
             Utilities.SetStateChanged(player, "CCSPlayerController", "m_iCompetitiveRanking");
+            Utilities.SetStateChanged(player, "CCSPlayerController", "m_iCompetitiveWins");
         }
         catch (Exception ex)
         {
@@ -659,24 +655,43 @@ public sealed class StatsModule : IRetakeModule
         }
     }
 
-    // The client hides the rank column outside round end: a fresh TAB press asks it to show every rank, as matchmaking does.
-    private void PollScoreboard()
+    // Every tick: jumps (player_jump does not reach plugins), the scoreboard rank (the game resets it, so it is written
+    // again whenever it differs) and TAB presses (the client hides the rank column outside round end unless asked).
+    private void PollInput()
     {
-        if (!_scoreboardElo || !_mapStarted || Server.TickCount % RevealPollTicks != 0)
+        if (!_mapStarted)
         {
             return;
         }
+        foreach (var player in PlayerQueries.Humans())
+        {
+            if (player.Pawn is not { IsValid: true } pawn || pawn.Value is not { IsValid: true })
+            {
+                continue;
+            }
+            var presses = _input.Update(player.Slot, (ulong)player.Buttons, IsOnGround(player));
+            if (presses.Jumped && player.PawnIsAlive)
+            {
+                OnPlayerEvent(player, PlayerEventType.Jump);
+            }
+            if (_scoreboardElo)
+            {
+                ShowElo(player);
+            }
+            if (_scoreboardElo && presses.Scoreboard)
+            {
+                RevealRanks(player);
+            }
+        }
+    }
+
+    private void RevealRanks(CCSPlayerController player)
+    {
         try
         {
-            foreach (var player in PlayerQueries.Humans())
-            {
-                if (player.Pawn is { IsValid: true } pawn && pawn.Value is { IsValid: true } && _reveal.Pressed(player.Slot, (ulong)player.Buttons))
-                {
-                    var message = UserMessage.FromPartialName("ServerRankRevealAll");
-                    message.Recipients.Add(player);
-                    message.Send();
-                }
-            }
+            var message = UserMessage.FromPartialName("ServerRankRevealAll");
+            message.Recipients.Add(player);
+            message.Send();
         }
         catch (Exception ex)
         {

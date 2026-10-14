@@ -6,6 +6,9 @@ public readonly record struct ScoreboardRank(sbyte RankType, int Value)
 {
     public const sbyte PremierRankType = 11;
 
+    // The client shows a rating only for players with at least this many competitive wins.
+    public const int ShownWins = 10;
+
     public static ScoreboardRank None { get; } = new(0, 0);
 
     public static ScoreboardRank For(bool enabled, bool loaded, int elo) =>

@@ -18,6 +18,9 @@ internal static class StatsEventMapper
 
     public static bool IsBot(CCSPlayerController? player) => player is { IsValid: true, IsBot: true };
 
+    public static bool IsOnGround(CCSPlayerController? player) =>
+        player is { IsValid: true } && player.PlayerPawn.Value is { IsValid: true } pawn && (pawn.Flags & OnGround) != 0;
+
     public static Vec3? PositionOf(CCSPlayerController? player) =>
         player is { IsValid: true } && player.PlayerPawn.Value is { IsValid: true, AbsOrigin: { } origin } ? new Vec3(origin.X, origin.Y, origin.Z) : null;
 
