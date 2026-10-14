@@ -28,6 +28,7 @@ public static class RoundAnalyzer
         CountEvents(record, players, deathTimes);
         CountBombCarry(record, players, deathTimes);
         ApplyEndStates(record, players, deathTimes);
+        ApplyMovement(record, rules, players, deathTimes);
         MarkClutches(sides, players, deathTimes);
         var winner = record.Outcome.Winner;
         return new RoundSummary(
@@ -347,6 +348,18 @@ public static class RoundAnalyzer
     }
 
     // A dead (or departed) player ends with 0 and 0; a living one with the last state read at round_end, if any.
+    private static void ApplyMovement(RoundRecord record, StatsRules rules, Dictionary<ulong, PlayerAccumulator> players, Dictionary<ulong, int> deathTimes)
+    {
+        if (rules.Movement is not { } movement)
+        {
+            return;
+        }
+        foreach (var (id, stats) in MovementAnalyzer.Analyze(record, movement, deathTimes))
+        {
+            players[id].Movement = stats;
+        }
+    }
+
     private static void ApplyEndStates(RoundRecord record, Dictionary<ulong, PlayerAccumulator> players, Dictionary<ulong, int> deathTimes)
     {
         var states = record.EndStates.GroupBy(s => s.Player).ToDictionary(g => g.Key, g => g.Last());

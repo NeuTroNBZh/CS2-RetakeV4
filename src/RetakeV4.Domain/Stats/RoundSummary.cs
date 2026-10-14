@@ -117,6 +117,9 @@ public sealed record PlayerRoundStats(ulong SteamId, string Name, TeamSide Side)
 
     public int? ArmorEnd { get; init; }
 
+    // Null without a live phase (no freeze end seen) or with the sampling off.
+    public MovementRoundStats? Movement { get; init; }
+
     public IReadOnlyList<WeaponRoundStats> Weapons { get; init; } = Array.Empty<WeaponRoundStats>();
 }
 

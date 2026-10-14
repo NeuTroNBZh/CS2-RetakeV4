@@ -111,6 +111,8 @@ internal sealed class PlayerAccumulator(RoundParticipant participant)
 
     public int? ArmorEnd { get; set; }
 
+    public MovementRoundStats? Movement { get; set; }
+
     public WeaponAccumulator Weapon(string weapon)
     {
         var key = StatsWeapons.Normalize(weapon);
@@ -177,6 +179,7 @@ internal sealed class PlayerAccumulator(RoundParticipant participant)
             BombCarryMs = BombCarryMs,
             HealthEnd = HealthEnd,
             ArmorEnd = ArmorEnd,
+            Movement = Movement,
             Weapons = _weapons.Values.OrderBy(w => w.Weapon, StringComparer.Ordinal).Select(w => w.Build()).ToList(),
         };
     }
