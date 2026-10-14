@@ -2,14 +2,24 @@ using RetakeV4.Domain.Common;
 
 namespace RetakeV4.Domain.Stats;
 
-// Additive counters stored per (player, scope). The column order is the order of the values returned by For and of the
-// counter columns in the public views. The v1 tables are frozen in StatsSchema: adding a counter needs an ALTER TABLE
-// migration appended to StatsSchema.Migrations and a new contract/view version.
+// Additive counters stored per (player, scope). Columns are the v1 counters, frozen with views.v1.json and
+// StatsSchema.V1Counters; V2Columns were added in 4.9 by ALTER migrations (StatsSchema.V2Counters) and appear in the v2
+// views only. The order of each list is the order of the values returned by For / ForV2 and of the view columns.
+// A new counter needs a new list, an ALTER migration appended to StatsSchema.Migrations and a new contract version.
 public static class StatsCounters
 {
     public static IReadOnlyList<string> Columns { get; } = BuildColumns();
 
     public static IReadOnlyList<string> WeaponColumns { get; } = new[] { "shots", "hits", "headshot_hits", "kills", "headshot_kills", "damage" };
+
+    public static IReadOnlyList<string> V2Columns { get; } = new[]
+    {
+        "shots_still", "hits_still", "shots_moving", "hits_moving", "shots_scoped", "hits_scoped",
+        "reloads", "reloads_full", "pickups", "drops", "jumps", "plant_attempts", "plant_aborts", "defuse_attempts", "defuse_aborts",
+        "clutch_defuses", "damage_taken", "bomb_carry_ms",
+    };
+
+    public static IReadOnlyList<string> AllColumns { get; } = Columns.Concat(V2Columns).ToArray();
 
     public static long[] For(PlayerRoundStats player, bool ranked)
     {
@@ -38,6 +48,19 @@ public static class StatsCounters
         values.Add((long)Math.Round(player.Rating * 1000, MidpointRounding.AwayFromZero));
         return values.ToArray();
     }
+
+    public static long[] ForV2(PlayerRoundStats player)
+    {
+        ArgumentNullException.ThrowIfNull(player);
+        return new long[]
+        {
+            player.ShotsStill, player.HitsStill, player.ShotsMoving, player.HitsMoving, player.ShotsScoped, player.HitsScoped,
+            player.Reloads, player.ReloadsFull, player.Pickups, player.Drops, player.Jumps, player.PlantAttempts, player.PlantAborts,
+            player.DefuseAttempts, player.DefuseAborts, B(player.ClutchDefuse), player.DamageTaken, player.BombCarryMs,
+        };
+    }
+
+    public static long[] ForAll(PlayerRoundStats player, bool ranked) => For(player, ranked).Concat(ForV2(player)).ToArray();
 
     public static long[] ForWeapon(WeaponRoundStats weapon)
     {

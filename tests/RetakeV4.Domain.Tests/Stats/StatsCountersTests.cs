@@ -80,4 +80,34 @@ public class StatsCountersTests
         Assert.Equal(new[] { "shots", "hits", "headshot_hits", "kills", "headshot_kills", "damage" }, StatsCounters.WeaponColumns);
         Assert.Equal(new long[] { 10, 4, 1, 2, 1, 150 }, StatsCounters.ForWeapon(new WeaponRoundStats("ak47", 10, 4, 1, 2, 1, 150)));
     }
+
+    [Fact]
+    public void V2Columns_FollowTheV1Columns()
+    {
+        Assert.Equal(
+            new[]
+            {
+                "shots_still", "hits_still", "shots_moving", "hits_moving", "shots_scoped", "hits_scoped",
+                "reloads", "reloads_full", "pickups", "drops", "jumps", "plant_attempts", "plant_aborts", "defuse_attempts", "defuse_aborts",
+                "clutch_defuses", "damage_taken", "bomb_carry_ms",
+            },
+            StatsCounters.V2Columns);
+        Assert.Equal(StatsCounters.Columns.Concat(StatsCounters.V2Columns), StatsCounters.AllColumns);
+        Assert.Equal(StatsCounters.AllColumns.Count, StatsCounters.AllColumns.Distinct().Count());
+        Assert.Equal(60, StatsCounters.ForAll(new PlayerRoundStats(1, "a", TeamSide.CT), false).Length);
+    }
+
+    [Fact]
+    public void ForV2_MapsEveryCounter()
+    {
+        var player = new PlayerRoundStats(1, "a", TeamSide.CT)
+        {
+            ShotsStill = 21, HitsStill = 22, ShotsMoving = 23, HitsMoving = 24, ShotsScoped = 25, HitsScoped = 26,
+            Reloads = 27, ReloadsFull = 28, Pickups = 29, Drops = 30, Jumps = 31, PlantAttempts = 32, PlantAborts = 33,
+            DefuseAttempts = 34, DefuseAborts = 35, ClutchDefuse = true, DamageTaken = 37, BombCarryMs = 38,
+        };
+        Assert.Equal(new long[] { 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 1, 37, 38 }, StatsCounters.ForV2(player));
+        Assert.Equal(StatsCounters.For(player, true).Concat(StatsCounters.ForV2(player)), StatsCounters.ForAll(player, true));
+        Assert.Equal(0, StatsCounters.ForV2(player with { ClutchDefuse = false })[15]);
+    }
 }
