@@ -24,4 +24,13 @@ public sealed record RoundRecord(
     BombDefusedFact? Defuse,
     BombExplodedFact? Explosion,
     IReadOnlyList<MvpAwarded> Mvps,
-    IReadOnlyList<PlayerLeftRound> Leavers);
+    IReadOnlyList<PlayerLeftRound> Leavers)
+{
+    public IReadOnlyList<PlayerEventFact> Events { get; init; } = Array.Empty<PlayerEventFact>();
+
+    // One state per player (the last one read).
+    public IReadOnlyList<PlayerEndState> EndStates { get; init; } = Array.Empty<PlayerEndState>();
+
+    // Milliseconds from the round start to round_freeze_end; null when it was not seen.
+    public int? FreezeEndMs { get; init; }
+}

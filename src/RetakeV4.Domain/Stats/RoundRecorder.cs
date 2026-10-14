@@ -2,7 +2,8 @@ using RetakeV4.Domain.Common;
 
 namespace RetakeV4.Domain.Stats;
 
-// Collects the facts of one round on the game thread: appends only, no I/O.
+// Collects the facts of one round on the game thread: appends only, no I/O. maxShots caps the shots and, separately,
+// the player events of a round.
 public sealed class RoundRecorder
 {
     private readonly int _maxShots;
@@ -15,9 +16,12 @@ public sealed class RoundRecorder
     private readonly List<PlayerBlinded> _blinds = new();
     private readonly List<MvpAwarded> _mvps = new();
     private readonly List<PlayerLeftRound> _leavers = new();
+    private readonly List<PlayerEventFact> _events = new();
+    private readonly Dictionary<ulong, PlayerEndState> _endStates = new();
     private BombPlantedFact? _plant;
     private BombDefusedFact? _defuse;
     private BombExplodedFact? _explosion;
+    private int? _freezeEndMs;
 
     public RoundRecorder(int maxShots, int minPlayersPerSide)
     {
@@ -32,6 +36,8 @@ public sealed class RoundRecorder
     public bool IsOpen => Context is not null;
 
     public int ShotsDropped { get; private set; }
+
+    public int EventsDropped { get; private set; }
 
     public void Open(RoundContext context)
     {
@@ -56,6 +62,41 @@ public sealed class RoundRecorder
         }
         _shots.Add(shot);
         return true;
+    }
+
+    // False when the round is not open or the per-round cap is reached.
+    public bool Add(PlayerEventFact playerEvent)
+    {
+        if (!IsOpen)
+        {
+            return false;
+        }
+        if (_events.Count >= _maxShots)
+        {
+            EventsDropped++;
+            return false;
+        }
+        _events.Add(playerEvent);
+        return true;
+    }
+
+    // The last state read for a player wins.
+    public void Add(PlayerEndState state)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        if (IsOpen)
+        {
+            _endStates[state.Player] = state;
+        }
+    }
+
+    // Only the first freeze end of the round counts.
+    public void MarkFreezeEnd(int timeMs)
+    {
+        if (IsOpen && _freezeEndMs is null)
+        {
+            _freezeEndMs = timeMs;
+        }
     }
 
     public void Add(DamageDealt damage) => AddIfOpen(_damages, damage);
@@ -108,7 +149,12 @@ public sealed class RoundRecorder
         var record = new RoundRecord(
             context, outcome, ranked,
             _shots.ToList(), _damages.ToList(), _kills.ToList(), _thrown.ToList(), _detonated.ToList(), _blinds.ToList(),
-            _plant, _defuse, _explosion, _mvps.ToList(), _leavers.ToList());
+            _plant, _defuse, _explosion, _mvps.ToList(), _leavers.ToList())
+        {
+            Events = _events.ToList(),
+            EndStates = _endStates.Values.ToList(),
+            FreezeEndMs = _freezeEndMs,
+        };
         Reset();
         return record;
     }
@@ -125,6 +171,7 @@ public sealed class RoundRecorder
     {
         Context = null;
         ShotsDropped = 0;
+        EventsDropped = 0;
         _shots.Clear();
         _damages.Clear();
         _kills.Clear();
@@ -133,8 +180,11 @@ public sealed class RoundRecorder
         _blinds.Clear();
         _mvps.Clear();
         _leavers.Clear();
+        _events.Clear();
+        _endStates.Clear();
         _plant = null;
         _defuse = null;
         _explosion = null;
+        _freezeEndMs = null;
     }
 }

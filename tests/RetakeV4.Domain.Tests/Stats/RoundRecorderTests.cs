@@ -97,4 +97,49 @@ public class RoundRecorderTests
             .ToArray();
         Assert.Equal(ranked, Record(Context(participants), TeamSide.CT, minPlayersPerSide: min).Ranked);
     }
+
+    [Fact]
+    public void PlayerEvents_EndStatesAndFreezeEnd_AreRecorded()
+    {
+        var recorder = new RoundRecorder(10, 1);
+        recorder.Open(Context(P(Ct1, TeamSide.CT), P(T1, TeamSide.T)));
+        recorder.MarkFreezeEnd(1500);
+        recorder.MarkFreezeEnd(9000);
+        Assert.True(recorder.Add(new PlayerEventFact(Ct1, PlayerEventType.Jump, 2000, null, null)));
+        recorder.Add(new PlayerEndState(Ct1, 50, 100));
+        recorder.Add(new PlayerEndState(Ct1, 40, 90));
+        var record = recorder.Close(new RoundOutcome(TeamSide.CT, 7, 1))!;
+        Assert.Equal(1500, record.FreezeEndMs);
+        Assert.Single(record.Events);
+        Assert.Equal(new PlayerEndState(Ct1, 40, 90), Assert.Single(record.EndStates));
+    }
+
+    [Fact]
+    public void ClosedRecorder_IgnoresEventsStatesAndFreezeEnd()
+    {
+        var recorder = new RoundRecorder(10, 1);
+        Assert.False(recorder.Add(new PlayerEventFact(Ct1, PlayerEventType.Jump, 0, null, null)));
+        recorder.Add(new PlayerEndState(Ct1, 50, 100));
+        recorder.MarkFreezeEnd(10);
+        recorder.Open(Context(P(Ct1, TeamSide.CT), P(T1, TeamSide.T)));
+        var record = recorder.Close(new RoundOutcome(TeamSide.CT, 7, 1))!;
+        Assert.Empty(record.Events);
+        Assert.Empty(record.EndStates);
+        Assert.Null(record.FreezeEndMs);
+    }
+
+    [Fact]
+    public void PlayerEvents_BeyondTheCap_AreDropped_AndCounted()
+    {
+        var recorder = new RoundRecorder(2, 1);
+        recorder.Open(Context(P(Ct1, TeamSide.CT), P(T1, TeamSide.T)));
+        Assert.True(recorder.Add(new PlayerEventFact(Ct1, PlayerEventType.Jump, 1, null, null)));
+        Assert.True(recorder.Add(new PlayerEventFact(Ct1, PlayerEventType.Jump, 2, null, null)));
+        Assert.False(recorder.Add(new PlayerEventFact(Ct1, PlayerEventType.Jump, 3, null, null)));
+        Assert.Equal(1, recorder.EventsDropped);
+        Assert.Equal(0, recorder.ShotsDropped);
+        Assert.Equal(2, recorder.Close(new RoundOutcome(TeamSide.CT, 7, 1))!.Events.Count);
+        recorder.Open(Context(P(Ct1, TeamSide.CT), P(T1, TeamSide.T)));
+        Assert.Equal(0, recorder.EventsDropped);
+    }
 }

@@ -41,7 +41,11 @@ public sealed record PlayerBlinded(ulong? Attacker, ulong Victim, int EntityId, 
 
 public sealed record BombPlantedFact(ulong Planter, int TimeMs);
 
-public sealed record BombDefusedFact(ulong Defuser, bool WithKit, int TimeMs);
+public sealed record BombDefusedFact(ulong Defuser, bool WithKit, int TimeMs)
+{
+    // Time left on the bomb when it was defused; null when the planted bomb could not be read.
+    public int? RemainingMs { get; init; }
+}
 
 public sealed record BombExplodedFact(int TimeMs);
 
