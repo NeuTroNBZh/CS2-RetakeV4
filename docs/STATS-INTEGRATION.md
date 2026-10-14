@@ -292,9 +292,9 @@ SELECT players_ct, players_t, SUM(rounds) AS rounds, ROUND(100.0 * SUM(ct_wins) 
 FROM v_stats_retake_odds WHERE map_name = ? AND site = ?
 GROUP BY players_ct, players_t HAVING SUM(rounds) >= 20 ORDER BY players_ct, players_t;
 
--- After the plant: CT win rate by players still alive. With the default automatic plant (AutoPlant) the plugin plants the bomb itself
--- and no plant is recorded (planted = 0), so these columns are NULL and this query returns nothing: it is meaningful only on a
--- server where players plant (FastPlant).
+-- After the plant: CT win rate by players still alive. With the default automatic plant (AutoPlant) the bomb is planted at the end
+-- of the freeze, so these counts are close to the starting counts and the split adds little; it becomes informative in a mode
+-- where players plant during the round (FastPlant).
 SELECT ct_alive_at_plant, t_alive_at_plant, SUM(rounds) AS rounds, ROUND(100.0 * SUM(ct_wins) / SUM(rounds), 1) AS ct_win_pct
 FROM v_stats_retake_odds WHERE map_name = ? AND ct_alive_at_plant IS NOT NULL
 GROUP BY ct_alive_at_plant, t_alive_at_plant ORDER BY ct_alive_at_plant, t_alive_at_plant;
