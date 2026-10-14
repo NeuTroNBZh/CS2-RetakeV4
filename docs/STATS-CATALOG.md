@@ -7,7 +7,7 @@ Read the views only (`v_stats_*`, `v2_stats_*`): the `stats_*` tables can change
 **Limits that apply everywhere**
 
 - Bots never get stats and are never actors: kills on bots are not kills, damage to bots is not damage, a bot's kill has no attacker. Humans who join after the round start are not participants of that round.
-- Raw rows are purged after `RawRetentionDays` (30 by default, 0 = keep): `v_stats_shots`, `v2_stats_shots`, `v_stats_damages`, `v_stats_player_events`, `v_stats_presence`, `v_stats_server_health`. Kills, grenades, rounds, round players, sessions, ELO history and every total are kept.
+- Raw rows are purged after `RawRetentionDays` (30 by default, 0 = keep): `v_stats_shots`, `v2_stats_shots`, `v_stats_damages`, `v_stats_player_events`, `v_stats_presence`, `v_stats_server_health`. Kills, grenades, rounds, round players, sessions, ELO history, replays and every total are kept.
 - Totals are additive counters updated once per round. A counter added in 4.9 is 0 for the rounds played before; a ratio built on it is therefore only meaningful over recent play.
 - Ratios are computed by the views, rounded to 3 decimals, `NULL` when the denominator is 0. `*_pct` and `accuracy` columns are 0–100; `kd`, `kpr`, `adr`, `rating`, `bait_rate`, `slowness_index` are plain ratios.
 - SteamID64 values (`steam_id`, `attacker`, `victim`, `assister`, `planter`, `defuser`, `opponent_id`, `mate_id`) are 64-bit unsigned: read them as strings in JavaScript. Dates are UTC.
@@ -47,6 +47,8 @@ Read the views only (`v_stats_*`, `v2_stats_*`): the `stats_*` tables can change
 | `v_stats_rivals` | v2 | player and enemy | no |
 | `v_stats_duos` | v2 | player and teammate | no |
 | `v_stats_server_activity` | v2 | server, UTC day and hour | partly (presence part) |
+| `v_stats_replays` | v2 | owner of a stored replay (round, player, reason) | no |
+| `v_stats_replay_tracks` | v2 | track of a stored replay (round, human player) | no |
 
 ## 1. Players and play time
 
@@ -359,6 +361,23 @@ FROM v_stats_server_health WHERE type IN ('module_error', 'module_disabled')
 GROUP BY DATE(at), module ORDER BY day DESC, errors DESC;
 ```
 
+## 17. Replays (2D)
+
+A replay is a round whose human trajectories are kept, for the players who own it. The format of `frames`, the radar conversion and a complete viewer example are in [STATS-INTEGRATION.md](STATS-INTEGRATION.md) ("Replays").
+
+| Stat | Definition | Source | Limits |
+|---|---|---|---|
+| Stored replays | One row per owner: the round (`v_stats_replays.round_id`, `v_stats_replays.server`, `v_stats_replays.map_name`, `v_stats_replays.round_number`, `v_stats_replays.site`, `v_stats_replays.round_type`, `v_stats_replays.winner`, `v_stats_replays.duration_ms`, `v_stats_replays.started_at`), the replay (`sample_hz`, `bytes`, `created_at`) and the owner (`v_stats_replays.steam_id`, `v_stats_replays.name`, `reason`, `score`, `owned_at`) | `v_stats_replays` | `reason` is `best` (the player's best rounds by Retake Rating, ranked rounds only), `highlight` (ace: every enemy human killed, at least 3; or a won clutch 1v3+) or `saved` (`!save`); `score` = the owner's Retake Rating in that round. Caps per player and reason (`ReplayBestPerPlayer` 10, `ReplayHighlightsPerPlayer` 10, `ReplaySavedPerPlayer` 20): a better `best` replaces the weakest, a new `highlight` or `saved` replaces the oldest. A round with no owner left is deleted. Never purged by `RawRetentionDays` |
+| Trajectories | One row per human participant of a stored round: `v_stats_replay_tracks.round_id`, `v_stats_replay_tracks.steam_id`, `v_stats_replay_tracks.name`, `v_stats_replay_tracks.side`, `frames` (JSON text `[[t_ms, x, y, z, yaw, flags, hp], ...]`) | `v_stats_replay_tracks` | Humans only (bots are never sampled: their deaths are in `v_stats_kills`); one frame every `SampleEveryTicks` ticks of the live phase while alive; replays need `SampleEveryTicks` > 0. Shots, damages and player events of a round older than `RawRetentionDays` are purged; kills, grenades and the bomb (`v_stats_rounds`) stay |
+
+A player's replays (query, `?` = the player's SteamID64 as a string):
+
+```sql
+SELECT round_id, map_name, site, round_type, started_at, reason, score
+FROM v_stats_replays WHERE steam_id = CAST(? AS UNSIGNED)
+ORDER BY reason, score DESC, owned_at DESC;
+```
+
 ## Column reference
 
 Every column of every view, in contract order (`view.column`). Definitions are in the sections above and in [STATS.md](STATS.md).
@@ -397,7 +416,9 @@ Every column of every view, in contract order (`view.column`). Definitions are i
 - `v_stats_rivals`: `v_stats_rivals.steam_id`, `v_stats_rivals.name`, `v_stats_rivals.opponent_id`, `v_stats_rivals.opponent_name`, `v_stats_rivals.kills`, `v_stats_rivals.deaths`, `v_stats_rivals.headshot_kills`, `v_stats_rivals.headshot_deaths`, `v_stats_rivals.kd`
 - `v_stats_duos`: `v_stats_duos.steam_id`, `v_stats_duos.name`, `v_stats_duos.mate_id`, `v_stats_duos.mate_name`, `v_stats_duos.rounds`, `v_stats_duos.rounds_won`, `v_stats_duos.win_pct`, `v_stats_duos.trades`
 - `v_stats_server_activity`: `v_stats_server_activity.server`, `v_stats_server_activity.day`, `v_stats_server_activity.hour`, `v_stats_server_activity.snapshots`, `v_stats_server_activity.humans_avg`, `v_stats_server_activity.humans_max`, `v_stats_server_activity.bots_avg`, `v_stats_server_activity.queued_max`, `v_stats_server_activity.rounds`, `v_stats_server_activity.ranked_rounds`, `v_stats_server_activity.players`, `v_stats_server_activity.sessions`
+- `v_stats_replays`: `v_stats_replays.round_id`, `v_stats_replays.server`, `v_stats_replays.map_name`, `v_stats_replays.round_number`, `v_stats_replays.site`, `v_stats_replays.round_type`, `v_stats_replays.winner`, `v_stats_replays.duration_ms`, `v_stats_replays.started_at`, `v_stats_replays.sample_hz`, `v_stats_replays.bytes`, `v_stats_replays.created_at`, `v_stats_replays.steam_id`, `v_stats_replays.name`, `v_stats_replays.reason`, `v_stats_replays.score`, `v_stats_replays.owned_at`
+- `v_stats_replay_tracks`: `v_stats_replay_tracks.round_id`, `v_stats_replay_tracks.steam_id`, `v_stats_replay_tracks.name`, `v_stats_replay_tracks.side`, `v_stats_replay_tracks.frames`
 
 ## Not available
 
-Steam profile data (avatar, hours, VAC), packet loss, chat contents, client-side data (FPS, settings), voice, Valve ranks and economy are not recorded. Replays (2D trajectories) arrive with 4.9.0.
+Steam profile data (avatar, hours, VAC), packet loss, chat contents, client-side data (FPS, settings), voice, Valve ranks and economy are not recorded.

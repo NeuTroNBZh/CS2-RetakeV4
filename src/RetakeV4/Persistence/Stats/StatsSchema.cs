@@ -67,11 +67,17 @@ public static class StatsSchema
         ["stats_server_events"] = [("ix_stats_server_events_at", "at"), ("ix_stats_server_events_type", "type, at")],
     };
 
+    // Indexes of the replay tables created by the 4.9-d step (kept apart so that the earlier entries never change).
+    public static IReadOnlyDictionary<string, (string Name, string Columns)[]> ReplayIndexes { get; } = new Dictionary<string, (string Name, string Columns)[]>
+    {
+        ["stats_replay_owners"] = [("ix_stats_replay_owners_steam", "steam_id, reason")],
+    };
+
     // Append-only: SqlMigrator applies entries by index, so an existing entry is never edited, reordered or removed.
     public static IReadOnlyList<SqlMigration> Migrations(StatsDialect d)
     {
         ArgumentNullException.ThrowIfNull(d);
-        return V1(d).Select(sql => new SqlMigration(sql)).Concat(V2(d)).Concat(V2Movement(d)).Concat(V2Catalog(d)).ToList();
+        return V1(d).Select(sql => new SqlMigration(sql)).Concat(V2(d)).Concat(V2Movement(d)).Concat(V2Catalog(d)).Concat(V2Replays(d)).ToList();
     }
 
     // Number of 4.8 entries: a 4.8 database has this version.
@@ -100,6 +106,13 @@ public static class StatsSchema
     {
         ArgumentNullException.ThrowIfNull(d);
         return V2MovementCount(d) + V2Catalog(d).Count;
+    }
+
+    // Number of entries up to the end of 4.9-d (sub-project 3): a database of that stage has this version.
+    internal static int V2ReplaysCount(StatsDialect d)
+    {
+        ArgumentNullException.ThrowIfNull(d);
+        return V2CatalogCount(d) + V2Replays(d).Count;
     }
 
     private static List<string> V1(StatsDialect d)
@@ -259,8 +272,38 @@ public static class StatsSchema
         return migrations;
     }
 
+    // 4.9-d (Stats v2, sub-project 3): the replay tables, the owners index, then the replay views (dropped first, like the
+    // other v2 steps). A replay row exists only while stats_replay_owners has a row for its round; frames is the compact
+    // JSON text of ReplayEncoder. Never purged by RawRetentionDays: bounded by the per-player caps.
+    private static List<SqlMigration> V2Replays(StatsDialect d)
+    {
+        var migrations = new List<SqlMigration>
+        {
+            new($"CREATE TABLE IF NOT EXISTS stats_replays (round_id {d.BigInt} NOT NULL PRIMARY KEY, sample_hz {d.Real} NOT NULL, created_at {d.DateTime} NOT NULL, bytes {d.Int} NOT NULL){d.TableOptions}"),
+            new($"""
+                CREATE TABLE IF NOT EXISTS stats_replay_owners (round_id {d.BigInt} NOT NULL, steam_id {d.SteamId} NOT NULL, reason {d.Text(16)} NOT NULL,
+                    score {d.Real} NOT NULL, created_at {d.DateTime} NOT NULL,
+                    PRIMARY KEY (round_id, steam_id, reason){Keys(d, "stats_replay_owners")}){d.TableOptions}
+                """),
+            new($"CREATE TABLE IF NOT EXISTS stats_replay_tracks (round_id {d.BigInt} NOT NULL, steam_id {d.SteamId} NOT NULL, side {d.Text(2)} NOT NULL, frames {d.LongText} NOT NULL, PRIMARY KEY (round_id, steam_id)){d.TableOptions}"),
+        };
+        if (!d.IsMySql)
+        {
+            migrations.AddRange(ReplayIndexes.SelectMany(t => t.Value.Select(i => new SqlMigration($"CREATE INDEX IF NOT EXISTS {i.Name} ON {t.Key} ({i.Columns})"))));
+        }
+        foreach (var view in StatsReplayViews.Build())
+        {
+            migrations.Add(new SqlMigration($"DROP VIEW IF EXISTS {view.Name}"));
+            migrations.Add(new SqlMigration($"{d.CreateView} {view.Name} AS {view.Select}"));
+        }
+        return migrations;
+    }
+
     // MySQL declares indexes inline so that CREATE TABLE IF NOT EXISTS stays re-runnable; SQLite uses CREATE INDEX IF NOT EXISTS.
     private static string Keys(StatsDialect d, string table) => d.IsMySql
-        ? string.Concat((Indexes.TryGetValue(table, out var v1) ? v1 : V2Indexes[table]).Select(i => $", KEY {i.Name} ({i.Columns})"))
+        ? string.Concat(IndexesOf(table).Select(i => $", KEY {i.Name} ({i.Columns})"))
         : string.Empty;
+
+    private static (string Name, string Columns)[] IndexesOf(string table) =>
+        Indexes.TryGetValue(table, out var v1) ? v1 : V2Indexes.TryGetValue(table, out var v2) ? v2 : ReplayIndexes[table];
 }

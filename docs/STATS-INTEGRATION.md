@@ -49,6 +49,8 @@ GRANT SELECT ON retakev4.v_stats_weapon_meta TO 'stats_reader'@'%';
 GRANT SELECT ON retakev4.v_stats_rivals TO 'stats_reader'@'%';
 GRANT SELECT ON retakev4.v_stats_duos TO 'stats_reader'@'%';
 GRANT SELECT ON retakev4.v_stats_server_activity TO 'stats_reader'@'%';
+GRANT SELECT ON retakev4.v_stats_replays TO 'stats_reader'@'%';
+GRANT SELECT ON retakev4.v_stats_replay_tracks TO 'stats_reader'@'%';
 ```
 
 Replace `retakev4` by your database name and, in production, `'%'` by the web server's address (`'stats_reader'@'10.0.0.5'`). Add `REQUIRE SSL` (`ALTER USER 'stats_reader'@'10.0.0.5' REQUIRE SSL;`) when the web server and the database are on different machines, and keep port 3306 closed to everything else. A new plugin version can add views: run the missing `GRANT` lines again after each upgrade (a view without a grant is simply invisible to the account).

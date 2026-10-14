@@ -35,6 +35,8 @@
     "v_stats_weapon_meta": ["weapon", "players", "shots", "hits", "headshot_hits", "kills", "headshot_kills", "damage", "accuracy", "hs_accuracy", "hs_pct", "kill_share_pct", "primary_rounds", "primary_players", "primary_won_rounds", "primary_win_pct"],
     "v_stats_rivals": ["steam_id", "name", "opponent_id", "opponent_name", "kills", "deaths", "headshot_kills", "headshot_deaths", "kd"],
     "v_stats_duos": ["steam_id", "name", "mate_id", "mate_name", "rounds", "rounds_won", "win_pct", "trades"],
-    "v_stats_server_activity": ["server", "day", "hour", "snapshots", "humans_avg", "humans_max", "bots_avg", "queued_max", "rounds", "ranked_rounds", "players", "sessions"]
+    "v_stats_server_activity": ["server", "day", "hour", "snapshots", "humans_avg", "humans_max", "bots_avg", "queued_max", "rounds", "ranked_rounds", "players", "sessions"],
+    "v_stats_replays": ["round_id", "server", "map_name", "round_number", "site", "round_type", "winner", "duration_ms", "started_at", "sample_hz", "bytes", "created_at", "steam_id", "name", "reason", "score", "owned_at"],
+    "v_stats_replay_tracks": ["round_id", "steam_id", "name", "side", "frames"]
   }
 }

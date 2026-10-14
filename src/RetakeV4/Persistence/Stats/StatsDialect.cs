@@ -19,6 +19,7 @@ public sealed class StatsDialect
         Bool = "TINYINT(1)",
         Real = "DOUBLE",
         DateTime = "DATETIME(3)",
+        LongText = "MEDIUMTEXT",
         TableOptions = " ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin",
         LastInsertId = "SELECT LAST_INSERT_ID()",
         Greatest = "GREATEST",
@@ -34,6 +35,7 @@ public sealed class StatsDialect
         Bool = "INTEGER",
         Real = "REAL",
         DateTime = "TEXT",
+        LongText = "TEXT",
         TableOptions = string.Empty,
         LastInsertId = "SELECT last_insert_rowid()",
         Greatest = "MAX",
@@ -55,6 +57,9 @@ public sealed class StatsDialect
 
     public string DateTime { get; private init; } = string.Empty;
 
+    // Replay frames: a track can exceed the 64 KB of a MySQL TEXT (MEDIUMTEXT holds 16 MB).
+    public string LongText { get; private init; } = string.Empty;
+
     public string TableOptions { get; private init; } = string.Empty;
 
     public string LastInsertId { get; private init; } = string.Empty;
@@ -62,6 +67,10 @@ public sealed class StatsDialect
     public string Greatest { get; private init; } = string.Empty;
 
     public string CreateView => IsMySql ? "CREATE OR REPLACE VIEW" : "CREATE VIEW IF NOT EXISTS";
+
+    // Locking read: replay selection locks the claimants' stats_players rows first, so that two servers deciding for the
+    // same player wait for each other. SQLite write transactions are already serialized (BEGIN IMMEDIATE).
+    public string ForUpdate => IsMySql ? " FOR UPDATE" : string.Empty;
 
     public string FloatCast(string expression) => IsMySql ? $"CAST({expression} AS DOUBLE)" : $"CAST({expression} AS REAL)";
 
@@ -121,4 +130,13 @@ public sealed class StatsDialect
     public object DateParam(DateTimeOffset at) => IsMySql
         ? at.UtcDateTime
         : at.UtcDateTime.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture);
+
+    // A stored date read back as a UTC instant: a DateTime on MySQL / MariaDB, the sortable text on SQLite.
+    public DateTimeOffset ReadDate(object value) => value switch
+    {
+        System.DateTime dateTime => new DateTimeOffset(System.DateTime.SpecifyKind(dateTime, DateTimeKind.Utc)),
+        string text => DateTimeOffset.ParseExact(text, "yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture,
+            DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal),
+        _ => throw new FormatException($"Unexpected stored date: {value}"),
+    };
 }

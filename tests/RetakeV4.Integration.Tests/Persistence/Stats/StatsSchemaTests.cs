@@ -142,7 +142,7 @@ public sealed class StatsSchemaTests : IDisposable
         {
             found.Add(reader.GetString(0));
         }
-        var expected = StatsSchema.Indexes.Values.Concat(StatsSchema.V2Indexes.Values).SelectMany(i => i).Select(i => i.Name);
+        var expected = StatsSchema.Indexes.Values.Concat(StatsSchema.V2Indexes.Values).Concat(StatsSchema.ReplayIndexes.Values).SelectMany(i => i).Select(i => i.Name);
         Assert.All(expected, name => Assert.Contains(name, found));
     }
 
@@ -509,15 +509,14 @@ public sealed class StatsSchemaTests : IDisposable
     }
 
     // 4.9-c: the special kill columns (totals, then round players), then one DROP VIEW + CREATE VIEW pair per view of
-    // CatalogViews, after the 4.9-b entries, and nothing after them yet.
+    // CatalogViews, right after the 4.9-b entries.
     [Fact]
     public void CatalogEntries_FollowTheMovementEntries()
     {
         foreach (var dialect in new[] { StatsDialect.Sqlite, StatsDialect.MySql })
         {
             var all = StatsSchema.Migrations(dialect);
-            Assert.Equal(all.Count, StatsSchema.V2CatalogCount(dialect));
-            var catalog = all.Skip(StatsSchema.V2MovementCount(dialect)).ToList();
+            var catalog = all.Skip(StatsSchema.V2MovementCount(dialect)).Take(StatsSchema.V2CatalogCount(dialect) - StatsSchema.V2MovementCount(dialect)).ToList();
             var columns = StatsSchema.SpecialKillCounters.Count;
             Assert.Equal((2 * columns) + (2 * StatsViewsV2.CatalogViews.Count), catalog.Count);
             for (var i = 0; i < columns; i++)
@@ -593,5 +592,76 @@ public sealed class StatsSchemaTests : IDisposable
         Assert.Equal(2L, await Scalar(connection, "SELECT bait_rounds FROM v2_stats_players WHERE steam_id = 1"));
         Assert.Equal(0.0, await Scalar(connection, "SELECT noscope_kill_pct FROM v2_stats_players WHERE steam_id = 1"));
         Assert.Equal(1L, await Scalar(connection, "SELECT kast FROM stats_round_players WHERE steam_id = 1"));
+    }
+
+    [Fact]
+    public void ReplayDialect_PerDialect()
+    {
+        Assert.Equal("MEDIUMTEXT", StatsDialect.MySql.LongText);
+        Assert.Equal("TEXT", StatsDialect.Sqlite.LongText);
+        Assert.Equal(" FOR UPDATE", StatsDialect.MySql.ForUpdate);
+        Assert.Equal(string.Empty, StatsDialect.Sqlite.ForUpdate);
+        var at = new DateTimeOffset(2026, 10, 14, 20, 15, 0, 123, TimeSpan.Zero);
+        Assert.Equal(at, StatsDialect.Sqlite.ReadDate(StatsDialect.Sqlite.DateParam(at)));
+        Assert.Equal(at, StatsDialect.MySql.ReadDate(StatsDialect.MySql.DateParam(at)));
+    }
+
+    // 4.9-d: the three replay tables, the SQLite index of stats_replay_owners, then one DROP VIEW + CREATE VIEW pair per
+    // replay view, after the 4.9-c entries, and nothing after them yet.
+    [Fact]
+    public void ReplayEntries_FollowTheCatalogEntries()
+    {
+        foreach (var dialect in new[] { StatsDialect.Sqlite, StatsDialect.MySql })
+        {
+            var all = StatsSchema.Migrations(dialect);
+            Assert.Equal(all.Count, StatsSchema.V2ReplaysCount(dialect));
+            var replays = all.Skip(StatsSchema.V2CatalogCount(dialect)).ToList();
+            var tables = new[] { "stats_replays", "stats_replay_owners", "stats_replay_tracks" };
+            for (var i = 0; i < tables.Length; i++)
+            {
+                Assert.StartsWith($"CREATE TABLE IF NOT EXISTS {tables[i]} (", replays[i].Sql, StringComparison.Ordinal);
+            }
+            var indexes = dialect.IsMySql ? 0 : 1;
+            if (!dialect.IsMySql)
+            {
+                Assert.Equal("CREATE INDEX IF NOT EXISTS ix_stats_replay_owners_steam ON stats_replay_owners (steam_id, reason)", replays[3].Sql);
+            }
+            var views = replays.Skip(tables.Length + indexes).ToList();
+            Assert.Equal(2 * StatsReplayViews.Names.Count, views.Count);
+            for (var i = 0; i < StatsReplayViews.Names.Count; i++)
+            {
+                var view = StatsReplayViews.Names[i];
+                Assert.Equal($"DROP VIEW IF EXISTS {view}", views[2 * i].Sql);
+                Assert.StartsWith($"{dialect.CreateView} {view} AS", views[(2 * i) + 1].Sql, StringComparison.Ordinal);
+            }
+        }
+    }
+
+    [Fact]
+    public void MySqlReplayTables_UseMediumTextAndAnInlineKey()
+    {
+        var migrations = StatsSchema.Migrations(StatsDialect.MySql);
+        Assert.Contains(migrations, m => m.Sql.Contains("frames MEDIUMTEXT NOT NULL", StringComparison.Ordinal));
+        Assert.Contains(migrations, m => m.Sql.Contains("KEY ix_stats_replay_owners_steam (steam_id, reason)", StringComparison.Ordinal));
+    }
+
+    // A 4.9-c database (sub-project 4) gets the replay tables and views without losing rows.
+    [Fact]
+    public async Task V2CatalogDatabase_UpgradesToReplays_KeepingItsRows()
+    {
+        await using var connection = new SqliteConnection($"Data Source={_dir.File("stats.db")}");
+        await connection.OpenAsync();
+        var all = StatsSchema.Migrations(StatsDialect.Sqlite);
+        await SqlMigrator.ApplyAsync(connection, all.Take(StatsSchema.V2CatalogCount(StatsDialect.Sqlite)).ToList(), CancellationToken.None, StatsSchema.VersionTable);
+        var seed = new ViewSeed(connection, StatsDialect.Sqlite);
+        var server = await seed.Server("eu-1");
+        var map = await seed.Map(server, "de_mirage", ViewSeed.Utc("2026-10-01 20:00:00"));
+        await seed.Round(map, new RoundSeed(ViewSeed.Utc("2026-10-01 20:01:00"), PlayersCt: 3, PlayersT: 2, Winner: "CT"));
+        Assert.Equal(0L, await Scalar(connection, "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'stats_replays'"));
+        await SqlMigrator.ApplyAsync(connection, all, CancellationToken.None, StatsSchema.VersionTable);
+        Assert.Equal((long)all.Count, await Scalar(connection, $"SELECT MAX(version) FROM {StatsSchema.VersionTable}"));
+        Assert.Equal(1L, await Scalar(connection, "SELECT COUNT(*) FROM v_stats_rounds"));
+        Assert.Equal(0L, await Scalar(connection, "SELECT COUNT(*) FROM v_stats_replays"));
+        Assert.Equal(0L, await Scalar(connection, "SELECT COUNT(*) FROM v_stats_replay_tracks"));
     }
 }

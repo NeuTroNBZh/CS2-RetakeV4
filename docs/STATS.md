@@ -43,6 +43,8 @@ GRANT SELECT ON retakev4.v_stats_weapon_meta TO 'stats_reader'@'%';
 GRANT SELECT ON retakev4.v_stats_rivals TO 'stats_reader'@'%';
 GRANT SELECT ON retakev4.v_stats_duos TO 'stats_reader'@'%';
 GRANT SELECT ON retakev4.v_stats_server_activity TO 'stats_reader'@'%';
+GRANT SELECT ON retakev4.v_stats_replays TO 'stats_reader'@'%';
+GRANT SELECT ON retakev4.v_stats_replay_tracks TO 'stats_reader'@'%';
 ```
 
 SQLite works too (same tables and views, file `plugins/RetakeV4/data/retakev4.db`), but only the game server can read it.

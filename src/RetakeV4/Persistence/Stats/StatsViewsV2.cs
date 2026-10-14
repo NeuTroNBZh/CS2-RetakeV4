@@ -7,9 +7,9 @@ namespace RetakeV4.Persistence.Stats;
 // Events(d) is what the 4.9-a migration step creates and Movement(d) what the 4.9-b step creates: both frozen
 // (StatsSchemaTests pins their SQL), so they read the frozen counter and ratio lists below and of StatsSchema, never
 // StatsCounters. Catalog(d) swaps in the 4.9-c player views (special kill counters) and adds the derived views of
-// the 4.9-c step (StatsDerivedViews). For(d) is the current
-// contract, today equal to Catalog(d). A view changed after 4.9-c gets its new definition swapped into BuildViews and
-// is replaced by a later step (StatsSchema: DROP VIEW + CREATE VIEW).
+// the 4.9-c step (StatsDerivedViews). For(d) is the current contract: Catalog(d) plus the replay views of the 4.9-d
+// step (StatsReplayViews). A view changed after 4.9-d gets its new definition swapped into BuildViews and is replaced
+// by a later step (StatsSchema: DROP VIEW + CREATE VIEW).
 public static class StatsViewsV2
 {
     // Frozen with the 4.9-a views (and reused unchanged by 4.9-b).
@@ -112,8 +112,8 @@ public static class StatsViewsV2
         return dialect.IsMySql ? MySqlCatalog : SqliteCatalog;
     }
 
-    // The current contract: the 4.9-c views, unchanged so far.
-    private static StatsView[] BuildViews(StatsDialect d) => BuildCatalog(d);
+    // The current contract: the 4.9-c views, then the replay views of 4.9-d.
+    private static StatsView[] BuildViews(StatsDialect d) => BuildCatalog(d).Concat(StatsReplayViews.Build()).ToArray();
 
     // The 4.9-b views with the player views changed by 4.9-c swapped in, then the derived views added by 4.9-c.
     private static StatsView[] BuildCatalog(StatsDialect d)
