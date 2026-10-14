@@ -1,3 +1,4 @@
+using System.Data;
 using System.Data.Common;
 using System.Globalization;
 using System.Text;
@@ -21,6 +22,7 @@ public sealed class SqlStatsRepository : IStatsRepository
     private const int EventValueLength = 32;
     private const int CountryLength = 2;
     private const int ServerEventValueLength = 128;
+    private const int ReasonLength = 16;
 
     private static readonly string[] RoundColumns =
     {
@@ -66,6 +68,8 @@ public sealed class SqlStatsRepository : IStatsRepository
         "round_id", "steam_id", "type", "thrown_ms", "detonated_ms", "throw_x", "throw_y", "throw_z", "det_x", "det_y", "det_z",
         "damage", "enemies_blinded", "teammates_blinded", "blind_seconds",
     };
+
+    private static readonly string[] TrackColumns = { "round_id", "steam_id", "side", "frames" };
 
     private readonly StatsDialect _dialect;
     private readonly Func<CancellationToken, Task<DbConnection>> _open;
@@ -287,6 +291,128 @@ public sealed class SqlStatsRepository : IStatsRepository
         return roundId;
     }
 
+    // Lock order, the same on every server: the claimants' stats_players rows (ascending SteamID), then the stats_rounds
+    // rows of every round the decisions touch (ascending id). A player's ownerships only change under that player's lock
+    // and a round's owners, replay and tracks only under that round's lock, so two servers deciding for the same player or
+    // the same round wait for each other, always in the same order (no deadlock). Every owner keeps a stats_players row:
+    // claimants without one are ignored, and players are never deleted. MySQL / MariaDB run this transaction in READ
+    // COMMITTED: each read sees what the previous lock holder committed, and the locking reads (owners count, replay row)
+    // lock only the matching rows, never a gap. SQLite: Microsoft.Data.Sqlite begins with BEGIN IMMEDIATE (its default is
+    // not deferred), so the database write lock is held from the start and the whole decision is serialized.
+    public async Task<int> WriteReplayAsync(long roundId, ReplayRound replay, IReadOnlyList<ReplayClaim> claims, ReplayCaps caps, DateTimeOffset at, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(replay);
+        ArgumentNullException.ThrowIfNull(claims);
+        ArgumentNullException.ThrowIfNull(caps);
+        await using var connection = await _open(ct).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(IsolationLevel.ReadCommitted, ct).ConfigureAwait(false);
+        var claimants = new HashSet<ulong>();
+        foreach (var steamId in claims.Select(c => c.SteamId).Distinct().Order())
+        {
+            var row = await ScalarAsync(connection, transaction, $"SELECT steam_id FROM stats_players WHERE steam_id = @steam{_dialect.ForUpdate}", ct,
+                ("@steam", _dialect.SteamParam(steamId))).ConfigureAwait(false);
+            if (row is not (null or DBNull))
+            {
+                claimants.Add(steamId);
+            }
+        }
+
+        // Decisions first (no write yet), so that every round they touch is locked in one ascending pass.
+        var held = new Dictionary<(ulong SteamId, ReplayReason Reason), List<ReplayOwnership>>();
+        var kept = new List<(ReplayClaim Claim, IReadOnlyList<long> Evict)>();
+        foreach (var claim in claims.Where(c => claimants.Contains(c.SteamId)).OrderBy(c => c.SteamId).ThenBy(c => c.Reason))
+        {
+            if (!held.TryGetValue((claim.SteamId, claim.Reason), out var owned))
+            {
+                owned = await OwnershipsAsync(connection, transaction, _dialect.SteamParam(claim.SteamId), ReasonName(claim.Reason), ct).ConfigureAwait(false);
+                held[(claim.SteamId, claim.Reason)] = owned;
+            }
+            var decision = ReplaySelection.Decide(roundId, claim, owned, caps.For(claim.Reason));
+            if (!decision.Keep)
+            {
+                continue;
+            }
+            owned.RemoveAll(o => decision.Evict.Contains(o.RoundId));
+            owned.Add(new ReplayOwnership(roundId, claim.Score, at));
+            kept.Add((claim, decision.Evict));
+        }
+        if (kept.Count == 0)
+        {
+            var current = await CountOwnersAsync(connection, transaction, roundId, ct).ConfigureAwait(false);
+            await transaction.CommitAsync(ct).ConfigureAwait(false);
+            return current;
+        }
+
+        var evicted = kept.SelectMany(k => k.Evict).Where(id => id != roundId).ToHashSet();
+        foreach (var id in evicted.Append(roundId).Order())
+        {
+            await ScalarAsync(connection, transaction, $"SELECT id FROM stats_rounds WHERE id = @round{_dialect.ForUpdate}", ct, ("@round", id)).ConfigureAwait(false);
+        }
+        var when = _dialect.DateParam(at);
+        foreach (var (claim, evict) in kept)
+        {
+            var steam = _dialect.SteamParam(claim.SteamId);
+            var reason = ReasonName(claim.Reason);
+            foreach (var old in evict)
+            {
+                await ExecuteAsync(connection, transaction,
+                    "DELETE FROM stats_replay_owners WHERE round_id = @round AND steam_id = @steam AND reason = @reason", ct,
+                    ("@round", old), ("@steam", steam), ("@reason", reason)).ConfigureAwait(false);
+            }
+            await ExecuteAsync(connection, transaction,
+                "INSERT INTO stats_replay_owners (round_id, steam_id, reason, score, created_at) VALUES (@round, @steam, @reason, @score, @at)", ct,
+                ("@round", roundId), ("@steam", steam), ("@reason", reason), ("@score", claim.Score), ("@at", when)).ConfigureAwait(false);
+        }
+        var owners = await CountOwnersAsync(connection, transaction, roundId, ct).ConfigureAwait(false);
+        if (owners > 0 && await ScalarAsync(connection, transaction, $"SELECT round_id FROM stats_replays WHERE round_id = @round{_dialect.ForUpdate}", ct,
+                ("@round", roundId)).ConfigureAwait(false) is null or DBNull)
+        {
+            await ExecuteAsync(connection, transaction,
+                "INSERT INTO stats_replays (round_id, sample_hz, created_at, bytes) VALUES (@round, @hz, @at, @bytes)", ct,
+                ("@round", roundId), ("@hz", replay.SampleHz), ("@at", when), ("@bytes", replay.Bytes)).ConfigureAwait(false);
+            await BulkInsertAsync(connection, transaction, "stats_replay_tracks", TrackColumns, replay.Tracks, t => new object?[]
+            {
+                roundId, _dialect.SteamParam(t.SteamId), t.Side.ToString(), t.Frames,
+            }, ct).ConfigureAwait(false);
+        }
+        foreach (var old in evicted)
+        {
+            if (await CountOwnersAsync(connection, transaction, old, ct).ConfigureAwait(false) == 0)
+            {
+                await ExecuteAsync(connection, transaction, "DELETE FROM stats_replay_tracks WHERE round_id = @round", ct, ("@round", old)).ConfigureAwait(false);
+                await ExecuteAsync(connection, transaction, "DELETE FROM stats_replays WHERE round_id = @round", ct, ("@round", old)).ConfigureAwait(false);
+            }
+        }
+        await transaction.CommitAsync(ct).ConfigureAwait(false);
+        return owners;
+    }
+
+    private static string ReasonName(ReplayReason reason) => Clip(ReplayReasons.Name(reason), ReasonLength)!;
+
+    private async Task<List<ReplayOwnership>> OwnershipsAsync(DbConnection connection, DbTransaction transaction, object steam, string reason, CancellationToken ct)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = "SELECT round_id, score, created_at FROM stats_replay_owners WHERE steam_id = @steam AND reason = @reason";
+        AddParameter(command, "@steam", steam);
+        AddParameter(command, "@reason", reason);
+        var held = new List<ReplayOwnership>();
+        await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        while (await reader.ReadAsync(ct).ConfigureAwait(false))
+        {
+            held.Add(new ReplayOwnership(
+                Convert.ToInt64(reader.GetValue(0), CultureInfo.InvariantCulture),
+                Convert.ToDouble(reader.GetValue(1), CultureInfo.InvariantCulture),
+                _dialect.ReadDate(reader.GetValue(2))));
+        }
+        return held;
+    }
+
+    // Locking read on MySQL / MariaDB: the latest committed owners of the round.
+    private async Task<int> CountOwnersAsync(DbConnection connection, DbTransaction transaction, long roundId, CancellationToken ct) =>
+        Convert.ToInt32(await ScalarAsync(connection, transaction, $"SELECT COUNT(*) FROM stats_replay_owners WHERE round_id = @round{_dialect.ForUpdate}", ct,
+            ("@round", roundId)).ConfigureAwait(false), CultureInfo.InvariantCulture);
+
     public async Task<IReadOnlyDictionary<ulong, int>> LoadEloAsync(IReadOnlyCollection<ulong> steamIds, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(steamIds);
@@ -312,7 +438,7 @@ public sealed class SqlStatsRepository : IStatsRepository
     }
 
     // Rounds older than the cutoff lose their shots, damages and player events; presence snapshots and server events
-    // older than the cutoff are deleted. Rounds, kills, grenades, sessions and aggregates are kept.
+    // older than the cutoff are deleted. Rounds, kills, grenades, sessions, replays and aggregates are kept.
     public async Task<int> PurgeRawAsync(DateTimeOffset olderThan, int batchSize, CancellationToken ct)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(batchSize, 1);

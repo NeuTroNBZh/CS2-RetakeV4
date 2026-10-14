@@ -29,6 +29,13 @@ public interface IStatsRepository
 
     Task<long> WriteRoundAsync(long mapId, RoundSummary round, CancellationToken ct);
 
+    // Keeps the replay of a round already written (roundId) for the claims that win: ReplaySelection.Decide is applied to
+    // each claim against the player's current ownerships, in one transaction that first locks the claimants' stats_players
+    // rows (claimants without a row are ignored), so that servers sharing the database agree. Tracks are written only when
+    // the round has an owner and no stored replay yet; replays left without an owner are deleted with their tracks.
+    // Returns the number of owners the round has afterwards (0 = not stored).
+    Task<int> WriteReplayAsync(long roundId, ReplayRound replay, IReadOnlyList<ReplayClaim> claims, ReplayCaps caps, DateTimeOffset at, CancellationToken ct);
+
     Task<IReadOnlyDictionary<ulong, int>> LoadEloAsync(IReadOnlyCollection<ulong> steamIds, CancellationToken ct);
 
     Task<int> PurgeRawAsync(DateTimeOffset olderThan, int batchSize, CancellationToken ct);

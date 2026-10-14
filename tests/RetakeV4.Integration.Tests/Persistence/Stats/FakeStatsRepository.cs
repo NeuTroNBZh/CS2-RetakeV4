@@ -86,6 +86,12 @@ internal sealed class FakeStatsRepository : IStatsRepository
         return Task.FromResult(Next());
     }
 
+    public Task<int> WriteReplayAsync(long roundId, ReplayRound replay, IReadOnlyList<ReplayClaim> claims, ReplayCaps caps, DateTimeOffset at, CancellationToken ct)
+    {
+        Record($"Replay round {roundId} claims {claims.Count}");
+        return Task.FromResult(claims.Count);
+    }
+
     public Task SetCountryAsync(long? sessionId, ulong steamId, string country, CancellationToken ct)
     {
         Record($"Country {steamId} {country} session {sessionId?.ToString() ?? "none"}");

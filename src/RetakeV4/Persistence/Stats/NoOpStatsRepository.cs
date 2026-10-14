@@ -23,6 +23,9 @@ public sealed class NoOpStatsRepository : IStatsRepository
 
     public Task<long> WriteRoundAsync(long mapId, RoundSummary round, CancellationToken ct) => Task.FromResult(0L);
 
+    public Task<int> WriteReplayAsync(long roundId, ReplayRound replay, IReadOnlyList<ReplayClaim> claims, ReplayCaps caps, DateTimeOffset at, CancellationToken ct) =>
+        Task.FromResult(0);
+
     public Task<IReadOnlyDictionary<ulong, int>> LoadEloAsync(IReadOnlyCollection<ulong> steamIds, CancellationToken ct) =>
         Task.FromResult<IReadOnlyDictionary<ulong, int>>(new Dictionary<ulong, int>());
 
