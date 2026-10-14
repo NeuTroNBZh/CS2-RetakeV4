@@ -28,17 +28,20 @@ public class RoundAnalyzerEventsTests
             r.Add(Hurt(Ct1, T1, 10, 90, 50, 5));
             r.Add(Hurt(Ct1, T1, 10, 80, 70, 7, weapon: "awp"));
             r.Add(Hurt(Ct1, T1, 10, 70, 80, 8));
+            r.Add(Hurt(Ct1, T1, 10, 60, 90, 6));
+            r.Add(Hurt(Ct1, T1, 10, 50, 100, 9));
+            r.Add(Hurt(Ct1, T1, 10, 40, 110, 20));
         }));
         var ct = Of(s, Ct1);
         Assert.Equal(5, ct.Shots);
-        Assert.Equal(3, ct.Hits);
+        Assert.Equal(6, ct.Hits);
         Assert.Equal(2, ct.ShotsStill);
         Assert.Equal(2, ct.ShotsMoving);
         Assert.Equal(1, ct.ShotsScoped);
         Assert.Equal(2, ct.HitsStill);
-        Assert.Equal(0, ct.HitsMoving);
+        Assert.Equal(2, ct.HitsMoving);
         Assert.Equal(1, ct.HitsScoped);
-        Assert.Equal(30, Of(s, T1).DamageTaken);
+        Assert.Equal(60, Of(s, T1).DamageTaken);
     }
 
     [Fact]
@@ -108,6 +111,19 @@ public class RoundAnalyzerEventsTests
     }
 
     [Fact]
+    public void DamageTaken_ExcludesBotVictims_AndCountsSelfAndWorldDamage()
+    {
+        var s = Analyze(Record(TwoVsTwo(), TeamSide.T, r =>
+        {
+            r.Add(Hurt(Ct1, Ct1, 20, 80, 100, 1, weapon: "hegrenade"));
+            r.Add(Hurt(null, Ct1, 10, 70, 200, 2, weapon: "world"));
+            r.Add(Hurt(T1, 5000UL, 40, 60, 300, 3, victimIsBot: true));
+        }));
+        Assert.Equal(30, Of(s, Ct1).DamageTaken);
+        Assert.Equal(0, Of(s, T1).Damage);
+    }
+
+    [Fact]
     public void BombCarry_RunsFromPickupToDropPlantOrDeath()
     {
         var s = Analyze(Record(Context(P(Ct1, TeamSide.CT), P(T1, TeamSide.T), P(T2, TeamSide.T), P(T3, TeamSide.T)), TeamSide.T, r =>
@@ -141,6 +157,7 @@ public class RoundAnalyzerEventsTests
     [InlineData(600, true)]
     [InlineData(999, true)]
     [InlineData(1000, false)]
+    [InlineData(-1, false)]
     [InlineData(null, false)]
     public void ClutchDefuse_NeedsLessThanOneSecondLeft(int? remainingMs, bool expected)
     {

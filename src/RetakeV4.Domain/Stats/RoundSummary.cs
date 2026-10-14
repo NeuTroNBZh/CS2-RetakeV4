@@ -112,7 +112,7 @@ public sealed record PlayerRoundStats(ulong SteamId, string Name, TeamSide Side)
 
     public int BombCarryMs { get; init; }
 
-    // Null when the player left without a state read at round_end; 0 for a dead player.
+    // 0 for a dead player or a leaver; null only for a living player without a state read at round_end.
     public int? HealthEnd { get; init; }
 
     public int? ArmorEnd { get; init; }

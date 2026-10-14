@@ -270,7 +270,7 @@ public static class RoundAnalyzer
         {
             defuser.Defused = true;
             defuser.DefusedWithKit = defuse.WithKit;
-            defuser.ClutchDefuse = defuse.RemainingMs is { } left && left < ClutchDefuseMs;
+            defuser.ClutchDefuse = defuse.RemainingMs is >= 0 and < ClutchDefuseMs;
         }
         foreach (var mvp in record.Mvps)
         {
