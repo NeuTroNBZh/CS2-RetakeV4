@@ -33,7 +33,7 @@ public static class StatsViews
                 COALESCE(pt.seconds_spec, 0) AS seconds_spec, COALESCE(pt.seconds_queue, 0) AS seconds_queue,
                 COALESCE(pt.seconds_ct + pt.seconds_t + pt.seconds_spec + pt.seconds_queue, 0) AS seconds_total,
                 COALESCE(pt.sessions, 0) AS sessions,
-                {CountersOrZero("t.")},
+                {CountersOrZero(StatsCounters.Columns, "t.")},
                 {RatioColumns(d, "t.", null)}
             FROM stats_players p
             LEFT JOIN stats_player_totals t ON t.steam_id = p.steam_id AND t.scope = 'all'
@@ -41,7 +41,7 @@ public static class StatsViews
             """),
         new StatsView("v_stats_player_scopes", $"""
             SELECT t.steam_id, p.name, t.scope,
-                {Counters("t.")},
+                {Counters(StatsCounters.Columns, "t.")},
                 {RatioColumns(d, "t.", null)}
             FROM stats_player_totals t
             JOIN stats_players p ON p.steam_id = t.steam_id
@@ -119,11 +119,12 @@ public static class StatsViews
             """),
     };
 
-    private static string Counters(string alias) => string.Join(", ", StatsCounters.Columns.Select(c => $"{alias}{c}"));
+    internal static string Counters(IEnumerable<string> columns, string alias) => string.Join(", ", columns.Select(c => $"{alias}{c}"));
 
-    private static string CountersOrZero(string alias) => string.Join(", ", StatsCounters.Columns.Select(c => $"COALESCE({alias}{c}, 0) AS {c}"));
+    internal static string CountersOrZero(IEnumerable<string> columns, string alias) =>
+        string.Join(", ", columns.Select(c => $"COALESCE({alias}{c}, 0) AS {c}"));
 
-    private static string RatioColumns(StatsDialect d, string alias, IReadOnlyCollection<string>? only) => string.Join(", ",
+    internal static string RatioColumns(StatsDialect d, string alias, IReadOnlyCollection<string>? only) => string.Join(", ",
         Ratios.Where(r => only is null || only.Contains(r.Name))
             .Select(r => $"{d.FloatCast(string.Format(CultureInfo.InvariantCulture, r.Expression, alias))} AS {r.Name}"));
 

@@ -176,6 +176,7 @@ public static class StatsSchema
         {
             migrations.AddRange(V2Indexes.SelectMany(t => t.Value.Select(i => new SqlMigration($"CREATE INDEX IF NOT EXISTS {i.Name} ON {t.Key} ({i.Columns})"))));
         }
+        migrations.AddRange(StatsViewsV2.For(d).Select(v => new SqlMigration($"{d.CreateView} {v.Name} AS {v.Select}")));
         return migrations;
     }
 

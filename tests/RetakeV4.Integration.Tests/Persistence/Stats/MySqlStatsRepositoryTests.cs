@@ -29,4 +29,18 @@ public class MySqlStatsRepositoryTests
         Assert.NotEqual(before, after);
         await repository.PurgeRawAsync(now.AddDays(-3650), 500, CancellationToken.None);
     }
+
+    // Several servers starting together on one database: the migration lock and the replayable ALTERs keep it safe.
+    [Fact]
+    public async Task ConcurrentInitialize_WhenAMySqlServerIsConfigured()
+    {
+        if (string.IsNullOrWhiteSpace(ConnectionString))
+        {
+            return;
+        }
+        var repositories = Enumerable.Range(0, 4)
+            .Select(i => StatsRepositories.MySql(ConnectionString, new StatsWriteOptions($"conc-{i}", 1000, 100)))
+            .ToList();
+        await Task.WhenAll(repositories.Select(r => Task.Run(() => r.InitializeAsync(CancellationToken.None))));
+    }
 }

@@ -19,12 +19,14 @@ public sealed class StatsSchemaTests : IDisposable
         _dir.Dispose();
     }
 
-    private static Dictionary<string, List<string>> Contract()
+    private static Dictionary<string, List<string>> Contract(string file = "views.v1.json")
     {
-        using var document = JsonDocument.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "contract", "stats", "views.v1.json")));
+        using var document = JsonDocument.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "contract", "stats", file)));
         return document.RootElement.GetProperty("views").EnumerateObject()
             .ToDictionary(v => v.Name, v => v.Value.EnumerateArray().Select(c => c.GetString()!).ToList());
     }
+
+    private static IEnumerable<KeyValuePair<string, List<string>>> AllContracts() => Contract().Concat(Contract("views.v2.json"));
 
     private async Task<SqliteConnection> MigratedSqlite()
     {
@@ -85,7 +87,7 @@ public sealed class StatsSchemaTests : IDisposable
     public async Task SqliteViews_MatchTheContract()
     {
         await using var connection = await MigratedSqlite();
-        foreach (var (view, expected) in Contract())
+        foreach (var (view, expected) in AllContracts())
         {
             Assert.Equal(expected, await SqliteColumns(connection, view));
         }
@@ -107,7 +109,7 @@ public sealed class StatsSchemaTests : IDisposable
     public async Task EveryViewIsQueryable_OnAnEmptyDatabase()
     {
         await using var connection = await MigratedSqlite();
-        foreach (var view in StatsViews.Names)
+        foreach (var view in StatsViews.Names.Concat(StatsViewsV2.Names))
         {
             await using var command = connection.CreateCommand();
             command.CommandText = $"SELECT COUNT(*) FROM {view}";
@@ -179,7 +181,7 @@ public sealed class StatsSchemaTests : IDisposable
         await using var connection = new MySqlConnection(MySqlConnectionString);
         await connection.OpenAsync();
         await SqlMigrator.ApplyAsync(connection, StatsSchema.Migrations(StatsDialect.MySql), CancellationToken.None, StatsSchema.VersionTable);
-        foreach (var (view, expected) in Contract())
+        foreach (var (view, expected) in AllContracts())
         {
             await using var command = connection.CreateCommand();
             command.CommandText = """
@@ -244,5 +246,38 @@ public sealed class StatsSchemaTests : IDisposable
         Assert.Equal(0L, await Scalar(connection, "SELECT COUNT(*) FROM stats_player_events"));
         Assert.Equal(0L, await Scalar(connection, "SELECT COUNT(*) FROM stats_presence"));
         Assert.Equal(0L, await Scalar(connection, "SELECT COUNT(*) FROM stats_server_events"));
+        Assert.Equal(3L, await Scalar(connection, "SELECT kills FROM v2_stats_players WHERE steam_id = 1"));
+        Assert.Equal(0L, await Scalar(connection, "SELECT shots_still FROM v2_stats_players WHERE steam_id = 1"));
+        Assert.Null(await Scalar(connection, "SELECT still_accuracy FROM v2_stats_players WHERE steam_id = 1"));
+    }
+
+    [Fact]
+    public void ContractV2Views_AreExactlyTheV2Views() =>
+        Assert.Equal(Contract("views.v2.json").Keys.Order(StringComparer.Ordinal), StatsViewsV2.Names.Order(StringComparer.Ordinal));
+
+    [Fact]
+    public void V2Views_NeverReuseAV1Name() => Assert.Empty(StatsViewsV2.Names.Intersect(StatsViews.Names));
+
+    [Fact]
+    public void ContractV2Counters_FollowAllCounters()
+    {
+        var scopes = Contract("views.v2.json")["v2_stats_player_scopes"];
+        Assert.Equal(StatsCounters.AllColumns, scopes.Skip(3).Take(StatsCounters.AllColumns.Count));
+    }
+
+    [Fact]
+    public async Task MySqlMigrations_ReappliedFromVersionZero_Succeed_WhenAMySqlServerIsConfigured()
+    {
+        if (string.IsNullOrWhiteSpace(MySqlConnectionString))
+        {
+            return;
+        }
+        await using var connection = new MySqlConnection(MySqlConnectionString);
+        await connection.OpenAsync();
+        var migrations = StatsSchema.Migrations(StatsDialect.MySql);
+        await SqlMigrator.ApplyAsync(connection, migrations, CancellationToken.None, StatsSchema.VersionTable);
+        await Execute(connection, $"DELETE FROM {StatsSchema.VersionTable}");
+        await SqlMigrator.ApplyAsync(connection, migrations, CancellationToken.None, StatsSchema.VersionTable);
+        Assert.Equal((long)migrations.Count, Convert.ToInt64(await Scalar(connection, $"SELECT MAX(version) FROM {StatsSchema.VersionTable}")));
     }
 }

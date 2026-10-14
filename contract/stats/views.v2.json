@@ -1,0 +1,23 @@
+{
+  "version": 2,
+  "views": {
+    "v2_stats_players": ["steam_id", "name", "country", "first_seen", "last_seen", "elo", "seconds_ct", "seconds_t", "seconds_spec", "seconds_queue", "seconds_total", "sessions",
+      "rounds", "rounds_won", "ranked_rounds", "survived_rounds", "kills", "deaths", "assists", "flash_assists", "team_kills", "damage", "utility_damage", "headshot_kills", "shots", "hits", "headshot_hits", "entry_kills", "entry_deaths", "trade_kills", "traded_deaths", "kast_rounds", "k2", "k3", "k4", "k5", "clutch_1_played", "clutch_1_won", "clutch_2_played", "clutch_2_won", "clutch_3_played", "clutch_3_won", "clutch_4_played", "clutch_4_won", "clutch_5_played", "clutch_5_won", "enemies_flashed", "teammates_flashed", "blind_ms", "mvps", "plants", "defuses", "defuses_with_kit", "rating_milli",
+      "shots_still", "hits_still", "shots_moving", "hits_moving", "shots_scoped", "hits_scoped", "reloads", "reloads_full", "pickups", "drops", "jumps", "plant_attempts", "plant_aborts", "defuse_attempts", "defuse_aborts", "clutch_defuses", "damage_taken", "bomb_carry_ms",
+      "kpr", "kd", "adr", "hs_pct", "accuracy", "hs_accuracy", "kast_pct", "survival_pct", "win_pct", "rating", "entry_success_pct", "clutch_won_pct",
+      "still_accuracy", "moving_accuracy", "scoped_accuracy", "still_shot_pct", "dtr"],
+    "v2_stats_player_scopes": ["steam_id", "name", "scope",
+      "rounds", "rounds_won", "ranked_rounds", "survived_rounds", "kills", "deaths", "assists", "flash_assists", "team_kills", "damage", "utility_damage", "headshot_kills", "shots", "hits", "headshot_hits", "entry_kills", "entry_deaths", "trade_kills", "traded_deaths", "kast_rounds", "k2", "k3", "k4", "k5", "clutch_1_played", "clutch_1_won", "clutch_2_played", "clutch_2_won", "clutch_3_played", "clutch_3_won", "clutch_4_played", "clutch_4_won", "clutch_5_played", "clutch_5_won", "enemies_flashed", "teammates_flashed", "blind_ms", "mvps", "plants", "defuses", "defuses_with_kit", "rating_milli",
+      "shots_still", "hits_still", "shots_moving", "hits_moving", "shots_scoped", "hits_scoped", "reloads", "reloads_full", "pickups", "drops", "jumps", "plant_attempts", "plant_aborts", "defuse_attempts", "defuse_aborts", "clutch_defuses", "damage_taken", "bomb_carry_ms",
+      "kpr", "kd", "adr", "hs_pct", "accuracy", "hs_accuracy", "kast_pct", "survival_pct", "win_pct", "rating", "entry_success_pct", "clutch_won_pct",
+      "still_accuracy", "moving_accuracy", "scoped_accuracy", "still_shot_pct", "dtr"],
+    "v2_stats_round_players": ["round_id", "server", "map_name", "site", "round_type", "started_at", "steam_id", "side", "primary_weapon", "survived", "won", "kills", "deaths", "assists", "flash_assists", "team_kills", "damage", "utility_damage", "headshot_kills", "shots", "hits", "headshot_hits", "entry_kill", "entry_death", "trade_kills", "traded_death", "kast", "clutch_vs", "clutch_won", "enemies_flashed", "teammates_flashed", "blind_seconds_inflicted", "mvp", "planted", "defused", "defused_with_kit", "rating", "elo_before", "elo_after",
+      "shots_still", "hits_still", "shots_moving", "hits_moving", "shots_scoped", "hits_scoped", "damage_taken", "bomb_carry_ms", "health_end", "armor_end"],
+    "v2_stats_shots": ["shot_id", "round_id", "steam_id", "weapon", "time_ms", "tick", "pos_x", "pos_y", "pos_z", "pitch", "yaw", "speed", "crouched", "scoped", "airborne", "walking", "still"],
+    "v2_stats_sessions": ["session_id", "steam_id", "server", "map_name", "connected_at", "disconnected_at", "disconnect_reason", "seconds_ct", "seconds_t", "seconds_spec", "seconds_queue", "seconds_vip", "ping_avg", "ping_max", "country"],
+    "v_stats_player_events": ["event_id", "round_id", "map_name", "site", "round_type", "started_at", "steam_id", "type", "time_ms", "value", "pos_x", "pos_y", "pos_z"],
+    "v_stats_player_network": ["steam_id", "name", "country", "sessions", "sessions_with_ping", "ping_avg", "ping_max", "seconds_vip"],
+    "v_stats_server_health": ["event_id", "server", "at", "type", "module", "value", "occurrences", "max_ms"],
+    "v_stats_presence": ["snapshot_id", "server", "at", "map_name", "humans", "bots", "queued"]
+  }
+}
