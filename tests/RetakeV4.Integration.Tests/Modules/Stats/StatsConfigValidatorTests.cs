@@ -277,4 +277,76 @@ public class StatsConfigValidatorTests
         Assert.Equal(new MovementRules(80f, 300f, 3.5, 20.0), config.ToRules().Movement);
         Assert.Equal(16, config.SampleEveryTicks);
     }
+
+    [Fact]
+    public void ReplayDefaults_MatchTheSpec()
+    {
+        var config = new StatsConfig();
+        Assert.Equal(10, config.ReplayBestPerPlayer);
+        Assert.Equal(10, config.ReplayHighlightsPerPlayer);
+        Assert.Equal(20, config.ReplaySavedPerPlayer);
+        Assert.Equal(5, config.ReplayMemoryRounds);
+        Assert.Equal(new ReplayCaps(10, 10, 20), config.ToReplayCaps());
+        Assert.False((config with { ReplayBestPerPlayer = 0, ReplayHighlightsPerPlayer = 0, ReplaySavedPerPlayer = 0 }).ToReplayCaps().Any);
+    }
+
+    [Theory]
+    [InlineData(-1, 10)]
+    [InlineData(0, 0)]
+    [InlineData(100, 100)]
+    [InlineData(101, 10)]
+    public void ReplayBestPerPlayer_IsBounded(int value, int expected)
+    {
+        var (config, issues) = Validate(new StatsConfig { ReplayBestPerPlayer = value });
+        Assert.Equal(expected, config.ReplayBestPerPlayer);
+        Assert.Equal(value == expected ? 0 : 1, issues.Count);
+    }
+
+    [Theory]
+    [InlineData(-1, 10)]
+    [InlineData(0, 0)]
+    [InlineData(100, 100)]
+    [InlineData(101, 10)]
+    public void ReplayHighlightsPerPlayer_IsBounded(int value, int expected)
+    {
+        var (config, issues) = Validate(new StatsConfig { ReplayHighlightsPerPlayer = value });
+        Assert.Equal(expected, config.ReplayHighlightsPerPlayer);
+        Assert.Equal(value == expected ? 0 : 1, issues.Count);
+    }
+
+    [Theory]
+    [InlineData(-1, 20)]
+    [InlineData(0, 0)]
+    [InlineData(100, 100)]
+    [InlineData(101, 20)]
+    public void ReplaySavedPerPlayer_IsBounded(int value, int expected)
+    {
+        var (config, issues) = Validate(new StatsConfig { ReplaySavedPerPlayer = value });
+        Assert.Equal(expected, config.ReplaySavedPerPlayer);
+        Assert.Equal(value == expected ? 0 : 1, issues.Count);
+    }
+
+    [Theory]
+    [InlineData(0, 5)]
+    [InlineData(1, 1)]
+    [InlineData(10, 10)]
+    [InlineData(11, 5)]
+    public void ReplayMemoryRounds_IsBounded(int value, int expected)
+    {
+        var (config, issues) = Validate(new StatsConfig { ReplayMemoryRounds = value });
+        Assert.Equal(expected, config.ReplayMemoryRounds);
+        Assert.Equal(value == expected ? 0 : 1, issues.Count);
+    }
+
+    [Fact]
+    public void AnOperatorsStatsJson_ReadsTheReplayKeys()
+    {
+        using var dir = new TempDirectory();
+        File.WriteAllText(dir.File("stats.json"), """
+            { "Version": 1, "ReplayBestPerPlayer": 3, "ReplayHighlightsPerPlayer": 0, "ReplaySavedPerPlayer": 5, "ReplayMemoryRounds": 2 }
+            """);
+        var config = new JsonConfigStore(dir.Path).Load("stats.json", new StatsConfig(), new StatsConfigValidator()).Config;
+        Assert.Equal(new ReplayCaps(3, 0, 5), config.ToReplayCaps());
+        Assert.Equal(2, config.ReplayMemoryRounds);
+    }
 }

@@ -91,6 +91,20 @@ public sealed record StatsConfig : ModuleConfig
     // A period without a move of 2 m, a turn of 5 degrees or a shot counts as AFK from this long.
     public int AfkSeconds { get; init; } = 15;
 
+    // Replays (stats v2 spec, section 3): per player, the best rounds by Retake Rating, the highlights (aces, won clutches
+    // 1v3+) and the rounds kept with !save. 0 turns a source off; all three at 0 keep no replay (movement stats are still
+    // computed). Replays need SampleEveryTicks > 0.
+    public int ReplayBestPerPlayer { get; init; } = 10;
+
+    public int ReplayHighlightsPerPlayer { get; init; } = 10;
+
+    public int ReplaySavedPerPlayer { get; init; } = 20;
+
+    // Recent rounds whose replay stays in memory for "!save n" (1 = the last round).
+    public int ReplayMemoryRounds { get; init; } = 5;
+
+    public ReplayCaps ToReplayCaps() => new(ReplayBestPerPlayer, ReplayHighlightsPerPlayer, ReplaySavedPerPlayer);
+
     public StatsRules ToRules() => new(
         TradeWindowSeconds,
         MinPlayersPerSide,

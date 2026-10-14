@@ -37,6 +37,10 @@ public sealed partial class StatsConfigValidator : IConfigValidator<StatsConfig>
             BaitDistance = Range(config.BaitDistance, 50, 2000, defaults.BaitDistance, file, nameof(StatsConfig.BaitDistance), issues),
             BaitWindowSeconds = Range(config.BaitWindowSeconds, 0.5, 30, defaults.BaitWindowSeconds, file, nameof(StatsConfig.BaitWindowSeconds), issues),
             AfkSeconds = Range(config.AfkSeconds, 5, 300, defaults.AfkSeconds, file, nameof(StatsConfig.AfkSeconds), issues),
+            ReplayBestPerPlayer = Range(config.ReplayBestPerPlayer, 0, 100, defaults.ReplayBestPerPlayer, file, nameof(StatsConfig.ReplayBestPerPlayer), issues),
+            ReplayHighlightsPerPlayer = Range(config.ReplayHighlightsPerPlayer, 0, 100, defaults.ReplayHighlightsPerPlayer, file, nameof(StatsConfig.ReplayHighlightsPerPlayer), issues),
+            ReplaySavedPerPlayer = Range(config.ReplaySavedPerPlayer, 0, 100, defaults.ReplaySavedPerPlayer, file, nameof(StatsConfig.ReplaySavedPerPlayer), issues),
+            ReplayMemoryRounds = Range(config.ReplayMemoryRounds, 1, 10, defaults.ReplayMemoryRounds, file, nameof(StatsConfig.ReplayMemoryRounds), issues),
         };
         return new ValidationResult<StatsConfig>(validated, issues);
     }
