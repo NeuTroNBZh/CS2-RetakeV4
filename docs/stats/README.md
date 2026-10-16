@@ -33,6 +33,34 @@ Every round between humans is recorded (bots never get stats). Rows marked *raw*
 
 The game does not give, so nothing records: Steam profile data (avatar, hours, VAC), packet loss, chat contents, client data (FPS, settings), voice, Valve ranks, the economy.
 
+## Stats you can compute
+
+Not stored as such, but computed from the data above. Each link leads to its SQL query in [DERIVED.md](DERIVED.md).
+
+| Family | Stat | What it tells you | Computed from |
+|---|---|---|---|
+| Duels and aim | [Time to kill](DERIVED.md#time-to-kill) | Seconds from the first bullet that hits a player to the kill | `v_stats_kills`, `v_stats_damages` |
+| Duels and aim | [First-bullet accuracy](DERIVED.md#first-bullet-accuracy) | Share of first bullets (after a 0.5 s pause) that hit | `v_stats_shots`, `v_stats_damages` |
+| Duels and aim | [Bullets per kill, damage per shot and per hit](DERIVED.md#bullets-per-kill-damage-per-shot-and-per-hit) | Shooting efficiency per weapon | `v_stats_player_weapons` |
+| Duels and aim | [Kills by distance](DERIVED.md#kills-by-distance) | Close (< 10 m), mid (10–25 m) and long (25 m+) kills | `v_stats_kills` (positions) |
+| Duels and aim | [Body parts hit per weapon](DERIVED.md#body-parts-hit-per-weapon) | Share of head, chest, stomach, arm and leg hits | `v_stats_damages` |
+| Round flow | [Time of the opening kill](DERIVED.md#time-of-the-opening-kill) | Second of the first kill, per map and site | `v_stats_kills` |
+| Round flow | [Time alive when killed](DERIVED.md#time-alive-when-killed) | Average second at which a player dies | `v_stats_kills` |
+| Round flow | [Value of the opening kill](DERIVED.md#value-of-the-opening-kill) | How often the side with the first kill wins | `v_stats_round_players` |
+| Round flow | [Traded entry deaths](DERIVED.md#traded-entry-deaths) | Share of entry deaths avenged by a teammate | `v_stats_round_players` |
+| Round flow | [Bomb time left at the defuse](DERIVED.md#bomb-time-left-at-the-defuse) | Seconds left on the bomb at the defuse, and last-second defuses | `v_stats_rounds` |
+| Round flow | [Team damage](DERIVED.md#team-damage) | Damage done to teammates | `v_stats_damages`, `v_stats_round_players` |
+| Utility | [Grenades per round, damage and flight time](DERIVED.md#grenades-per-round-damage-and-flight-time) | Grenades thrown per round by type, damage per grenade, time in the air | `v_stats_grenades`, `v_stats_players` |
+| Form | [Longest win streak](DERIVED.md#longest-win-streak) | Most rounds won in a row | `v_stats_round_players` |
+| Form | [Recent form](DERIVED.md#recent-form) | Rating over the last 20 rounds next to the career rating | `v_stats_round_players`, `v_stats_players` |
+| Form | [Consistency](DERIVED.md#consistency) | Spread of the per-round rating (lower = steadier) | `v_stats_round_players` |
+| Form | [Highest and lowest ELO](DERIVED.md#highest-and-lowest-elo) | Peak and lowest ELO reached | `v_stats_round_players` |
+| Form | [Win rate per primary weapon](DERIVED.md#win-rate-per-primary-weapon) | Rounds won with each primary weapon | `v_stats_round_players` |
+| Form | [Best site and side](DERIVED.md#best-site-and-side) | Rating and win rate on A, B, CT and T | `v_stats_player_scopes` |
+| Presence | [Session length and days played](DERIVED.md#session-length-and-days-played) | Average minutes per session, days with a session | `v_stats_sessions` |
+| Positions | [Death heatmap](DERIVED.md#death-heatmap) | Where players die (or kill, or throw grenades) on the map | `v_stats_kills`, `v_stats_grenades`, `v_stats_shots` |
+| Positions | [From the replay trajectories](DERIVED.md#from-the-replay-trajectories) | Time to reach the site, route, distance to teammates, health over time | `v_stats_replay_tracks` (parsed in code) |
+
 ## How to get them
 
 1. **Store the stats in MySQL or MariaDB** so that other programs can read them: in `stats.json` set `Database.Type` to `MySql` and `Database.MySqlConnectionString`. Tables and views are created at startup ([REFERENCE.md](REFERENCE.md#setup)). With the default SQLite file, the data stays in `plugins/RetakeV4/data/retakev4.db`.
