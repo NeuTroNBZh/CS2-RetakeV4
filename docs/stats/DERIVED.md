@@ -7,7 +7,7 @@ Stats that no view column holds but that you can compute from the recorded data.
 - The queries read the public views only. Add `WHERE steam_id = CAST(? AS UNSIGNED)` (or `attacker`, `victim`) to get one player; never build the SQL by concatenation.
 - Queries on `v_stats_shots`, `v2_stats_shots`, `v_stats_damages` and `v_stats_player_events` only see the last `RawRetentionDays` days (30 by default). The others cover the whole history.
 - Window functions (`OVER`, `LAG`, `ROW_NUMBER`) need MySQL 8, MariaDB 10.2 or SQLite 3.25. `SQRT`, `STDDEV_POP` and `TIMESTAMPDIFF` are MySQL / MariaDB: on SQLite, use a build with math functions for `SQRT`, compute the standard deviation in code and use `julianday()` differences for durations.
-- Damage events carry the game's base weapon name: the damage of an M4A1-S is under `m4a1`, of a USP-S under `hkp2000`, while its shots and kills are under `m4a1_silencer` and `usp_silencer`. Per-weapon damage and hits for these weapons must merge both names; per-player totals are not affected.
+- The game names the damage of an M4A1-S `m4a1` and of a USP-S `hkp2000`. Since 4.9.1 each bullet hit takes the name of the shot fired in the same tick (`m4a1_silencer`, `usp_silencer`), as its shots and kills already do. Rounds recorded with 4.9.0 keep the base names in `v_stats_damages` and in the per-weapon damage and hits of `v_stats_player_weapons`; per-player totals were never affected.
 - These are heavy queries on large tables: run them in a scheduled job or cache the result (see INTEGRATION.md, "Caching").
 
 ## Duels and aim
