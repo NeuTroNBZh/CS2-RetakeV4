@@ -15,6 +15,7 @@ public static class RoundAnalyzer
     {
         ArgumentNullException.ThrowIfNull(record);
         ArgumentNullException.ThrowIfNull(rules);
+        record = HitWeapons.Resolve(record);
         var sides = record.Context.Participants.ToDictionary(p => p.SteamId, p => p.Side);
         var players = record.Context.Participants.ToDictionary(p => p.SteamId, p => new PlayerAccumulator(p));
         var kills = record.Kills.OrderBy(k => k.TimeMs).ToList();

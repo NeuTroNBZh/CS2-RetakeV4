@@ -295,7 +295,7 @@ GROUP BY hitgroup ORDER BY hitgroup;
 
 | Stat | Definition | Source | Limits |
 |---|---|---|---|
-| Per player | `weapon` (name without `weapon_`), `shots`, `hits`, `headshot_hits`, `kills`, `headshot_kills`, `damage`, `accuracy`, `hs_pct` | `v_stats_player_weapons` | |
+| Per player | `weapon` (name without `weapon_`), `shots`, `hits`, `headshot_hits`, `kills`, `headshot_kills`, `damage`, `accuracy`, `hs_pct` | `v_stats_player_weapons` || Since 4.9.1 a bullet hit takes the weapon of the shot fired in the same tick: the game names the damage of an M4A1-S `m4a1` and of a USP-S `hkp2000`, so with 4.9.0 their hits and damage went to those rows |
 | `primary_weapon` | Primary weapon given at the round start | `v_stats_round_players.primary_weapon` | `NULL` for pistol-only loadouts |
 | Weapon meta | Per weapon over all players: `players` (players with a row for it), totals, `accuracy`, `hs_accuracy`, `hs_pct`, `kill_share_pct` (its kills / all weapon kills), `primary_rounds`, `primary_players`, `primary_won_rounds`, `primary_win_pct` (rounds where it was the primary weapon) | `v_stats_weapon_meta.players`, `v_stats_weapon_meta.kill_share_pct`, `v_stats_weapon_meta.primary_rounds`, `v_stats_weapon_meta.primary_players`, `v_stats_weapon_meta.primary_won_rounds`, `v_stats_weapon_meta.primary_win_pct` | Whole history; a weapon only given as primary and never fired has zero totals |
 
