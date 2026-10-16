@@ -2,6 +2,34 @@
 
 Stats that no view column holds but that you can compute from the recorded data. Each one comes with a SQL query run against a live MySQL 8 database. What every source column means is in [CATALOG.md](CATALOG.md); how to call the database from a website is in [INTEGRATION.md](INTEGRATION.md).
 
+## At a glance
+
+Examples are real results from a 30-round test game; yours will differ.
+
+| Family | Stat | What it tells you | Computed from | Example |
+|---|---|---|---|---|
+| Duels and aim | [Time to kill](#time-to-kill) | Seconds from the first bullet that hits a player to the kill | `v_stats_kills`, `v_stats_damages` | 2.4 s |
+| Duels and aim | [First-bullet accuracy](#first-bullet-accuracy) | Share of first bullets (after a 0.5 s pause) that hit | `v_stats_shots`, `v_stats_damages` | 38 % with the AK-47 |
+| Duels and aim | [Bullets per kill, damage per shot and per hit](#bullets-per-kill-damage-per-shot-and-per-hit) | Shooting efficiency per weapon | `v_stats_player_weapons` | 8.3 bullets per kill |
+| Duels and aim | [Kills by distance](#kills-by-distance) | Close (< 10 m), mid (10–25 m) and long (25 m+) kills | `v_stats_kills` (positions) | 3 / 12 / 7 |
+| Duels and aim | [Body parts hit per weapon](#body-parts-hit-per-weapon) | Share of head, chest, stomach, arm and leg hits | `v_stats_damages` | 36 % head with the AK-47 |
+| Round flow | [Time of the opening kill](#time-of-the-opening-kill) | Second of the first kill, per map and site | `v_stats_kills` | 19 s on B |
+| Round flow | [Time alive when killed](#time-alive-when-killed) | Average second at which a player dies | `v_stats_kills` | 19 s |
+| Round flow | [Value of the opening kill](#value-of-the-opening-kill) | How often the side with the first kill wins | `v_stats_round_players` | 91 % (CT) |
+| Round flow | [Traded entry deaths](#traded-entry-deaths) | Share of entry deaths avenged by a teammate | `v_stats_round_players` | 0 % (none possible in 1 vs 1) |
+| Round flow | [Bomb time left at the defuse](#bomb-time-left-at-the-defuse) | Seconds left on the bomb at the defuse, and last-second defuses | `v_stats_rounds` | 17 s |
+| Round flow | [Team damage](#team-damage) | Damage done to teammates | `v_stats_damages`, `v_stats_round_players` | 0 HP (no teammate in 1 vs 1) |
+| Utility | [Grenades per round, damage and flight time](#grenades-per-round-damage-and-flight-time) | Grenades thrown per round by type, damage per grenade, time in the air | `v_stats_grenades`, `v_stats_players` | 0.57 flashes per round |
+| Form | [Longest win streak](#longest-win-streak) | Most rounds won in a row | `v_stats_round_players` | 6 rounds |
+| Form | [Recent form](#recent-form) | Rating over the last 20 rounds next to the career rating | `v_stats_round_players`, `v_stats_players` | 1.40 vs 1.36 |
+| Form | [Consistency](#consistency) | Spread of the per-round rating (lower = steadier) | `v_stats_round_players` | 0.51 |
+| Form | [Highest and lowest ELO](#highest-and-lowest-elo) | Peak and lowest ELO reached | `v_stats_round_players` | 1094 / 1012 |
+| Form | [Win rate per primary weapon](#win-rate-per-primary-weapon) | Rounds won with each primary weapon | `v_stats_round_players` | 75 % with the AK-47 |
+| Form | [Best site and side](#best-site-and-side) | Rating and win rate on A, B, CT and T | `v_stats_player_scopes` | 1.40 on B, 1.32 on A |
+| Presence | [Session length and days played](#session-length-and-days-played) | Average minutes per session, days with a session | `v_stats_sessions` | 6 min, 1 day |
+| Positions | [Death heatmap](#death-heatmap) | Where players die (or kill, or throw grenades) on the map | `v_stats_kills`, `v_stats_grenades`, `v_stats_shots` | Grid of 256 × 256 units |
+| Positions | [From the replay trajectories](#from-the-replay-trajectories) | Time to reach the site, route, distance to teammates, health over time | `v_stats_replay_tracks` (parsed in code) | Stored rounds only |
+
 **Before using them**
 
 - The queries read the public views only. Add `WHERE steam_id = CAST(? AS UNSIGNED)` (or `attacker`, `victim`) to get one player; never build the SQL by concatenation.
