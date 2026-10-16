@@ -2,7 +2,7 @@
 
 The `Stats` module records every Retake round: shots, damage, kills, grenades, bomb, sessions. On top of the raw data it stores additive per-player totals, a Retake Rating and an ELO. This page documents the **public views**: they are the stable contract for the web panel and for external websites. Read the views, never the `stats_*` tables (those can change between versions).
 
-Every stat with its definition, source and limits: [STATS-CATALOG.md](STATS-CATALOG.md). Building a website on the views (read-only account, back end, Node.js and PHP examples, recipes): [STATS-INTEGRATION.md](STATS-INTEGRATION.md).
+Every stat with its definition, source and limits: [CATALOG.md](CATALOG.md). Building a website on the views (read-only account, back end, Node.js and PHP examples, recipes): [INTEGRATION.md](INTEGRATION.md). Stats computed from the views: [DERIVED.md](DERIVED.md). Overview: [README.md](README.md).
 
 ## Setup
 
@@ -217,7 +217,7 @@ The server samples every living human every `SampleEveryTicks` ticks of the live
 - **Caps need sampling**: with `SampleEveryTicks` = 0 there are no samples, so the three caps do nothing.
 - **Database settings**: replay writes run in a `READ COMMITTED` transaction. On MySQL / MariaDB this needs `binlog_format` `ROW` or `MIXED` (the defaults) when binary logging is on: a server forced to `STATEMENT` rejects them (error 1665). A replay that cannot be written is retried once, then dropped with a warning in the log; round stats are never delayed or lost because of it.
 
-The radar conversion, the values of every Retake map and a complete JavaScript viewer are in [STATS-INTEGRATION.md](STATS-INTEGRATION.md) ("Replays").
+The radar conversion, the values of every Retake map and a complete JavaScript viewer are in [INTEGRATION.md](INTEGRATION.md) ("Replays").
 
 ## Reliability
 

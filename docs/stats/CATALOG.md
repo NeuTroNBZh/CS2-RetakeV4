@@ -1,6 +1,6 @@
 # RetakeV4 stats — catalogue
 
-Every statistic the `Stats` module stores or lets you compute, by category: what it means, where to read it (a view column written `view.column`, or a complete SQL query) and its limits. Column types, conventions and setup are in [STATS.md](STATS.md); building a website on top of the views is in [STATS-INTEGRATION.md](STATS-INTEGRATION.md).
+Every statistic the `Stats` module stores or lets you compute, by category: what it means, where to read it (a view column written `view.column`, or a complete SQL query) and its limits. Column types, conventions and setup are in [REFERENCE.md](REFERENCE.md); building a website on top of the views is in [INTEGRATION.md](INTEGRATION.md); more stats computed from these columns (time to kill, first-bullet accuracy, streaks, form…) are in [DERIVED.md](DERIVED.md).
 
 Read the views only (`v_stats_*`, `v2_stats_*`): the `stats_*` tables can change between versions. The view columns are frozen by `contract/stats/views.v1.json` and `contract/stats/views.v2.json`; a test checks that every view and every column of both files is named on this page (a column name shared by several views must be written `view.column`).
 
@@ -83,7 +83,7 @@ FROM v_stats_players GROUP BY DATE(first_seen) ORDER BY day;
 
 | Stat | Definition | Source | Limits |
 |---|---|---|---|
-| `rating` | Retake Rating: per-round score (kills, survival, damage, KAST, impact; formula in STATS.md), averaged over the rounds | `v_stats_players.rating`, `v_stats_player_scopes.rating`, `v_stats_leaderboard.rating`; per round `v_stats_round_players.rating` | Weights configurable in `stats.json`: compare servers with the same weights |
+| `rating` | Retake Rating: per-round score (kills, survival, damage, KAST, impact; formula in REFERENCE.md), averaged over the rounds | `v_stats_players.rating`, `v_stats_player_scopes.rating`, `v_stats_leaderboard.rating`; per round `v_stats_round_players.rating` | Weights configurable in `stats.json`: compare servers with the same weights |
 | `rating_milli` | Sum of the per-round ratings × 1000 (to recompute averages over any set of scopes) | `v_stats_players.rating_milli` | |
 | `elo` | Current ELO (start 1000, floor 100), changed by ranked rounds only | `v_stats_players.elo`, `v_stats_leaderboard.elo`, `v_stats_elo_history.elo` | Several servers sharing a database share one ELO |
 | `elo_before` / `elo_after` | ELO at the start and the end of a round | `v_stats_round_players.elo_before`, `v_stats_round_players.elo_after` | When the floor clamps a loss, `elo_after - elo_before` differs from the raw delta |
@@ -363,7 +363,7 @@ GROUP BY DATE(at), module ORDER BY day DESC, errors DESC;
 
 ## 17. Replays (2D)
 
-A replay is a round whose human trajectories are kept, for the players who own it. The format of `frames`, the radar conversion and a complete viewer example are in [STATS-INTEGRATION.md](STATS-INTEGRATION.md#replays) ("Replays").
+A replay is a round whose human trajectories are kept, for the players who own it. The format of `frames`, the radar conversion and a complete viewer example are in [INTEGRATION.md](INTEGRATION.md#replays) ("Replays").
 
 | Stat | Definition | Source | Limits |
 |---|---|---|---|
@@ -380,7 +380,7 @@ ORDER BY reason, score DESC, owned_at DESC;
 
 ## Column reference
 
-Every column of every view, in contract order (`view.column`). Definitions are in the sections above and in [STATS.md](STATS.md).
+Every column of every view, in contract order (`view.column`). Definitions are in the sections above and in [REFERENCE.md](REFERENCE.md).
 
 **Contract v1**
 

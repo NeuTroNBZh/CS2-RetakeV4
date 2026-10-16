@@ -18,6 +18,6 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="..\..\contract\**\*.json" LinkBase="contract" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="..\..\docs\STATS*.md" LinkBase="docs" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\docs\stats\*.md" LinkBase="docs\stats" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

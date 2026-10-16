@@ -4,11 +4,11 @@ using System.Text.RegularExpressions;
 namespace RetakeV4.Integration.Tests.Docs;
 
 // The stats documentation follows the contract: every view and every column of views.v1.json and views.v2.json is named
-// in STATS-CATALOG.md, and the GRANT examples cover every view. A column name used by several views must be written
+// in docs/stats/CATALOG.md, and the GRANT examples cover every view. A column name used by several views must be written
 // `view.column` (a bare `column` would hide a missing view); a name unique to one view may stay bare.
 public class StatsDocsTests
 {
-    private static string Doc(string file) => File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "docs", file));
+    private static string Doc(string file) => File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "docs", "stats", file));
 
     private static Dictionary<string, List<string>> Contract(string file)
     {
@@ -22,7 +22,7 @@ public class StatsDocsTests
     [InlineData("views.v2.json")]
     public void Catalog_NamesEveryViewAndColumn(string contract)
     {
-        var catalog = Doc("STATS-CATALOG.md");
+        var catalog = Doc("CATALOG.md");
         var missing = new List<string>();
         var owners = Contract("views.v1.json").Concat(Contract("views.v2.json"))
             .SelectMany(v => v.Value.Select(column => (column, view: v.Key)))
@@ -43,11 +43,14 @@ public class StatsDocsTests
         Assert.Empty(missing);
     }
 
-    [Fact]
-    public void Catalog_QualifiedColumns_ExistInTheContracts()
+    [Theory]
+    [InlineData("CATALOG.md")]
+    [InlineData("DERIVED.md")]
+    [InlineData("README.md")]
+    public void QualifiedColumns_ExistInTheContracts(string doc)
     {
         var contracts = Contract("views.v1.json").Concat(Contract("views.v2.json")).ToDictionary(v => v.Key, v => v.Value);
-        var stale = Regex.Matches(Doc("STATS-CATALOG.md"), @"`(v2?_stats_[a-z_]+)\.([a-z0-9_]+)`")
+        var stale = Regex.Matches(Doc(doc), @"`(v2?_stats_[a-z_]+)\.([a-z0-9_]+)`")
             .Select(m => (view: m.Groups[1].Value, column: m.Groups[2].Value))
             .Where(x => !contracts.TryGetValue(x.view, out var columns) || !columns.Contains(x.column))
             .Select(x => $"{x.view}.{x.column}")
@@ -56,9 +59,24 @@ public class StatsDocsTests
         Assert.Empty(stale);
     }
 
+    // The derived-stats queries and the overview only read public views: a view they name must be in a contract.
     [Theory]
-    [InlineData("STATS.md")]
-    [InlineData("STATS-INTEGRATION.md")]
+    [InlineData("DERIVED.md")]
+    [InlineData("README.md")]
+    public void NamedViews_ExistInTheContracts(string doc)
+    {
+        var views = Contract("views.v1.json").Concat(Contract("views.v2.json")).Select(v => v.Key).ToHashSet();
+        var unknown = Regex.Matches(Doc(doc), @"\bv2?_stats_[a-z_]+\b")
+            .Select(m => m.Value)
+            .Where(v => !views.Contains(v))
+            .Distinct()
+            .ToList();
+        Assert.Empty(unknown);
+    }
+
+    [Theory]
+    [InlineData("REFERENCE.md")]
+    [InlineData("INTEGRATION.md")]
     public void GrantExamples_CoverEveryView(string doc)
     {
         var text = Doc(doc);
@@ -70,7 +88,7 @@ public class StatsDocsTests
     [Fact]
     public void ReplayRecipe_RadarTable_MatchesTheJavaScriptObject()
     {
-        var text = Doc("STATS-INTEGRATION.md");
+        var text = Doc("INTEGRATION.md");
         var table = Regex.Matches(text, @"^\| (de_[a-z0-9_]+) \| (-?[0-9.]+) \| (-?[0-9.]+) \| ([0-9.]+) \|", RegexOptions.Multiline)
             .ToDictionary(m => m.Groups[1].Value, m => new[] { m.Groups[2].Value, m.Groups[3].Value, m.Groups[4].Value }.Select(ParseNumber).ToArray());
         var script = Regex.Match(text, @"const RADARS = \{(.*?)\};", RegexOptions.Singleline).Groups[1].Value;
