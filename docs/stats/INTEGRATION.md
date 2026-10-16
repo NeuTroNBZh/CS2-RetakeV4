@@ -1,6 +1,6 @@
 # RetakeV4 stats — building a website
 
-How to show the RetakeV4 stats on your own website: database account, back end, examples in Node.js and PHP, caching, data types and ready-made recipes. What each column means is in [STATS-CATALOG.md](STATS-CATALOG.md); the view reference and the server setup are in [STATS.md](STATS.md).
+How to show the RetakeV4 stats on your own website: database account, back end, examples in Node.js and PHP, caching, data types and ready-made recipes. What each column means is in [CATALOG.md](CATALOG.md); the view reference and the server setup are in [REFERENCE.md](REFERENCE.md).
 
 ## 1. Architecture
 
