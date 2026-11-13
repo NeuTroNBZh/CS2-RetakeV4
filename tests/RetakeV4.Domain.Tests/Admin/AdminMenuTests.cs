@@ -1,6 +1,7 @@
 using RetakeV4.Domain.Admin;
 using RetakeV4.Domain.Common;
 using RetakeV4.Domain.Hud;
+using RetakeV4.Domain.Loadouts;
 using RetakeV4.Domain.Spawns;
 
 namespace RetakeV4.Domain.Tests.Admin;
@@ -12,9 +13,29 @@ public class AdminMenuTests
     {
         var menu = AdminMenu.Build();
         Assert.Equal(AdminMenu.MenuId, menu.Id);
-        Assert.Equal(new[] { AdminMenu.EditorId, "forcesite", AdminMenu.ScrambleId, AdminMenu.CleanupId }, menu.Items.Select(i => i.Id));
+        Assert.Equal(new[] { AdminMenu.EditorId, "forcesite", AdminMenu.ScrambleId, AdminMenu.CleanupId, "random" }, menu.Items.Select(i => i.Id));
         Assert.Equal(MenuItemKind.Submenu, menu.Items[1].Kind);
+        Assert.Equal(MenuItemKind.Submenu, menu.Items[4].Kind);
     }
+
+    [Fact]
+    public void RandomWeaponsSubmenu_OffersOnceStickyAndOff()
+    {
+        var items = AdminMenu.Build().Items[4].Submenu!.Items;
+        Assert.Equal(
+            new RandomWeaponsRequest?[]
+            {
+                new(RandomWeaponsMode.Once), new(RandomWeaponsMode.Sticky), new(null),
+            },
+            items.Select(i => AdminMenu.Parse(i.Id)?.Random));
+        Assert.All(items, i => Assert.Equal(AdminAction.RandomWeapons, AdminMenu.Parse(i.Id)?.Action));
+    }
+
+    [Theory]
+    [InlineData("random")]
+    [InlineData("random:Forever")]
+    [InlineData("random:Once:extra")]
+    public void Parse_RejectsUnknownRandomItems(string itemId) => Assert.Null(AdminMenu.Parse(itemId));
 
     [Fact]
     public void EveryItem_ParsesToItsAction()

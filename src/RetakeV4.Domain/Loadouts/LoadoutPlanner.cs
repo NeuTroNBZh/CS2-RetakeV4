@@ -14,7 +14,24 @@ public static class LoadoutPlanner
         var kits = PickDefuseKits(definition.DefuseKit, cts, random);
         return players.ToDictionary(
             p => p.Player,
-            p => Build(definition, p, awp.Contains(p.Player), kits.Contains(p.Player), grenadeKits, random));
+            p =>
+            {
+                var (primary, secondary) = ResolveWeapons(definition, p);
+                var weapons = new WeaponPair(awp.Contains(p.Player) ? WeaponCatalog.Awp : primary, secondary);
+                return Build(definition, p.Team, weapons, kits.Contains(p.Player), grenadeKits, random);
+            });
+    }
+
+    // Random weapons round: the guns come from RandomLoadout, no AWP; armor, kits, Zeus and grenades follow the round type.
+    public static IReadOnlyDictionary<PlayerId, Loadout> PlanRandom(
+        RoundTypeDefinition definition, IReadOnlyList<LoadoutRequest> players, IReadOnlyList<GrenadeKit> grenadeKits, IRandom random)
+    {
+        var weapons = RandomLoadout.Assign(definition, players, random);
+        var cts = players.Where(p => p.Team == TeamSide.CT).Select(p => p.Player).ToList();
+        var kits = PickDefuseKits(definition.DefuseKit, cts, random);
+        return players.ToDictionary(
+            p => p.Player,
+            p => Build(definition, p.Team, weapons[p.Player], kits.Contains(p.Player), grenadeKits, random));
     }
 
     public static (string? Primary, string Secondary) ResolveWeapons(RoundTypeDefinition definition, LoadoutRequest request)
@@ -79,16 +96,15 @@ public static class LoadoutPlanner
     }
 
     private static Loadout Build(
-        RoundTypeDefinition definition, LoadoutRequest request, bool awp, bool kit, IReadOnlyList<GrenadeKit> grenadeKits, IRandom random)
+        RoundTypeDefinition definition, TeamSide team, WeaponPair weapons, bool kit, IReadOnlyList<GrenadeKit> grenadeKits, IRandom random)
     {
-        var (primary, secondary) = ResolveWeapons(definition, request);
         var zeus = definition.Zeus.Enabled && Chance.Roll(definition.Zeus.Chance, random);
         return new Loadout(
-            awp ? WeaponCatalog.Awp : primary,
-            secondary,
+            weapons.Primary,
+            weapons.Secondary,
             definition.Armor,
             kit,
             zeus,
-            PickGrenades(grenadeKits, request.Team, random));
+            PickGrenades(grenadeKits, team, random));
     }
 }

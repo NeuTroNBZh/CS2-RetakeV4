@@ -1,4 +1,5 @@
 using RetakeV4.Domain.Common;
+using RetakeV4.Domain.Loadouts;
 using RetakeV4.Domain.Spawns;
 
 namespace RetakeV4.Domain.Events;
@@ -7,6 +8,8 @@ namespace RetakeV4.Domain.Events;
 public sealed record ForceSiteRequested(PlayerId? Requester, ForceSiteRequest Request);
 
 public sealed record ScrambleRequested(PlayerId? Requester);
+
+public sealed record RandomWeaponsRequested(PlayerId? Requester, RandomWeaponsRequest Request);
 
 // CounterStrikeSharp's OnAllPluginsLoaded: other plugins' capabilities (CS2-SimpleAdmin) can be resolved from here on.
 public sealed record AllPluginsLoaded(bool HotReload);

@@ -189,6 +189,34 @@ public class LoadoutPlannerTests
     }
 
     [Fact]
+    public void PlanRandom_NeverGivesTheAwp_EvenToWinningVolunteers()
+    {
+        var plan = LoadoutPlanner.PlanRandom(FullBuy, Lobby(3, 3, new LoadoutPreference(null, null, true)), Array.Empty<GrenadeKit>(), new FixedRandom { DoubleValue = 0.0 });
+        Assert.DoesNotContain(plan.Values, l => l.Primary == WeaponCatalog.Awp);
+    }
+
+    [Fact]
+    public void PlanRandom_KeepsArmorKitsAndZeus_AndIgnoresPreferences()
+    {
+        var definition = FullBuy with { Zeus = new ZeusSettings(true, 100) };
+        var preference = new LoadoutPreference("weapon_m4a1_silencer", "weapon_usp_silencer", false);
+        var plan = LoadoutPlanner.PlanRandom(definition, Lobby(2, 2, preference), Array.Empty<GrenadeKit>(), new FixedRandom());
+        Assert.Equal(4, plan.Count);
+        Assert.All(plan.Values, l => Assert.Equal(ArmorKind.KevlarHelmet, l.Armor));
+        Assert.All(plan.Values, l => Assert.True(l.Zeus));
+        Assert.All(plan.Where(p => p.Key.Slot >= 100), p => Assert.True(p.Value.DefuseKit));
+        Assert.All(plan.Values, l => Assert.Contains(l.Primary, RandomLoadout.PoolOf(FullBuy.Primaries)));
+    }
+
+    [Fact]
+    public void PlanRandom_PistolRound_GivesPistolsOnly()
+    {
+        var plan = LoadoutPlanner.PlanRandom(Pistol, Lobby(2, 2), Array.Empty<GrenadeKit>(), new FixedRandom());
+        Assert.All(plan.Values, l => Assert.Null(l.Primary));
+        Assert.All(plan.Values, l => Assert.True(WeaponCatalog.IsSecondary(l.Secondary)));
+    }
+
+    [Fact]
     public void SwapBetween_OnlyFlagsTheChangedSlots()
     {
         var before = new Loadout(WeaponCatalog.Awp, "weapon_glock", ArmorKind.KevlarHelmet, false, false, Array.Empty<string>());

@@ -23,7 +23,7 @@ It is a full rewrite of CS2RetakeV3: every feature is a module that can be turne
 - **Clean HUD**: a center panel with the round type, site and player counts; menus in the center of the screen, floating in the world, or in the chat.
 - **Map rotation**: an end-of-match vote over every map that has Retake spawns, plus `!rtv`.
 - **Map cleanup**: doors opened, windows and vents broken every round, nothing else touched; per-map corrections from an in-game editor.
-- **Admin tools**: in-game spawn editor, forced site, scramble, and a Retake category in the CS2-SimpleAdmin menu.
+- **Admin tools**: in-game spawn editor, forced site, scramble, random weapons rounds, and a Retake category in the CS2-SimpleAdmin menu.
 - **For server owners**: text overrides, timed announcements, community commands (`!discord`, `!rules`), and a config checker shipped with every release.
 - **For developers**: a public API to react to rounds from other plugins, and a companion [web panel](https://github.com/NeuTroNBZh/CS2-RetakeV4-Panel).
 
@@ -115,11 +115,12 @@ Admin commands need the `@retakev4/admin` permission (`@retakev4/root` for the V
 
 | Command | Effect |
 |---|---|
-| `!retake` | Admin menu: spawn editor, forced site, scramble, map cleanup |
+| `!retake` | Admin menu: spawn editor, forced site, scramble, map cleanup, random weapons |
 | `!retake edit`, `css_retake_edit [save\|discard\|exit]` | Enter or leave the spawn editor |
 | `!retake cleanup` | Open the map cleanup editor |
 | `css_retake_forcesite <A\|B\|off> [once\|sticky]` | Force the next site, or every following one |
 | `css_retake_scramble` | Scramble the teams at round end |
+| `css_retake_randomweapons <once\|sticky\|off>` | Random weapons for the next round, or every round until `off`: each player draws a gun from the round type's pools (both sides' weapons, no AWP), teammates get different guns and both teams get the same strength tiers. Like the forced site, `sticky` survives a map change but not a plugin reload |
 | `css_retake_addspawn <T\|CT> <A\|B> [plant]` | Add a spawn at your position |
 | `css_retake_delspawn` | Delete the nearest spawn |
 | `css_retake_tpspawn <n>`, `css_retake_teleport <x> <y> <z>` | Teleport |

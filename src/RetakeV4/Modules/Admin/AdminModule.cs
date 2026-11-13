@@ -74,6 +74,9 @@ public sealed class AdminModule : IRetakeModule
             case AdminAction.ForceSite when selection.Force is { } request:
                 Context.Bus.Publish(new ForceSiteRequested(id, request));
                 break;
+            case AdminAction.RandomWeapons when selection.Random is { } random:
+                Context.Bus.Publish(new RandomWeaponsRequested(id, random));
+                break;
         }
     }
 
