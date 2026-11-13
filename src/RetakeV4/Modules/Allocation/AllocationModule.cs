@@ -40,6 +40,9 @@ public sealed class AllocationModule : IRetakeModule
     private IReadOnlyList<RoundTypeDefinition> _definitions = Array.Empty<RoundTypeDefinition>();
     private RoundTypeDefinition? _current;
     private bool _roundTypeChanged;
+    private string? _menuOfferedFor;
+    private RandomWeaponsSwitch _randomWeapons = RandomWeaponsSwitch.Off;
+    private bool _randomRound;
 
     public string Name => "Allocation";
 
@@ -81,6 +84,9 @@ public sealed class AllocationModule : IRetakeModule
         });
         hooks.Command("css_awp", "Toggles AWP volunteering", OnAwpCommand);
         hooks.Command("css_retake_import_v3", "Imports V3 weapon preferences: css_retake_import_v3 <path to cs2retake.db>", OnImportCommand);
+        hooks.Command("css_retake_randomweapons", "Random weapons: css_retake_randomweapons <once|sticky|off>", OnRandomWeaponsCommand);
+        hooks.OnBus<RandomWeaponsRequested>(e =>
+            SetRandomWeapons(e.Requester is { } requester ? Utilities.GetPlayerFromSlot(requester.Slot) : null, e.Request));
         hooks.OnBus<RoundTypesLoaded>(e =>
         {
             _definitions = e.Definitions;
@@ -125,6 +131,8 @@ public sealed class AllocationModule : IRetakeModule
         _preferences?.DisposeAsync().AsTask().Wait(TimeSpan.FromSeconds(5));
         _preferences = null;
         _nativeBuy = null;
+        _randomWeapons = RandomWeaponsSwitch.Off;
+        _randomRound = false;
         ReleaseSqliteFiles();
         _context = null;
     }
@@ -226,9 +234,11 @@ public sealed class AllocationModule : IRetakeModule
     {
         if (context.RoundTypeDefinition is not { } definition)
         {
+            _randomRound = false;
             return context;
         }
-        _roundTypeChanged = _current?.Name != definition.Name;
+        // Compared with the last round type the menus were offered for: a random round in between does not hide a change.
+        _roundTypeChanged = _menuOfferedFor != definition.Name;
         _current = definition;
         var players = PlayerQueries.Humans()
             .Select(p => (Controller: p, Side: PlayerQueries.SideOf(p)))
@@ -240,7 +250,7 @@ public sealed class AllocationModule : IRetakeModule
                 p.Side!.Value,
                 _preferences?.RequestFor(p.Controller.SteamID, p.Side.Value, definition.Name)))
             .ToList();
-        var plan = LoadoutPlanner.Plan(definition, requests, GrenadeKits(definition.GrenadePool), _random);
+        var plan = PlanRound(definition, requests);
         _lastPlan = plan.ToImmutableDictionary();
         Context.Bus.Publish(new LoadoutsAssigned(context.RoundNumber, plan));
         foreach (var (controller, side) in players)
@@ -268,6 +278,55 @@ public sealed class AllocationModule : IRetakeModule
             Context.Logger.LogInformation("Round {Round}: {Count} loadout(s) applied for {RoundType}", context.RoundNumber, plan.Count, definition.Name);
         }
         return context;
+    }
+
+    private IReadOnlyDictionary<PlayerId, Loadout> PlanRound(RoundTypeDefinition definition, IReadOnlyList<LoadoutRequest> requests)
+    {
+        (_randomRound, _randomWeapons) = _randomWeapons.Consume();
+        var grenades = GrenadeKits(definition.GrenadePool);
+        if (!_randomRound)
+        {
+            return LoadoutPlanner.Plan(definition, requests, grenades, _random);
+        }
+        Context.Text.ChatAll("allocation.random.round");
+        return LoadoutPlanner.PlanRandom(definition, requests, grenades, _random);
+    }
+
+    private void OnRandomWeaponsCommand(CCSPlayerController? player, CommandInfo command)
+    {
+        if (player is not null && !RetakePermissions.IsAdmin(player))
+        {
+            Context.Text.ChatAlert(player, "allocation.no_permission");
+            return;
+        }
+        if (RandomWeaponsRequest.Parse(command.ArgCount > 1 ? command.GetArg(1) : null) is not { } request)
+        {
+            ReplyRandom(player, "allocation.random.usage");
+            return;
+        }
+        SetRandomWeapons(player, request);
+    }
+
+    // The switch is read when the next round's loadouts are planned: turning it off leaves the current round as it is.
+    private void SetRandomWeapons(CCSPlayerController? player, RandomWeaponsRequest request)
+    {
+        _randomWeapons = new RandomWeaponsSwitch(request.Mode);
+        ReplyRandom(player, request.Mode switch
+        {
+            RandomWeaponsMode.Once => "allocation.random.set_once",
+            RandomWeaponsMode.Sticky => "allocation.random.set_sticky",
+            _ => "allocation.random.cleared",
+        });
+    }
+
+    private void ReplyRandom(CCSPlayerController? player, string key)
+    {
+        if (player is { IsValid: true })
+        {
+            Context.Text.Chat(player, key);
+            return;
+        }
+        Server.PrintToConsole(Context.Text.Server(key));
     }
 
     private void OnGunsCommand(CCSPlayerController? player)
@@ -327,6 +386,11 @@ public sealed class AllocationModule : IRetakeModule
     {
         preferences.SetWeapon(player.SteamID, selection.Team, selection.RoundType, selection.Slot, selection.Weapon);
         var id = new PlayerId(player.Slot);
+        if (_randomRound)
+        {
+            Context.Bus.Publish(new HudAlert(id, HudText.Of("allocation.random.choice_later")));
+            return;
+        }
         var phase = Context.Rounds.State.Phase;
         if (_current is { } definition && _lastPlan.TryGetValue(id, out var loadout)
             && WeaponMenu.AppliesNow(selection, phase, player.PawnIsAlive, PlayerQueries.SideOf(player), definition.Name))
@@ -356,10 +420,11 @@ public sealed class AllocationModule : IRetakeModule
     // New players and every player after a round type change get the menu once, if the round offers a choice.
     private void AutoOpenMenus()
     {
-        if (!_config.AutoOpenMenu || !AllocationModes.UsesMenu(_config.Mode) || _current is not { } current)
+        if (!_config.AutoOpenMenu || _randomRound || !AllocationModes.UsesMenu(_config.Mode) || _current is not { } current)
         {
             return;
         }
+        _menuOfferedFor = current.Name;
         foreach (var player in PlayerQueries.Humans())
         {
             if (player.SteamID == 0 || PlayerQueries.SideOf(player) is not { } side || !WeaponMenu.HasChoice(current, side))

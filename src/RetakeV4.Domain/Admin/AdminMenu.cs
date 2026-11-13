@@ -1,5 +1,6 @@
 using RetakeV4.Domain.Common;
 using RetakeV4.Domain.Hud;
+using RetakeV4.Domain.Loadouts;
 using RetakeV4.Domain.Spawns;
 
 namespace RetakeV4.Domain.Admin;
@@ -10,9 +11,10 @@ public enum AdminAction
     Scramble,
     ForceSite,
     MapCleanupEditor,
+    RandomWeapons,
 }
 
-public sealed record AdminSelection(AdminAction Action, ForceSiteRequest? Force = null);
+public sealed record AdminSelection(AdminAction Action, ForceSiteRequest? Force = null, RandomWeaponsRequest? Random = null);
 
 public static class AdminMenu
 {
@@ -23,6 +25,8 @@ public static class AdminMenu
     public const string CleanupId = "cleanup";
 
     private const string ForcePrefix = "force";
+    private const string RandomPrefix = "random";
+    private const string RandomOffId = "random:off";
 
     public static Menu Build() => new(MenuId, HudText.Of("admin.menu.title"), new[]
     {
@@ -30,6 +34,7 @@ public static class AdminMenu
         new MenuItem("forcesite", HudText.Of("admin.menu.forcesite"), MenuItemKind.Submenu, Submenu: ForceMenu()),
         new MenuItem(ScrambleId, HudText.Of("admin.menu.scramble"), MenuItemKind.Action),
         new MenuItem(CleanupId, HudText.Of("admin.menu.cleanup"), MenuItemKind.Action),
+        new MenuItem(RandomPrefix, HudText.Of("admin.menu.random"), MenuItemKind.Submenu, Submenu: RandomMenu()),
     });
 
     public static AdminSelection? Parse(string itemId) => itemId switch
@@ -38,8 +43,25 @@ public static class AdminMenu
         ScrambleId => new AdminSelection(AdminAction.Scramble),
         CleanupId => new AdminSelection(AdminAction.MapCleanupEditor),
         ForceOffId => new AdminSelection(AdminAction.ForceSite, new ForceSiteRequest(null)),
-        _ => ParseForce(itemId),
+        RandomOffId => new AdminSelection(AdminAction.RandomWeapons, Random: new RandomWeaponsRequest(null)),
+        _ => ParseRandom(itemId) ?? ParseForce(itemId),
     };
+
+    private static AdminSelection? ParseRandom(string itemId)
+    {
+        var parts = itemId.Split(':');
+        return parts.Length == 2 && parts[0] == RandomPrefix
+            && Enum.TryParse<RandomWeaponsMode>(parts[1], out var mode) && Enum.IsDefined(mode)
+                ? new AdminSelection(AdminAction.RandomWeapons, Random: new RandomWeaponsRequest(mode))
+                : null;
+    }
+
+    private static Menu RandomMenu() => new(RandomPrefix, HudText.Of("admin.menu.random"), new[]
+    {
+        new MenuItem($"{RandomPrefix}:{RandomWeaponsMode.Once}", HudText.Of("admin.menu.random_once"), MenuItemKind.Action),
+        new MenuItem($"{RandomPrefix}:{RandomWeaponsMode.Sticky}", HudText.Of("admin.menu.random_sticky"), MenuItemKind.Action),
+        new MenuItem(RandomOffId, HudText.Of("admin.menu.random_off"), MenuItemKind.Action),
+    });
 
     private static AdminSelection? ParseForce(string itemId)
     {

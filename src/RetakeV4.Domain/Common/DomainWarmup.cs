@@ -70,6 +70,7 @@ public static class DomainWarmup
         var requests = new[] { new LoadoutRequest(first, TeamSide.T, null), new LoadoutRequest(second, TeamSide.CT, null) };
         var grenades = new[] { new GrenadeKit(null, new[] { "weapon_flashbang" }) };
         LoadoutPlanner.Plan(definition, requests, grenades, random);
+        LoadoutPlanner.PlanRandom(definition, requests, grenades, random);
         return definition;
     }
 
